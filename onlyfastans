@@ -1,0 +1,159 @@
+==================== p1 ====================
+
+Elapsed: 0.604s
+
+Synthesized:
+
+a ← var
+b ← const 0x1
+c ← const 0x0
+d ← sub c, b
+e ← shr_s d, c
+f ← add d, a
+g ← xor e, f
+h ← or a, g
+i ← xor g, h
+
+==================== p2 ====================
+
+Elapsed: 3.046s
+
+Synthesized:
+
+a ← var
+b ← le_u a, a
+c ← const 0xFFFFFFFFFFFFFFFF
+d ← shr_u b, a
+e ← xor c, d
+f ← add b, a
+g ← gt_u c, e
+h ← sub f, g
+i ← and a, h
+
+==================== p3 ====================
+
+Elapsed: 0.950s
+
+Synthesized:
+
+a ← var
+b ← gt_u a, a
+c ← sub b, a
+d ← or b, c
+e ← le_u a, a
+f ← xor a, c
+g ← const 0x0
+h ← shr_s a, g
+i ← and h, c
+j ← sub e, d
+k ← shr_u f, j
+l ← xor k, k
+m ← add i, l
+
+==================== p4 ====================
+
+Elapsed: 1.601s
+
+Synthesized:
+
+a ← var
+b ← ge_u a, a
+c ← const 0xFFFFFFFFFFFFFFFF
+d ← and c, c
+e ← xor a, d
+f ← or e, e
+g ← const 0x0
+h ← sub a, b
+i ← le_u b, g
+j ← shr_u h, i
+k ← xor j, e
+l ← sub f, k
+m ← shr_s l, g
+n ← add m, a
+
+==================== p5 ====================
+
+Elapsed: 1.458s
+
+Synthesized:
+
+a ← var
+b ← xor a, a
+c ← or a, b
+d ← const 0xFFFFFFFFFFFFFFFF
+e ← gt_u a, c
+f ← sub b, a
+g ← add d, f
+h ← shr_u d, e
+i ← and f, g
+j ← sub h, i
+
+==================== p6 ====================
+
+Elapsed: 6.660s
+
+Synthesized:
+
+a ← var
+b ← and a, a
+c ← const 0x0
+d ← gt_u b, c
+e ← const 0x1
+f ← sub c, e
+g ← le_u d, c
+h ← const 0xFFFFFFFFFFFFFFFF
+i ← add f, h
+j ← shr_s b, g
+k ← sub i, b
+l ← xor f, k
+m ← or l, j
+
+==================== p7 ====================
+
+Elapsed: 0.891s
+
+Synthesized:
+
+a ← var
+b ← const 0x1
+c ← shr_s b, b
+d ← const 0xFFFFFFFFFFFFFFFF
+e ← xor c, a
+f ← sub e, d
+g ← or e, f
+h ← xor g, e
+
+==================== p10 ====================
+
+Elapsed: 2.512s
+
+Synthesized:
+
+a ← var
+b ← var
+c ← and a, b
+d ← or a, a
+e ← le_u b, b
+f ← xor d, b
+g ← sub a, d
+h ← xor g, f
+i ← shr_s g, e
+j ← gt_u h, c
+k ← shr_u e, j
+l ← add k, i
+
+==================== p18 ====================
+
+Elapsed: 4.299s
+
+Synthesized:
+
+a ← var
+b ← const 0xFFFFFFFFFFFFFFFF
+c ← add b, a
+d ← xor c, a
+e ← ge_u d, a
+f ← le_u c, c
+g ← shr_s f, a
+h ← xor g, e
+
