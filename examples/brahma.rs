@@ -1,3 +1,5 @@
+use std::vec;
+
 use structopt::*;
 use synth_loop_free_prog::{Result as SynthResult, *};
 
@@ -35,6 +37,7 @@ fn main() {
             "mytest3".to_string(),
             "mytest4".to_string(),
             "mytest5".to_string(),
+            "mytest6".to_string(),
         ];
     }
 
@@ -78,6 +81,7 @@ fn main() {
         mytest3,
         mytest4,
         mytest5,
+        mytest6,
     };
 
     for (name, p) in problems {
@@ -167,9 +171,9 @@ fn mytest1(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     //     }));
     // 注意，不能没有var，而且var一定要在最前面！！！
     let mut builder = ProgramBuilder::new();
-    let a = builder.var();
-    let b = builder.var();
-    let _ = builder.tf_add(a, b);
+    let in1 = vec![builder.var()];
+    let in2 = vec![builder.var()];
+    let _ = builder.tf_add(in1[0], in2[0]);
     let spec = builder.finish();
 
     synthesize(opts, context, &spec, &library)
@@ -178,15 +182,22 @@ fn mytest1(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
 fn mytest2(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     let library = Library::brahma_std();
     let mut builder = ProgramBuilder::new();
-    let a00 = builder.var();
-    let a01 = builder.var();
-    let a02 = builder.var();
-    let a10 = builder.var();
-    let a11 = builder.var();
-    let a12 = builder.var();
-    let _ = builder.tf_add(a00, a10);
-    let _ = builder.tf_add(a01, a11);
-    let _ = builder.tf_add(a02, a12);
+    let in1 = vec![builder.var(), builder.var(), builder.var()];
+    // 手动实现tf.expand_dims(in2, 1)
+    // eg：tf.expand_dims([10, 20, 30], 1)) = [[10], [20], [30]]
+    let mut in2 : Vec<Vec<Id>> = vec![Vec::new(), Vec::new(), Vec::new()];
+    for value in &mut in2 {
+        for _ in 1..3 {
+            value.push(builder.var());
+        }
+    }
+    for value_in1 in in1 {
+        for sub_in2 in &in2 {
+            for value_in2 in sub_in2 {
+                let _ = builder.tf_add(value_in1, *value_in2);
+            }
+        }
+    }
     let spec = builder.finish();
 
     synthesize(opts, context, &spec, &library)
@@ -199,87 +210,20 @@ fn mytest3(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
         .push(component::const_(if opts.synthesize_constants {
             None
         } else {
-            Some(7)
+            Some(100)
         }));
     let mut builder = ProgramBuilder::new();
-    let a00 = builder.var();
-    let a11 = builder.var();
-    let a22 = builder.var();
-    let a33 = builder.var();
-    let a44 = builder.var();
-    let tfconst = builder.const_(7);
-    let _a01 = builder.const_(0);
-    let _a02 = builder.const_(0);
-    let _a03 = builder.const_(0);
-    let _a04 = builder.const_(0);
-    let _a10 = builder.const_(0);
-    let _a12 = builder.const_(0);
-    let _a13 = builder.const_(0);
-    let _a14 = builder.const_(0);
-    let _a20 = builder.const_(0);
-    let _a21 = builder.const_(0);
-    let _a23 = builder.const_(0);
-    let _a24 = builder.const_(0);
-    let _a30 = builder.const_(0);
-    let _a31 = builder.const_(0);
-    let _a32 = builder.const_(0);
-    let _a34 = builder.const_(0);
-    let _a40 = builder.const_(0);
-    let _a41 = builder.const_(0);
-    let _a42 = builder.const_(0);
-    let _a43 = builder.const_(0);
-    let _ = builder.tf_mul(a00, tfconst);
-    let _ = builder.tf_mul(a11, tfconst);
-    let _ = builder.tf_mul(a22, tfconst);
-    let _ = builder.tf_mul(a33, tfconst);
-    let _ = builder.tf_mul(a44, tfconst);
+    let in1 = vec![builder.var(), builder.var(), builder.var()];
+    let const_ = builder.const_(100);
+    for value_in1 in in1 {
+        let _ = builder.tf_add(value_in1, const_);
+    }
     let spec = builder.finish();
 
     synthesize(opts, context, &spec, &library)
 }
 
 fn mytest4(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
-    let library = Library::brahma_std();
-    let mut builder = ProgramBuilder::new();
-    let a00 = builder.var();
-    let a01 = builder.var();
-    let a02 = builder.var();
-    let a03 = builder.var();
-    let a10 = builder.var();
-    let a11 = builder.var();
-    let a12 = builder.var();
-    let a13 = builder.var();
-    let a20 = builder.var();
-    let a21 = builder.var();
-    let a22 = builder.var();
-    let a23 = builder.var();
-    let o10 = builder.tf_add(a00, a01);
-    let o11 = builder.tf_add(o10, a02);
-    let row1 = builder.tf_add(o11, a03);
-    let o20 = builder.tf_add(a10, a11);
-    let o21 = builder.tf_add(o20, a12);
-    let row2 = builder.tf_add(o21, a13);
-    let o30 = builder.tf_add(a20, a21);
-    let o31 = builder.tf_add(o30, a22);
-    let row3 = builder.tf_add(o31, a23);
-    let _ = builder.tf_div(a00, row1);
-    let _ = builder.tf_div(a01, row1);
-    let _ = builder.tf_div(a02, row1);
-    let _ = builder.tf_div(a03, row1);
-    let _ = builder.tf_div(a10, row2);
-    let _ = builder.tf_div(a11, row2);
-    let _ = builder.tf_div(a12, row2);
-    let _ = builder.tf_div(a13, row2);
-    let _ = builder.tf_div(a20, row3);
-    let _ = builder.tf_div(a21, row3);
-    let _ = builder.tf_div(a22, row3);
-    let _ = builder.tf_div(a23, row3);
-    let spec = builder.finish();
-
-    synthesize(opts, context, &spec, &library)
-}
-
-fn mytest5(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     let mut library = Library::brahma_std();
     library
         .components
@@ -289,24 +233,70 @@ fn mytest5(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
             Some(1)
         }));
     let mut builder = ProgramBuilder::new();
-    let a0 = builder.var();
-    let a1 = builder.var();
-    let a2 = builder.var();
-    let a3 = builder.var();
-    let a4 = builder.var();
-    let a5 = builder.var();
-    let b0 = builder.const_(1);
-    let b1 = builder.const_(1);
-    let b2 = builder.const_(0);
-    let b3 = builder.const_(1);
-    let b4 = builder.const_(0);
-    let b5 = builder.const_(1);
-    let _ = builder.tf_boolean_mask(a0, b0);
-    let _ = builder.tf_boolean_mask(a1, b1);
-    let _ = builder.tf_boolean_mask(a2, b2);
-    let _ = builder.tf_boolean_mask(a3, b3);
-    let _ = builder.tf_boolean_mask(a4, b4);
-    let _ = builder.tf_boolean_mask(a5, b5);
+    let in1 = builder.var();
+    // 手动实现tf.eye
+    // 该表达式输入一个参数，输出行列长度均为该参数的的单位矩阵
+    let mut in2 : Vec<Vec<Id>> = vec![Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new()];
+    for outer_index in 1..5 {
+        for inner_index in 1..5 {
+            if outer_index == inner_index {
+                in2[outer_index - 1].push(builder.const_(1));
+            } else {
+                in2[outer_index - 1].push(builder.const_(0));
+            }
+        }
+    }
+    for index in 1..5 {
+        let _ = builder.tf_mul(in1, in2[index - 1][index - 1]);
+    }
+    let spec = builder.finish();
+
+    synthesize(opts, context, &spec, &library)
+}
+
+fn mytest5(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+    let mut in1 : Vec<Vec<Id>> = vec![Vec::new(), Vec::new(), Vec::new()];
+    for value in &mut in1 {
+        for _ in 1..4 {
+            value.push(builder.var());
+        }
+    }
+    // 求in1每一行元素的和
+    let mut o1 : Vec<Id> = vec![];
+    for value in &in1 {
+        let mut ans = builder.const_(0);
+        for index in 1..4 {
+            ans = builder.tf_add(ans, value[index - 1]);
+        }
+        o1.push(ans);
+    }
+    for outer_index in 1..3 {
+        for inner_index in 1..4 {
+            let _ = builder.tf_div(in1[outer_index - 1][inner_index - 1], o1[outer_index - 1]);
+        }
+    }
+    let spec = builder.finish();
+
+    synthesize(opts, context, &spec, &library)
+}
+
+fn mytest6(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+    let mut library = Library::brahma_std();
+    library
+        .components
+        .push(component::const_(if opts.synthesize_constants {
+            None
+        } else {
+            Some(1)
+        }));
+    let mut builder = ProgramBuilder::new();
+    let in1 = vec![builder.var(), builder.var(), builder.var(), builder.var(), builder.var(), builder.var()];
+    let in2 = vec![builder.const_(1), builder.const_(1), builder.const_(0), builder.const_(1), builder.const_(0), builder.const_(1)];
+    for index in 1..6 {
+        let _ = builder.tf_boolean_mask(in1[index - 1], in2[index - 1]);
+    }
     let spec = builder.finish();
 
     synthesize(opts, context, &spec, &library)
