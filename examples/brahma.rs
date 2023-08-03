@@ -157,6 +157,36 @@ fn synthesize(
         .synthesize()
 }
 
+/*
+下一步的重点：所有的样例是按照单个输入处理的，比如abs里面只接受一个数（Id），而不允许接受一个数组（vec！【Id】）
+例如，abs（a）是可以的，但是abs（【a， b， c】）就没办法
+之前做的工作，也只是在外部包装了一下数组，即定义三个var，然后push到数组里面，然后遍历数组，传入单个参数进行处理
+这种工作对于需要数组操作的方法来说无能为力，因为它没有办法体现在最终结果里面
+所以能够看到，在operator方法里面只有几个tf方法，因为这些太多的tf表达式和数组有关了，然而目前还没有办法实现数组的操作
+之前想到的一种方法是，可以考虑把这个过程的输出插入到最终输出的过程中，来达到目的
+比如mytest2里面的样例，可以把expanddim这个方法的输出插入到add的输出之前，但是目前做不到显示expanddim这个步骤
+而且，根据结果可知，如果不把他们放到数组里面的话，最后的结果会被“合并”
+比如【a， b， c】和【d， e， f】相加应该是a+d， b+e， c+f，但是输出只显示一个，这是不对的
+所以当务之急还是如何将代码由处理单个变量扩充到处理数组
+当然目前也不是一无进展，处理表达式第一步先要在operator里面定义，然后加入到lib里面的component，在component.rs里面编写，再在builder里面添加函数，这样就可以了
+其余的都简单，直接改成数组即可，唯独component.rs里面的make_operator和make_expression需要大改，估计lib也得改，所以是个大工程o(╥﹏╥)o
+*/
+
+/*
+  examples = [
+      benchmark.Example(
+          inputs=[
+              [10],
+              [20],
+          ],
+          output=[30],
+      ),
+  ]
+  constants = [0]
+  description = 'Add elementwise'
+  target_program = 'tf.add(in1, in2)'
+  source = 'test'
+*/
 fn mytest1(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     let library = Library::brahma_std();
     // 如果不需要常数，那么就去掉上面的mut，否则的加上mut来符合rust语法
@@ -178,7 +208,21 @@ fn mytest1(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
 
     synthesize(opts, context, &spec, &library)
 }
-
+/*
+  examples = [
+      benchmark.Example(
+          inputs=[
+              [3, 4, 5],
+              [10, 20, 30],
+          ],
+          output=[[13, 14, 15], [23, 24, 25], [33, 34, 35]],
+      ),
+  ]
+  constants = []
+  description = 'Add two tensors with broadcasting'
+  target_program = 'tf.add(in1, tf.expand_dims(in2, 1))'
+  source = 'handwritten task'
+*/
 fn mytest2(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     let library = Library::brahma_std();
     let mut builder = ProgramBuilder::new();
@@ -202,7 +246,20 @@ fn mytest2(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
 
     synthesize(opts, context, &spec, &library)
 }
-
+/*
+  examples = [
+      benchmark.Example(
+          inputs=[
+              [1, 2, 3],
+          ],
+          output=[101, 102, 103]
+      ),
+  ]
+  constants = [100]
+  description = 'Add 100 to every element'
+  target_program = 'tf.add(in1, tf.constant(100))'
+  source = 'handwritten task'
+*/
 fn mytest3(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     let mut library = Library::brahma_std();
     library
@@ -222,7 +279,24 @@ fn mytest3(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
 
     synthesize(opts, context, &spec, &library)
 }
-
+/*
+  examples = [
+      benchmark.Example(
+          inputs=[
+              tf.constant(7.0),
+          ],
+          output=[[7.0, 0.0, 0.0, 0.0, 0.0],
+                  [0.0, 7.0, 0.0, 0.0, 0.0],
+                  [0.0, 0.0, 7.0, 0.0, 0.0],
+                  [0.0, 0.0, 0.0, 7.0, 0.0],
+                  [0.0, 0.0, 0.0, 0.0, 7.0]]
+      ),
+  ]
+  constants = []
+  description = 'Multiply with the identity matrix'
+  target_program = 'tf.multiply(in1, tf.eye(5))'
+  source = 'handwritten task'
+*/
 fn mytest4(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     let mut library = Library::brahma_std();
     library
@@ -253,7 +327,24 @@ fn mytest4(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
 
     synthesize(opts, context, &spec, &library)
 }
-
+/*
+  examples = [
+      benchmark.Example(
+          inputs=[
+              [[0.0, 1.0, 0.0, 0.0],
+               [0.0, 1.0, 1.0, 0.0],
+               [1.0, 1.0, 1.0, 1.0]],
+          ],
+          output=[[0.0, 1.0, 0.0, 0.0],
+                  [0.0, 0.5, 0.5, 0.0],
+                  [0.25, 0.25, 0.25, 0.25]]
+      ),
+  ]
+  constants = []
+  description = 'Divide each row by the sum of that row'
+  target_program = 'tf.divide(in1, tf.expand_dims(tf.reduce_sum(in1, axis=1), 1))'
+  source = 'Real task encountered by Googler, 11/01/2018'
+*/
 fn mytest5(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     let library = Library::brahma_std();
     let mut builder = ProgramBuilder::new();
@@ -281,7 +372,22 @@ fn mytest5(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
 
     synthesize(opts, context, &spec, &library)
 }
-
+/*
+  examples = [
+      benchmark.Example(
+          inputs=[
+              [10, 20, 0, 40, 0, 30],
+              [1, 1, 0, 1, 0, 1],
+          ],
+          output=[10, 20, 40, 30]
+      ),
+  ]
+  constants = []
+  description = 'gather the marked elements'
+  target_program = 'tf.boolean_mask(in1, tf.cast(in2, tf.bool))'
+  source = ('Proposed by Googler at an internal demo on 8/13/2019, '
+            'simplified slightly')
+*/
 fn mytest6(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     let mut library = Library::brahma_std();
     library

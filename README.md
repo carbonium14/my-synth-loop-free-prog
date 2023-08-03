@@ -1,5 +1,11 @@
 # 注意！此项目为[synth-loop-free-prog](https://github.com/fitzgen/synth-loop-free-prog)的副本，原文档请参考上文提供的地址中的[readme.md](https://github.com/fitzgen/synth-loop-free-prog/blob/master/README.md)
 
+## 注意，自定义的运行方式如下所示，避免和原来的程序冲突
+
+```shell
+$ cargo run --example brahma -- --mytest
+```
+
 # `synth-loop-free-prog`
 
 Implementing [*Synthesis of Loop-free Programs* by Gulwani et
