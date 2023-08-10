@@ -20,10 +20,11 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::{self, Display};
 use std::iter::FromIterator;
 use std::ops::Range;
-use std::time;
+use std::{time, result};
 use z3::ast::{Ast, Bool, BV as BitVec};
 
 const FULL_BIT_WIDTH: u32 = 32;
+
 
 fn and<'a, 'b>(context: &'a z3::Context, exprs: impl IntoIterator<Item = &'b Bool<'a>>) -> Bool<'a>
 where
@@ -41,38 +42,99 @@ where
     Bool::from_bool(context, false).or(&exprs)
 }
 
-fn fresh_immediate(context: &z3::Context, bit_width: u32) -> BitVec {
-    BitVec::fresh_const(context, "immediate", bit_width)
-}
+//here
+// fn fresh_immediate(context: &z3::Context, bit_width: u32) -> BitVec {
+//     BitVec::fresh_const(context, "immediate", bit_width)
+// }
 
-fn fresh_param(context: &z3::Context, bit_width: u32) -> BitVec {
-    BitVec::fresh_const(context, "param", bit_width)
-}
+// fn fresh_param(context: &z3::Context, bit_width: u32) -> BitVec {
+//     BitVec::fresh_const(context, "param", bit_width)
+// }
 
-fn fresh_result(context: &z3::Context, bit_width: u32) -> BitVec {
-    BitVec::fresh_const(context, "result", bit_width)
-}
+// fn fresh_result(context: &z3::Context, bit_width: u32) -> BitVec {
+//     BitVec::fresh_const(context, "result", bit_width)
+// }
 
-fn fresh_input(context: &z3::Context, bit_width: u32) -> BitVec {
-    BitVec::fresh_const(context, "input", bit_width)
-}
+// fn fresh_input(context: &z3::Context, bit_width: u32) -> BitVec {
+//     BitVec::fresh_const(context, "input", bit_width)
+// }
 
-fn fresh_output(context: &z3::Context, bit_width: u32) -> BitVec {
-    BitVec::fresh_const(context, "output", bit_width)
+// fn fresh_output(context: &z3::Context, bit_width: u32) -> BitVec {
+//     BitVec::fresh_const(context, "output", bit_width)
+// }
+
+//TODO:这里限定了数组是一维数组，并且直接给出了len的大小，正常来说这里应该传的是动态的纬度
+fn fresh_immediate(context: &z3::Context, bit_width: u32, len : u32) -> Vec<BitVec> {
+    let mut result : Vec<BitVec> = Vec::new();
+    for i in 1..len {
+        result.push(BitVec::fresh_const(context, "immediate", bit_width));
+    }
+    return result;
+}
+//TODO:这里限定了数组是一维数组，并且直接给出了len的大小，正常来说这里应该传的是动态的纬度
+fn fresh_param(context: &z3::Context, bit_width: u32, len : u32) -> Vec<BitVec> {
+    let mut result : Vec<BitVec> = Vec::new();
+    for i in 1..len {
+        result.push(BitVec::fresh_const(context, "param", bit_width));
+    }
+    return result;
+}
+//TODO:这里限定了数组是一维数组，并且直接给出了len的大小，正常来说这里应该传的是动态的纬度
+fn fresh_result(context: &z3::Context, bit_width: u32, len : u32) -> Vec<BitVec> {
+    let mut result : Vec<BitVec> = Vec::new();
+    for i in 1..len {
+        result.push(BitVec::fresh_const(context, "result", bit_width));
+    }
+    return result;
+}
+//TODO:这里限定了数组是一维数组，并且直接给出了len的大小，正常来说这里应该传的是动态的纬度
+fn fresh_input(context: &z3::Context, bit_width: u32, len : u32) -> Vec<BitVec> {
+    let mut result : Vec<BitVec> = Vec::new();
+    for i in 1..len {
+        result.push(BitVec::fresh_const(context, "input", bit_width));
+    }
+    return result;
+}
+//TODO:这里限定了数组是一维数组，并且直接给出了len的大小，正常来说这里应该传的是动态的纬度
+fn fresh_output(context: &z3::Context, bit_width: u32, len : u32) -> Vec<BitVec> {
+    let mut result : Vec<BitVec> = Vec::new();
+    for i in 1..len {
+        result.push(BitVec::fresh_const(context, "output", bit_width));
+    }
+    return result;
 }
 
 fn eval_bitvec(model: &z3::Model, bv: &BitVec) -> u64 {
     model.eval(bv).unwrap().as_u64().unwrap()
 }
 
-fn eval_bitvecs<'a, I>(model: &'a z3::Model, bvs: I) -> Vec<u64>
+//bitvec -> u64
+fn eval_bitvecs<'a, I>(model: &'a z3::Model, bvs:I) -> Vec<Vec<u64>>
 where
-    I: IntoIterator<Item = &'a BitVec<'a>>,
+    I: IntoIterator<Item = &'a Vec< BitVec<'a>>>,
+{
+    let mut result : Vec<Vec<u64>> = Vec::new();
+
+    for v in bvs.into_iter() {
+        let mut temp : Vec<u64> = Vec::new();
+        for k in 1..v.len() {
+            temp.push(eval_bitvec(model, &v[k-1]));
+        }
+        result.push(temp);
+
+    }
+    return result;
+}
+
+
+/*fn eval_bitvecs<'a, I>(model: &'a z3::Model, bvs: I) -> Vec<u64>
+where
+    I: IntoIterator<Item = &'a Vec<BitVec<'a>>>,
 {
     bvs.into_iter()
-        .map(move |bv| eval_bitvec(model, bv))
+        .map(move |bv| eval_bitvec(model, &bv[0]))
         .collect()
-}
+}*/
 
 fn eval_line(model: &z3::Model, line: &Line) -> u32 {
     eval_bitvec(model, line) as u32
@@ -138,8 +200,8 @@ pub trait Specification: fmt::Debug {
     fn make_expression<'a>(
         &self,
         context: &'a z3::Context,
-        inputs: &[BitVec<'a>],
-        output: &BitVec<'a>,
+        inputs: &Vec<Vec<BitVec<'a>>>,
+        output: &Vec<BitVec<'a>>,
         bit_width: u32,
     ) -> Bool<'a>;
 }
@@ -221,10 +283,11 @@ impl Library {
                 // // 12.
                 // component::xor(),
                 component::tf_abs(),
-                component::tf_add(),
+                //here
+                /*component::tf_add(),
                 component::tf_mul(),
                 component::tf_div(),
-                component::tf_boolean_mask(),
+                component::tf_boolean_mask(),*/
             ],
         }
     }
@@ -442,7 +505,7 @@ impl<'a> LocationVars<'a> {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 struct Assignments {
-    immediates: Vec<u64>,
+    immediates: Vec<Vec<u64>>,
     // The line in the program where the i^th input is defined (for all inputs
     // of all components).
     params: Vec<u32>,
@@ -501,7 +564,7 @@ impl Display for Program {
 
 enum Verification {
     WorksForAllInputs,
-    Counterexample(Vec<u64>),
+    Counterexample(Vec<Vec<u64>>),
 }
 
 #[derive(Debug, Clone)]
@@ -612,30 +675,60 @@ impl<'a> Synthesizer<'a> {
         );
         self.invalid_connections.contains(&(i, j)) || self.invalid_connections.contains(&(j, i))
     }
+    
+    //here
+    // fn fresh_immediates(&self, bit_width: u32) -> Vec<BitVec<'a>> {
+    //     self.library
+    //         .components
+    //         .iter()
+    //         .flat_map(|c| {
+    //             (0..c.immediate_arity()).map(|_| fresh_immediate(self.context, bit_width))
+    //         })
+    //         .collect()
+    // }
 
-    fn fresh_immediates(&self, bit_width: u32) -> Vec<BitVec<'a>> {
+    // fn fresh_param_vars(&self, bit_width: u32) -> Vec<BitVec<'a>> {
+    //     self.library
+    //         .components
+    //         .iter()
+    //         .flat_map(|c| (0..c.operand_arity()).map(|_| fresh_param(self.context, bit_width)))
+    //         .collect()
+    // }
+
+
+    // fn fresh_result_vars(&self, bit_width: u32) -> Vec<BitVec<'a>> {
+    //     self.library
+    //         .components
+    //         .iter()
+    //         .map(|_| fresh_result(self.context, bit_width))
+    //         .collect()
+    // }
+
+
+    fn fresh_immediates(&self, bit_width: u32, len: u32) -> Vec<Vec<BitVec<'a>>> {
         self.library
             .components
             .iter()
             .flat_map(|c| {
-                (0..c.immediate_arity()).map(|_| fresh_immediate(self.context, bit_width))
+                (0..c.immediate_arity()).map(|_| fresh_immediate(self.context, bit_width, len))
             })
             .collect()
     }
 
-    fn fresh_param_vars(&self, bit_width: u32) -> Vec<BitVec<'a>> {
+    fn fresh_param_vars(&self, bit_width: u32, len: u32) -> Vec<Vec<BitVec<'a>>> {
         self.library
             .components
             .iter()
-            .flat_map(|c| (0..c.operand_arity()).map(|_| fresh_param(self.context, bit_width)))
+            .flat_map(|c| (0..c.operand_arity()).map(|_| fresh_param(self.context, bit_width, len)))
             .collect()
     }
 
-    fn fresh_result_vars(&self, bit_width: u32) -> Vec<BitVec<'a>> {
+
+    fn fresh_result_vars(&self, bit_width: u32, len : u32) -> Vec<Vec<BitVec<'a>>> {
         self.library
             .components
             .iter()
-            .map(|_| fresh_result(self.context, bit_width))
+            .map(|_| fresh_result(self.context, bit_width, len))
             .collect()
     }
 
@@ -678,6 +771,7 @@ impl<'a> Synthesizer<'a> {
         self.not_invalid_assignments = Bool::from_bool(self.context, true);
     }
 
+    /* here
     fn finite_synthesis(
         &mut self,
         inputs: &HashSet<Vec<u64>>,
@@ -764,12 +858,104 @@ impl<'a> Synthesizer<'a> {
             }
         }
     }
+    */
 
-    fn verification(&mut self, assignments: &Assignments, bit_width: u32) -> Result<Verification> {
+    fn finite_synthesis(
+        &mut self,
+        inputs: &HashSet<Vec<Vec<u64>>>,
+        output_line: u32,
+        bit_width: u32,
+        array_len: u32
+    ) -> Result<Assignments> {
+        debug!(
+            "finite synthesis at bit width {} with inputs = {:#018X?}",
+            bit_width,
+            {
+                let mut inputs: Vec<_> = inputs.iter().collect();
+                inputs.sort();
+                inputs
+            }
+        );
+
+        let immediates = self.fresh_immediates(bit_width, array_len);
+        let mut works_for_inputs = Vec::with_capacity(inputs.len() * 4);
+
+        for input in inputs {
+            let params = self.fresh_param_vars(bit_width, array_len);
+            let results = self.fresh_result_vars(bit_width, array_len);
+            let inputs: Vec<_> = input
+                .iter()
+                .map(|i| 
+                    (0..i.len()).map(|_| BitVec::from_i64(self.context, i[0] as i64, bit_width)).collect()
+                )
+                .collect();
+            //i[0] ?
+            let output = fresh_output(self.context, bit_width, array_len);
+
+            let lib = self.library(&immediates, &params, &results, bit_width);
+            works_for_inputs.push(lib);
+
+            let conn = self.connectivity(&inputs, &output, &params, &results);
+            works_for_inputs.push(conn);
+
+            let spec = self
+                .spec
+                .make_expression(self.context, &inputs, &output, bit_width);
+            works_for_inputs.push(spec);
+        }
+
+        let works_for_inputs: Vec<&_> = works_for_inputs.iter().collect();
+
+        assert!(self.spec.arity() <= output_line as usize);
+        assert!((output_line as usize) < self.spec.arity() + self.library.components.len());
+        let output_on_line = self
+            .locations
+            .output
+            ._eq(&self.locations.line_from_u32(self.context, output_line));
+
+        let query = self
+            .well_formed_program
+            .and(&works_for_inputs)
+            .and(&[&self.not_invalid_assignments, &output_on_line]);
+        trace!("finite synthesis query =\n{:?}", query);
+
+        let solver = self.solver();
+        solver.assert(&query);
+
+        match solver.check() {
+            z3::SatResult::Unknown => Err(Error::SynthesisUnknown),
+            z3::SatResult::Unsat => Err(Error::SynthesisUnsatisfiable),
+            z3::SatResult::Sat => {
+                let model = solver.get_model();
+
+                let immediates = eval_bitvecs(&model, &immediates);
+
+                let params = eval_lines(&model, &self.locations.params);
+
+                let results = eval_lines(&model, &self.locations.results);
+
+                let assignments = Assignments {
+                    immediates,
+                    params,
+                    results,
+                    output: output_line,
+                };
+
+                debug!(
+                    "finite synthesis generated:\n{}",
+                    assignments.to_program(self.spec.arity(), &self.library)
+                );
+
+                Ok(assignments)
+            }
+        }
+    }
+
+    fn verification(&mut self, assignments: &Assignments, bit_width: u32, array_len: u32) -> Result<Verification> {
         let inputs: Vec<_> = (0..self.spec.arity())
-            .map(|_| fresh_input(self.context, bit_width))
+            .map(|_| fresh_input(self.context, bit_width, array_len))
             .collect();
-        let output = fresh_output(self.context, bit_width);
+        let output = fresh_output(self.context, bit_width, array_len);
 
         let mut prog = assignments.to_program(self.spec.arity(), self.library);
         prog.dce();
@@ -810,10 +996,10 @@ impl<'a> Synthesizer<'a> {
     /// 5.2 Encoding Dataflow in Programs
     fn connectivity(
         &self,
-        inputs: &[BitVec<'a>],
-        output: &BitVec<'a>,
-        params: &[BitVec<'a>],
-        results: &[BitVec<'a>],
+        inputs: &Vec<Vec<BitVec<'a>>>,
+        output: &Vec<BitVec<'a>>,
+        params: &Vec<Vec<BitVec<'a>>>,
+        results: &Vec<Vec<BitVec<'a>>>,
     ) -> Bool<'a> {
         let locs_to_vars: Vec<_> = self
             .locations
@@ -833,13 +1019,21 @@ impl<'a> Synthesizer<'a> {
                 if self.is_invalid_connection(i as u32, j as u32) {
                     continue;
                 }
-                conn.push(l_x._eq(l_y).implies(&x._eq(y)));
+
+                //这边默认x和y的len相等
+                let mut temp = x[0]._eq(&y[0]);
+                for k in 1..x.len() {
+                    temp = temp.and(&[&temp]);
+                }
+
+                conn.push(l_x._eq(l_y).implies(&temp));
             }
         }
 
         and(self.context, &conn)
     }
 
+    /* here
     fn library(
         &self,
         immediates: &[BitVec<'a>],
@@ -868,6 +1062,49 @@ impl<'a> Synthesizer<'a> {
         }
 
         and(self.context, &exprs)
+    }*/
+
+    fn library(
+        &self,
+        immediates: &[Vec<BitVec<'a>>],
+        params: &[Vec<BitVec<'a>>],
+        results: &[Vec<BitVec<'a>>],
+        bit_width: u32,
+    ) -> Bool<'a> {
+        let mut exprs = Vec::with_capacity(self.library.components.len());
+        let mut immediates = immediates;
+        let mut params = params;
+        let mut results = results.iter();
+
+        for c in &self.library.components {
+            let (imms, rest) = immediates.split_at(c.immediate_arity());
+            immediates = rest;
+
+            let (inputs, rest) = params.split_at(c.operand_arity());
+            params = rest;
+
+            let result = results.next().unwrap();
+
+            let expression = c.make_expression(self.context, imms, inputs, bit_width);
+
+            let sz1 = result.len();
+            let sz2 = expression.len();
+
+            if sz1 != sz2 {
+                println!("error in library function!");
+            }
+ 
+            for i in 1..sz1 {
+                exprs.push(expression[i-1]._eq(&result[i-1]));
+
+            }
+            // exprs.push(
+            //     c.make_expression(self.context, imms, inputs, bit_width)[0]
+            //         ._eq(&result[0]),
+            // );
+        }
+
+        and(self.context, &exprs)
     }
 
     /// Have the solver generate initial concrete inputs for finite synthesis by
@@ -877,30 +1114,46 @@ impl<'a> Synthesizer<'a> {
     /// took this technique from Souper. Presumably it lets the solver choose
     /// inputs that are more interesting than an RNG would have chosen, which
     /// later helps it synthesize better solutions more quickly.
-    fn initial_concrete_inputs(&mut self) -> Result<HashSet<Vec<u64>>> {
+    fn initial_concrete_inputs(&mut self, array_len: u32) -> Result<HashSet<Vec<Vec<u64>>>> {
         // Taken from Souper.
         const NUM_INITIAL_INPUTS: usize = 4;
 
-        let mut inputs: HashSet<Vec<u64>> = HashSet::with_capacity(NUM_INITIAL_INPUTS);
+        let mut inputs: HashSet<Vec<Vec<u64>>> = HashSet::with_capacity(NUM_INITIAL_INPUTS);
+        
 
-        let input_vars: Vec<_> = (0..self.spec.arity())
-            .map(|_| fresh_input(self.context, FULL_BIT_WIDTH))
+        let input_vars: Vec<Vec<_>> = (0..self.spec.arity())
+            .map(|_| fresh_input(self.context, FULL_BIT_WIDTH, array_len))
             .collect();
-        let output_var = fresh_output(self.context, FULL_BIT_WIDTH);
+        let output_var = fresh_output(self.context, FULL_BIT_WIDTH, array_len);
         let spec =
             self.spec
                 .make_expression(self.context, &input_vars, &output_var, FULL_BIT_WIDTH);
         // let not_spec = spec.not();
+
+        //因为vec<>没有实现copy，只能是传递，因此先构造一个引用
+        let in1 = &input_vars;
+        let in2 = &input_vars;
+
 
         for _ in 0..NUM_INITIAL_INPUTS {
             // Make sure that we don't find the same concrete inputs that we've
             // already found.
             let mut existing_inputs = Vec::with_capacity(inputs.len());
             for input_set in &inputs {
+                //对于每一组输出，可能有好几个数组作为输入
                 let mut this_input = Vec::with_capacity(self.spec.arity());
-                for (inp, var) in input_set.iter().zip(&input_vars) {
-                    let inp = BitVec::from_i64(self.context, *inp as i64, FULL_BIT_WIDTH);
-                    this_input.push(inp._eq(var));
+                for (inp, var) in input_set.iter().zip(in1) {
+
+                    /*let inp = BitVec::from_i64(self.context, *inp as i64, FULL_BIT_WIDTH);
+                    this_input.push(inp._eq(var));*/
+                    let sz = inp.len();
+                    let mut temp = BitVec::from_i64(self.context, inp[0] as i64, FULL_BIT_WIDTH)._eq(&var[0]);
+                    for i in 2..sz {
+                        let temp2 = BitVec::from_i64(self.context, inp[i-1] as i64, FULL_BIT_WIDTH)._eq(&var[i-1]);
+                        temp = temp.and(&[&temp2]);
+                    }
+                    this_input.push(temp);
+
                 }
                 let this_input = and(self.context, &this_input);
                 existing_inputs.push(this_input);
@@ -919,7 +1172,7 @@ impl<'a> Synthesizer<'a> {
                 z3::SatResult::Unsat => return Err(Error::SynthesisUnsatisfiable),
                 z3::SatResult::Sat => {
                     let model = solver.get_model();
-                    let new_inputs = eval_bitvecs(&model, &input_vars);
+                    let new_inputs = eval_bitvecs(&model, in2);
                     let is_new = inputs.insert(new_inputs);
                     assert!(is_new);
                 }
@@ -933,8 +1186,8 @@ impl<'a> Synthesizer<'a> {
     ///
     /// The synthesizer has been configured, and we're ready to create a
     /// program.
-    pub fn synthesize(&mut self) -> Result<Program> {
-        let mut inputs = self.initial_concrete_inputs()?;
+    pub fn synthesize(&mut self, array_len: u32) -> Result<Program> {
+        let mut inputs = self.initial_concrete_inputs(array_len)?;
         assert!(!inputs.is_empty());
 
         let arity = self.spec.arity();
@@ -956,7 +1209,7 @@ impl<'a> Synthesizer<'a> {
         let mut best = Err(Error::SynthesisUnknown);
         let mut length = longest;
         while length >= shortest {
-            match self.synthesize_with_length(length, &mut inputs) {
+            match self.synthesize_with_length(length, &mut inputs, array_len) {
                 Ok(mut program) => {
                     program.dce();
 
@@ -982,18 +1235,19 @@ impl<'a> Synthesizer<'a> {
     fn synthesize_with_length(
         &mut self,
         program_length: u32,
-        inputs: &mut HashSet<Vec<u64>>,
+        inputs: &mut HashSet<Vec<Vec<u64>>>,
+        array_len: u32
     ) -> Result<Program> {
         debug!("synthesizing a program of length = {}", program_length);
 
         let mut bit_width = 2;
         'cegis: loop {
-            let assignments = self.finite_synthesis(inputs, program_length - 1, bit_width)?;
+            let assignments = self.finite_synthesis(inputs, program_length - 1, bit_width, array_len)?;
 
             let mut verifying_with_more_bits = false;
             loop {
                 debug!("verifying at bit width = {}", bit_width);
-                match self.verification(&assignments, bit_width)? {
+                match self.verification(&assignments, bit_width, array_len)? {
                     Verification::WorksForAllInputs => {
                         debug_assert!(bit_width <= FULL_BIT_WIDTH);
                         debug_assert!(bit_width.is_power_of_two());
@@ -1024,9 +1278,10 @@ impl Program {
         context: &'a z3::Context,
         spec: &impl Specification,
         library: &Library,
+        arr_len : u32
     ) -> Result<Program> {
         let mut synthesizer = Synthesizer::new(context, library, spec)?;
-        synthesizer.synthesize()
+        synthesizer.synthesize(arr_len)
     }
 
     pub fn dce(&mut self) {
@@ -1074,8 +1329,8 @@ impl Specification for Program {
     fn make_expression<'a>(
         &self,
         context: &'a z3::Context,
-        inputs: &[BitVec<'a>],
-        output: &BitVec<'a>,
+        inputs: &Vec<Vec<BitVec<'a>>>,
+        output: &Vec<BitVec<'a>>,
         bit_width: u32,
     ) -> Bool<'a> {
         assert!(self.instructions.len() > inputs.len());
@@ -1101,7 +1356,17 @@ impl Specification for Program {
             );
         }
 
-        vars.pop().unwrap()._eq(output)
+        let vars = vars.pop().unwrap();
+
+        let mut temp = vars[0]._eq(&output[0]);
+
+        for i in 2..vars.len() {
+            let temp2 = vars[i-1]._eq(&output[i-1]);
+            temp = temp.and(&[&temp2]);
+        }
+        
+        return temp;
+        
     }
 }
 

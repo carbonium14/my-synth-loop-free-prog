@@ -327,6 +327,7 @@ impl ProgramBuilder {
         result
     }
 
+    /* here
     pub fn tf_add(&mut self, a: Id, b: Id) -> Id {
         let result = self.next_id();
         self.program.instructions.push(Instruction {
@@ -361,6 +362,6 @@ impl ProgramBuilder {
             operator: Operator::TfBooleanMask(a, b),
         });
         result
-    }
+    }*/
 
 }

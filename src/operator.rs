@@ -51,14 +51,14 @@ pub enum Operator {
 
     // 绝对值，
     TfAbs(Id),
-    // 相加
-    TfAdd(Id, Id),
+    // 相加 here
+    //TfAdd(Id, Id),
     // 相乘
-    TfMul(Id, Id),
+    //TfMul(Id, Id),
     // 相除
-    TfDiv(Id, Id),
+    //TfDiv(Id, Id),
     // 掩码，即如果为1则返回原值，为0则什么也不做
-    TfBooleanMask(Id, Id),
+    //TfBooleanMask(Id, Id),
 }
 
 impl Operator {
@@ -93,7 +93,8 @@ impl Operator {
             // | Operator::Rotr(_, _) => 2,
             // Operator::Select(_, _, _) => 3,
             Operator::TfAbs(_) => 1,
-            Operator::TfAdd(_, _) | Operator::TfMul(_, _) | Operator::TfDiv(_, _) | Operator::TfBooleanMask(_, _) => 2,
+            //here
+            //Operator::TfAdd(_, _) | Operator::TfMul(_, _) | Operator::TfDiv(_, _) | Operator::TfBooleanMask(_, _) => 2,
         }
     }
 
@@ -141,10 +142,12 @@ impl Operator {
             //     f(c);
             // }
             Operator::TfAbs(a) => f(a),
+            
+            /* here
             Operator::TfAdd(a, b) | Operator::TfMul(a, b) | Operator::TfDiv(a, b) | Operator::TfBooleanMask(a, b) => {
                 f(a);
                 f(b);
-            }
+            }*/
         }
     }
 
@@ -186,10 +189,12 @@ impl Operator {
             //     f(c);
             // }
             Operator::TfAbs(a) => f(a),
+            
+            /*here
             Operator::TfAdd(a, b) | Operator::TfMul(a, b) | Operator::TfDiv(a, b) | Operator::TfBooleanMask(a, b) => {
                 f(a);
                 f(b);
-            }
+            }*/
         }
     }
 }
@@ -230,10 +235,13 @@ impl Display for Operator {
             // Operator::Rotr(a, b) => write!(f, "rotr {}, {}", a, b),
             // Operator::Select(a, b, c) => write!(f, "select {}, {}, {}", a, b, c),
             Operator::TfAbs(id) => write!(f, "TfAbs {}", id),
+            /* here
             Operator::TfAdd(a, b) => write!(f, "TfAdd {}, {}", a, b),
             Operator::TfMul(a, b) => write!(f, "TfMul {}, {}", a, b),
             Operator::TfDiv(a, b) => write!(f, "TfDiv {}, {}", a, b),
             Operator::TfBooleanMask(a, b) => write!(f, "TfBooleanMask, {}, {}", a, b),
+            end
+            */
         }
     }
 }
