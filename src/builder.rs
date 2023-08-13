@@ -23,13 +23,13 @@ impl ProgramBuilder {
     }
 
     pub fn var(&mut self) -> Id {
-        assert!(
+        /*assert!(
             self.program
                 .instructions
                 .iter()
-                .all(|inst| inst.operator == Operator::Var),
+                .all(|inst| inst.operator == Operator::Var) ,
             "All `var`s must be at the start of the program"
-        );
+        );*/
 
         let result = self.next_id();
         self.program.instructions.push(Instruction {
@@ -39,6 +39,23 @@ impl ProgramBuilder {
         result
     }
 
+    /*pub fn vecs(&mut self, c: u64) -> Id {
+        /*assert!(
+            self.program
+                .instructions
+                .iter()
+                .all(|inst| inst.operator == Operator::Var) ,
+            "All `var`s must be at the start of the program"
+        );*/
+
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::Vecs(c),
+        });
+        result
+    }*/
+
     pub fn const_(&mut self, c: u64) -> Id {
         let result = self.next_id();
         self.program.instructions.push(Instruction {
@@ -47,7 +64,7 @@ impl ProgramBuilder {
         });
         result
     }
-
+/* 
     // pub fn eqz(&mut self, a: Id) -> Id {
     //     let result = self.next_id();
     //     self.program.instructions.push(Instruction {
@@ -316,7 +333,7 @@ impl ProgramBuilder {
     //         operator: Operator::Select(a, b, c),
     //     });
     //     result
-    // }
+    // } */
 
     pub fn tf_abs(&mut self, a: Id) -> Id {
         let result = self.next_id();

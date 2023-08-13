@@ -109,6 +109,57 @@ pub fn const_(val: Option<u64>) -> Box<dyn Component> {
     Box::new(Const(val)) as _
 }
 
+/* 
+#[derive(Debug)]
+struct Vecs(Option<u64>);
+
+impl Component for Vecs {
+    fn operand_arity(&self) -> usize {
+        1
+    }
+
+    fn make_operator(&self, immediates: &Vec<Vec<u64>>, _operands: &[Id]) -> Operator {
+        Operator::Vecs(self.0.unwrap())
+        
+    }
+
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        // immediates: &[BitVec<'a>],
+        // _operands: &[BitVec<'a>],
+        immediates: &[Vec<BitVec<'a>>],
+        _operands: &[Vec<BitVec<'a>>],
+        bit_width: u32,
+    ) -> 
+        //BitVec<'a> 
+        Vec<BitVec<'a>>
+        {
+        let mut result : Vec<BitVec<'a>> = Vec::new();
+        let sz = BitVec::as_u64(&_operands[0][0]).unwrap();
+        
+        for i in 1 .. sz  {
+            if let Some(val) = self.0 {
+                result.push(BitVec::from_i64(context, val as i64, bit_width));
+            } else {
+                result.push(immediates[0][0].clone());
+            }  
+        }
+
+        return result;
+    }
+
+    fn immediate_arity(&self) -> usize {
+         0
+    }
+}
+
+pub fn vecs_(val: Option<u64>) -> Box<dyn Component> {
+    Box::new(Vecs(val)) as _
+}*/
+
+
+/* 
 // #[derive(Debug)]
 // struct Eqz;
 
@@ -984,7 +1035,7 @@ pub fn const_(val: Option<u64>) -> Box<dyn Component> {
 
 // pub fn select() -> Box<dyn Component> {
 //     Box::new(Select) as _
-// }
+// } */
 
 #[derive(Debug)]
 struct TfAbs;
@@ -1022,6 +1073,8 @@ impl Component for TfAbs {
         // let minus_num = const0.bvsub(&operands[0]);
         // let plus_or_minus = operands[0].bvslt(&const0).ite(&one(context, bit_width), &zero(context, bit_width));
         // plus_or_minus._eq(&one(context, bit_width)).ite(&minus_num, &operands[0])
+
+        //TODO：目前只是一维
 
         let const0 = zero(context, bit_width);
         let sz = operands[0].len();
@@ -1177,11 +1230,25 @@ macro_rules! with_operator_component {
     ( $me:expr , |$c:ident| $body:expr ) => {
         match $me {
             Operator::Var => panic!("`Var` operators do not have a component"),
+            //Operator::Vecs(_) =>panic!("`Vecs` operators do not have a component"),
+            /*Operator::Vecs(_) => {
+                let $c = Vecs;
+                $body
+            }*/
             Operator::Const(c) => {
                 let $c = Const(Some(*c));
                 $body
             }
-            // Operator::Eqz(_) => {
+            // Operator::TfAdd(_, _) => {
+            //     let $c = TfAdd;
+            //     $body
+            // }
+            Operator::TfAbs(_)  => {
+                let $c = TfAbs;
+                $body
+            }
+           
+          /*  // Operator::Eqz(_) => {
             //     let $c = Eqz;
             //     $body
             // }
@@ -1304,7 +1371,7 @@ macro_rules! with_operator_component {
             Operator::TfAbs(_) => {
                 let $c = TfAbs;
                 $body
-            }
+            } */
             /* here
             Operator::TfAdd(_, _) => {
                 let $c = TfAdd;

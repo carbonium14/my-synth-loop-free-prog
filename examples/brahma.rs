@@ -32,12 +32,13 @@ fn main() {
     // }
     if opts.mytest {
         opts.problems = vec![
-            "mytest1".to_string(),
+            /*"mytest1".to_string(),
             "mytest2".to_string(),
             "mytest3".to_string(),
             "mytest4".to_string(),
             "mytest5".to_string(),
-            "mytest6".to_string(),
+            "mytest6".to_string(),*/
+            "mytest7".to_string(),
         ];
     }
 
@@ -82,6 +83,7 @@ fn main() {
         //mytest4,
         //mytest5,
         //mytest6,
+        mytest7,
     };
 
     for (name, p) in problems {
@@ -172,6 +174,19 @@ fn synthesize(
 当然目前也不是一无进展，处理表达式第一步先要在operator里面定义，然后加入到lib里面的component，在component.rs里面编写，再在builder里面添加函数，这样就可以了
 其余的都简单，直接改成数组即可，唯独component.rs里面的make_operator和make_expression需要大改，估计lib也得改，所以是个大工程o(╥﹏╥)o
 */
+
+fn mytest7(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+    //TODO：测试一纬数组，然后只有一个abs函数
+
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+    
+    let a = builder.var();
+    let _ = builder.tf_abs(a);
+    let spec = builder.finish();
+
+    synthesize(opts, context, &spec, &library,4)
+}
 
 /*
   examples = [
@@ -408,6 +423,8 @@ fn synthesize(
 
     synthesize(opts, context, &spec, &library)
 }*/
+
+/* 
 
 // fn p1(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
 //     let mut library = Library::brahma_std();
@@ -1166,4 +1183,4 @@ fn synthesize(
 //     let spec = builder.finish();
 
 //     synthesize(opts, context, &spec, &library)
-// }
+// } */
