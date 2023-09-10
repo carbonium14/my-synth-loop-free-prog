@@ -32,12 +32,13 @@ fn main() {
     // }
     if opts.mytest {
         opts.problems = vec![
-            "mytest1".to_string(),
+            /*"mytest1".to_string(),
             "mytest2".to_string(),
             "mytest3".to_string(),
             "mytest4".to_string(),
             "mytest5".to_string(),
-            "mytest6".to_string(),
+            "mytest6".to_string(),*/
+            "mytest7".to_string(),
         ];
     }
 
@@ -76,12 +77,13 @@ fn main() {
         // p23,
         // p24,
         // p25,
-        mytest1,
-        mytest2,
-        mytest3,
-        mytest4,
-        mytest5,
-        mytest6,
+        //mytest1,
+        //mytest2,
+        //mytest3,
+        //mytest4,
+        //mytest5,
+        //mytest6,
+        mytest7,
     };
 
     for (name, p) in problems {
@@ -150,11 +152,12 @@ fn synthesize(
     context: &z3::Context,
     spec: &dyn Specification,
     library: &Library,
+    arr_len : u32
 ) -> SynthResult<Program> {
     Synthesizer::new(context, library, spec)?
         .set_timeout(opts.timeout)
         .should_synthesize_minimal_programs(opts.minimal)
-        .synthesize()
+        .synthesize(arr_len)
 }
 
 /*
@@ -172,6 +175,19 @@ fn synthesize(
 其余的都简单，直接改成数组即可，唯独component.rs里面的make_operator和make_expression需要大改，估计lib也得改，所以是个大工程o(╥﹏╥)o
 */
 
+fn mytest7(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+    //TODO：测试一纬数组，然后只有一个abs函数
+
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+    
+    let a = builder.var();
+    let _ = builder.tf_abs(a);
+    let spec = builder.finish();
+
+    synthesize(opts, context, &spec, &library,4)
+}
+
 /*
   examples = [
       benchmark.Example(
@@ -187,27 +203,27 @@ fn synthesize(
   target_program = 'tf.add(in1, in2)'
   source = 'test'
 */
-fn mytest1(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
-    let library = Library::brahma_std();
-    // 如果不需要常数，那么就去掉上面的mut，否则的加上mut来符合rust语法
-    // 注意，这里是设置常数的，如果常数是0可以不用写，但是其余的值得写
-    // 看起来非零常数只能声明一次，因为它只有一次声明
-    // library
-    //     .components
-    //     .push(component::const_(if opts.synthesize_constants {
-    //         None
-    //     } else {
-    //         Some(1)
-    //     }));
-    // 注意，不能没有var，而且var一定要在最前面！！！
-    let mut builder = ProgramBuilder::new();
-    let in1 = vec![builder.var()];
-    let in2 = vec![builder.var()];
-    let _ = builder.tf_add(in1[0], in2[0]);
-    let spec = builder.finish();
+// fn mytest1(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+//     let library = Library::brahma_std();
+//     // 如果不需要常数，那么就去掉上面的mut，否则的加上mut来符合rust语法
+//     // 注意，这里是设置常数的，如果常数是0可以不用写，但是其余的值得写
+//     // 看起来非零常数只能声明一次，因为它只有一次声明
+//     // library
+//     //     .components
+//     //     .push(component::const_(if opts.synthesize_constants {
+//     //         None
+//     //     } else {
+//     //         Some(1)
+//     //     }));
+//     // 注意，不能没有var，而且var一定要在最前面！！！
+//     let mut builder = ProgramBuilder::new();
+//     let in1 = vec![builder.var()];
+//     let in2 = vec![builder.var()];
+//     let _ = builder.tf_add(in1[0], in2[0]);
+//     let spec = builder.finish();
 
-    synthesize(opts, context, &spec, &library)
-}
+//     synthesize(opts, context, &spec, &library, 1)
+// }
 /*
   examples = [
       benchmark.Example(
@@ -223,7 +239,7 @@ fn mytest1(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
   target_program = 'tf.add(in1, tf.expand_dims(in2, 1))'
   source = 'handwritten task'
 */
-fn mytest2(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+/*fn mytest2(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     let library = Library::brahma_std();
     let mut builder = ProgramBuilder::new();
     let in1 = vec![builder.var(), builder.var(), builder.var()];
@@ -245,7 +261,7 @@ fn mytest2(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     let spec = builder.finish();
 
     synthesize(opts, context, &spec, &library)
-}
+}*/
 /*
   examples = [
       benchmark.Example(
@@ -260,7 +276,7 @@ fn mytest2(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
   target_program = 'tf.add(in1, tf.constant(100))'
   source = 'handwritten task'
 */
-fn mytest3(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+/*fn mytest3(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     let mut library = Library::brahma_std();
     library
         .components
@@ -278,7 +294,7 @@ fn mytest3(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     let spec = builder.finish();
 
     synthesize(opts, context, &spec, &library)
-}
+}*/
 /*
   examples = [
       benchmark.Example(
@@ -297,7 +313,7 @@ fn mytest3(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
   target_program = 'tf.multiply(in1, tf.eye(5))'
   source = 'handwritten task'
 */
-fn mytest4(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+/*fn mytest4(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     let mut library = Library::brahma_std();
     library
         .components
@@ -326,7 +342,7 @@ fn mytest4(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     let spec = builder.finish();
 
     synthesize(opts, context, &spec, &library)
-}
+}*/
 /*
   examples = [
       benchmark.Example(
@@ -345,7 +361,7 @@ fn mytest4(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
   target_program = 'tf.divide(in1, tf.expand_dims(tf.reduce_sum(in1, axis=1), 1))'
   source = 'Real task encountered by Googler, 11/01/2018'
 */
-fn mytest5(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+/*fn mytest5(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     let library = Library::brahma_std();
     let mut builder = ProgramBuilder::new();
     let mut in1 : Vec<Vec<Id>> = vec![Vec::new(), Vec::new(), Vec::new()];
@@ -371,7 +387,7 @@ fn mytest5(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     let spec = builder.finish();
 
     synthesize(opts, context, &spec, &library)
-}
+}*/
 /*
   examples = [
       benchmark.Example(
@@ -388,7 +404,7 @@ fn mytest5(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
   source = ('Proposed by Googler at an internal demo on 8/13/2019, '
             'simplified slightly')
 */
-fn mytest6(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+/*mytest6(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     let mut library = Library::brahma_std();
     library
         .components
@@ -406,7 +422,9 @@ fn mytest6(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     let spec = builder.finish();
 
     synthesize(opts, context, &spec, &library)
-}
+}*/
+
+/* 
 
 // fn p1(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
 //     let mut library = Library::brahma_std();
@@ -1165,4 +1183,4 @@ fn mytest6(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
 //     let spec = builder.finish();
 
 //     synthesize(opts, context, &spec, &library)
-// }
+// } */

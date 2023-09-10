@@ -9,6 +9,9 @@ pub enum Operator {
     // A constant value.
     Const(u64),
 
+    //产生一个vec，传入的是一维vec的长度 TODO：后面需要转化为纬度
+    //Vecs(u64),
+
     // // Unary operators.
     // Eqz(Id),
     // Clz(Id),
@@ -51,20 +54,21 @@ pub enum Operator {
 
     // 绝对值，
     TfAbs(Id),
-    // 相加
-    TfAdd(Id, Id),
+    // 相加 here
+    //TfAdd(Id, Id),
     // 相乘
-    TfMul(Id, Id),
+    //TfMul(Id, Id),
     // 相除
-    TfDiv(Id, Id),
+    //TfDiv(Id, Id),
     // 掩码，即如果为1则返回原值，为0则什么也不做
-    TfBooleanMask(Id, Id),
+    //TfBooleanMask(Id, Id),
 }
 
 impl Operator {
     pub fn arity(&self) -> usize {
         match self {
             Operator::Var | Operator::Const(_) => 0,
+            //Operator::Vecs(_) => 1,
             // Operator::Eqz(_) | Operator::Clz(_) | Operator::Ctz(_) | Operator::Popcnt(_) => 1,
             // Operator::Eq(_, _)
             // | Operator::Ne(_, _)
@@ -93,7 +97,8 @@ impl Operator {
             // | Operator::Rotr(_, _) => 2,
             // Operator::Select(_, _, _) => 3,
             Operator::TfAbs(_) => 1,
-            Operator::TfAdd(_, _) | Operator::TfMul(_, _) | Operator::TfDiv(_, _) | Operator::TfBooleanMask(_, _) => 2,
+            //here
+            //Operator::TfAdd(_, _) | Operator::TfMul(_, _) | Operator::TfDiv(_, _) | Operator::TfBooleanMask(_, _) => 2,
         }
     }
 
@@ -105,7 +110,7 @@ impl Operator {
 
     pub fn operands(&self, mut f: impl FnMut(Id)) {
         match *self {
-            Operator::Var | Operator::Const(_) => {}
+            Operator::Var | Operator::Const(_) => {},
             // Operator::Eqz(a) | Operator::Clz(a) | Operator::Ctz(a) | Operator::Popcnt(a) => f(a),
             // Operator::Eq(a, b)
             // | Operator::Ne(a, b)
@@ -141,10 +146,13 @@ impl Operator {
             //     f(c);
             // }
             Operator::TfAbs(a) => f(a),
+            //Operator::Vecs(a) => {},
+            
+            /* here
             Operator::TfAdd(a, b) | Operator::TfMul(a, b) | Operator::TfDiv(a, b) | Operator::TfBooleanMask(a, b) => {
                 f(a);
                 f(b);
-            }
+            }*/
         }
     }
 
@@ -186,10 +194,12 @@ impl Operator {
             //     f(c);
             // }
             Operator::TfAbs(a) => f(a),
+            
+            /*here
             Operator::TfAdd(a, b) | Operator::TfMul(a, b) | Operator::TfDiv(a, b) | Operator::TfBooleanMask(a, b) => {
                 f(a);
                 f(b);
-            }
+            }*/
         }
     }
 }
@@ -197,8 +207,9 @@ impl Operator {
 impl Display for Operator {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Operator::Var => write!(f, "var"),
+            Operator::Var => write!(f, "var : vec"),
             Operator::Const(c) => write!(f, "const {:#X}", c),
+            //Operator::Vecs(id) => write!(f, "Vecs {}", id),
             // Operator::Eqz(id) => write!(f, "eqz {}", id),
             // Operator::Clz(id) => write!(f, "clz {}", id),
             // Operator::Ctz(id) => write!(f, "ctz {}", id),
@@ -230,10 +241,13 @@ impl Display for Operator {
             // Operator::Rotr(a, b) => write!(f, "rotr {}, {}", a, b),
             // Operator::Select(a, b, c) => write!(f, "select {}, {}, {}", a, b, c),
             Operator::TfAbs(id) => write!(f, "TfAbs {}", id),
+            /* here
             Operator::TfAdd(a, b) => write!(f, "TfAdd {}, {}", a, b),
             Operator::TfMul(a, b) => write!(f, "TfMul {}, {}", a, b),
             Operator::TfDiv(a, b) => write!(f, "TfDiv {}, {}", a, b),
             Operator::TfBooleanMask(a, b) => write!(f, "TfBooleanMask, {}, {}", a, b),
+            end
+            */
         }
     }
 }

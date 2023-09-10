@@ -2,6 +2,17 @@ use crate::{Id, Operator};
 use std::fmt::Debug;
 use z3::ast::{Ast, BV as BitVec};
 
+macro_rules! vecnd {
+    ($([$($inner:tt)*]),+ $(,)?) => {
+        vec![$(
+            vecnd![$($inner)*]
+        ),+]
+    };
+    ($($t:tt)*) => {
+        vec![$($t)*]
+    };
+}
+
 fn bit_vec_from_u64(context: &z3::Context, val: u64, bit_width: u32) -> BitVec {
     BitVec::from_i64(context, val as i64, bit_width)
 }
@@ -17,15 +28,22 @@ fn one(context: &z3::Context, bit_width: u32) -> BitVec {
 pub trait Component: Debug {
     fn operand_arity(&self) -> usize;
 
-    fn make_operator(&self, immediates: &[u64], operands: &[Id]) -> Operator;
+    fn make_operator(&self, immediates: &Vec<Vec<u64>>, operands: &[Id]) -> Operator;
 
     fn make_expression<'a>(
         &self,
         context: &'a z3::Context,
-        immediates: &[BitVec<'a>],
-        operands: &[BitVec<'a>],
+        // immediates: &[BitVec<'a>],
+        // operands: &[BitVec<'a>],
+        immediates: &[Vec<BitVec<'a>>],
+        operands: &[Vec<BitVec<'a>>],
+
         bit_width: u32,
-    ) -> BitVec<'a>;
+    ) -> 
+        //BitVec<'a> 
+        Vec<BitVec<'a>>;
+        
+    
 
     /// How many immediates does this component require?
     fn immediate_arity(&self) -> usize {
@@ -41,26 +59,41 @@ impl Component for Const {
         0
     }
 
-    fn make_operator(&self, immediates: &[u64], _operands: &[Id]) -> Operator {
+    fn make_operator(&self, immediates: &Vec<Vec<u64>>, _operands: &[Id]) -> Operator {
         if let Some(val) = self.0 {
             Operator::Const(val)
         } else {
-            Operator::Const(immediates[0])
+            Operator::Const(immediates[0][0])
         }
     }
 
     fn make_expression<'a>(
         &self,
         context: &'a z3::Context,
-        immediates: &[BitVec<'a>],
-        _operands: &[BitVec<'a>],
+        // immediates: &[BitVec<'a>],
+        // _operands: &[BitVec<'a>],
+        immediates: &[Vec<BitVec<'a>>],
+        _operands: &[Vec<BitVec<'a>>],
         bit_width: u32,
-    ) -> BitVec<'a> {
+    ) -> 
+        //BitVec<'a> 
+        Vec<BitVec<'a>>
+        {
+            
+        // if let Some(val) = self.0 {
+        //     BitVec::from_i64(context, val as i64, bit_width)
+        // } else {
+        //     immediates[0][0].clone()
+        // }
+
+        let mut result : Vec<BitVec<'a>> = Vec::new();
         if let Some(val) = self.0 {
-            BitVec::from_i64(context, val as i64, bit_width)
+            result.push(BitVec::from_i64(context, val as i64, bit_width));
         } else {
-            immediates[0].clone()
+            result.push(immediates[0][0].clone());
         }
+        return result;
+
     }
 
     fn immediate_arity(&self) -> usize {
@@ -76,6 +109,57 @@ pub fn const_(val: Option<u64>) -> Box<dyn Component> {
     Box::new(Const(val)) as _
 }
 
+/* 
+#[derive(Debug)]
+struct Vecs(Option<u64>);
+
+impl Component for Vecs {
+    fn operand_arity(&self) -> usize {
+        1
+    }
+
+    fn make_operator(&self, immediates: &Vec<Vec<u64>>, _operands: &[Id]) -> Operator {
+        Operator::Vecs(self.0.unwrap())
+        
+    }
+
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        // immediates: &[BitVec<'a>],
+        // _operands: &[BitVec<'a>],
+        immediates: &[Vec<BitVec<'a>>],
+        _operands: &[Vec<BitVec<'a>>],
+        bit_width: u32,
+    ) -> 
+        //BitVec<'a> 
+        Vec<BitVec<'a>>
+        {
+        let mut result : Vec<BitVec<'a>> = Vec::new();
+        let sz = BitVec::as_u64(&_operands[0][0]).unwrap();
+        
+        for i in 1 .. sz  {
+            if let Some(val) = self.0 {
+                result.push(BitVec::from_i64(context, val as i64, bit_width));
+            } else {
+                result.push(immediates[0][0].clone());
+            }  
+        }
+
+        return result;
+    }
+
+    fn immediate_arity(&self) -> usize {
+         0
+    }
+}
+
+pub fn vecs_(val: Option<u64>) -> Box<dyn Component> {
+    Box::new(Vecs(val)) as _
+}*/
+
+
+/* 
 // #[derive(Debug)]
 // struct Eqz;
 
@@ -951,7 +1035,7 @@ pub fn const_(val: Option<u64>) -> Box<dyn Component> {
 
 // pub fn select() -> Box<dyn Component> {
 //     Box::new(Select) as _
-// }
+// } */
 
 #[derive(Debug)]
 struct TfAbs;
@@ -961,17 +1045,23 @@ impl Component for TfAbs {
         1
     }
 
-    fn make_operator(&self, _immediates: &[u64], operands: &[Id]) -> Operator {
+    fn make_operator(&self, _immediates: &Vec<Vec<u64>>, operands: &[Id]) -> Operator {
+        println!("{}", (&operands[0]));
         Operator::TfAbs(operands[0])
     }
 
     fn make_expression<'a>(
         &self,
         context: &'a z3::Context,
-        _immediates: &[BitVec<'a>],
-        operands: &[BitVec<'a>],
+        // _immediates: &[BitVec<'a>],
+        // operands: &[BitVec<'a>],
+        _immediates: &[Vec<BitVec<'a>>],
+        operands: &[Vec<BitVec<'a>>],
         bit_width: u32,
-    ) -> BitVec<'a> {
+    ) -> 
+        Vec<BitVec<'a>>
+        //BitVec<'a> 
+       {
         /* 
             a = operands[0]
             b = const(0)
@@ -979,16 +1069,32 @@ impl Component for TfAbs {
             o1 = lts(a, b) 如果o1为正则a小于b，也就是a为负，反之则为a为正
             _ = select(o1, c, a) 负数返回相反数，正数返回自身
         */
+        // let const0 = zero(context, bit_width);
+        // let minus_num = const0.bvsub(&operands[0]);
+        // let plus_or_minus = operands[0].bvslt(&const0).ite(&one(context, bit_width), &zero(context, bit_width));
+        // plus_or_minus._eq(&one(context, bit_width)).ite(&minus_num, &operands[0])
+
+        //TODO：目前只是一维
+
         let const0 = zero(context, bit_width);
-        let minus_num = const0.bvsub(&operands[0]);
-        let plus_or_minus = operands[0].bvslt(&const0).ite(&one(context, bit_width), &zero(context, bit_width));
-        plus_or_minus._eq(&one(context, bit_width)).ite(&minus_num, &operands[0])
+        let sz = operands[0].len();
+        let mut result : Vec<BitVec> = Vec::new();
+        for i in 1..sz {
+            let minus_num = const0.bvsub(&operands[0][i-1]);
+            let plus_or_minus = operands[0][i-1].bvslt(&const0).ite(&one(context, bit_width), &zero(context, bit_width));
+            result.push(plus_or_minus._eq(&one(context, bit_width)).ite(&minus_num, &operands[0][i-1]))
+        }
+        return result;
+        
+
     }
 }
 
 pub fn tf_abs() -> Box<dyn Component> {
     Box::new(TfAbs) as _
 }
+
+/* here
 
 #[derive(Debug)]
 struct TfAdd;
@@ -1118,16 +1224,31 @@ impl Component for TfBooleanMask {
 pub fn tf_boolean_mask() -> Box<dyn Component> {
     Box::new(TfBooleanMask) as _
 }
-
+end
+*/
 macro_rules! with_operator_component {
     ( $me:expr , |$c:ident| $body:expr ) => {
         match $me {
             Operator::Var => panic!("`Var` operators do not have a component"),
+            //Operator::Vecs(_) =>panic!("`Vecs` operators do not have a component"),
+            /*Operator::Vecs(_) => {
+                let $c = Vecs;
+                $body
+            }*/
             Operator::Const(c) => {
                 let $c = Const(Some(*c));
                 $body
             }
-            // Operator::Eqz(_) => {
+            // Operator::TfAdd(_, _) => {
+            //     let $c = TfAdd;
+            //     $body
+            // }
+            Operator::TfAbs(_)  => {
+                let $c = TfAbs;
+                $body
+            }
+           
+          /*  // Operator::Eqz(_) => {
             //     let $c = Eqz;
             //     $body
             // }
@@ -1250,7 +1371,8 @@ macro_rules! with_operator_component {
             Operator::TfAbs(_) => {
                 let $c = TfAbs;
                 $body
-            }
+            } */
+            /* here
             Operator::TfAdd(_, _) => {
                 let $c = TfAdd;
                 $body
@@ -1267,6 +1389,7 @@ macro_rules! with_operator_component {
                 let $c = TfBooleanMask;
                 $body
             }
+            */
         }
     };
 }
@@ -1276,17 +1399,29 @@ impl Component for Operator {
         Operator::arity(self)
     }
 
-    fn make_operator(&self, immediates: &[u64], operands: &[Id]) -> Operator {
+    fn make_operator(&self, immediates: &Vec<Vec<u64>>, operands: &[Id]) -> Operator {
         with_operator_component!(self, |c| c.make_operator(immediates, operands))
     }
+
+    // fn make_expression<'a>(
+    //     &self,
+    //     context: &'a z3::Context,
+    //     immediates: &[BitVec<'a>],
+    //     operands: &[BitVec<'a>],
+    //     bit_width: u32,
+    // ) -> BitVec<'a> {
+    //     with_operator_component!(self, |c| {
+    //         c.make_expression(context, immediates, operands, bit_width)
+    //     })
+    // }
 
     fn make_expression<'a>(
         &self,
         context: &'a z3::Context,
-        immediates: &[BitVec<'a>],
-        operands: &[BitVec<'a>],
+        immediates: &[Vec<BitVec<'a>>],
+        operands: &[Vec<BitVec<'a>>],
         bit_width: u32,
-    ) -> BitVec<'a> {
+    ) -> Vec<BitVec<'a>> {
         with_operator_component!(self, |c| {
             c.make_expression(context, immediates, operands, bit_width)
         })
