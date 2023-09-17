@@ -32,13 +32,9 @@ fn main() {
     // }
     if opts.mytest {
         opts.problems = vec![
-            /*"mytest1".to_string(),
-            "mytest2".to_string(),
+            "mytest1".to_string(),
             "mytest3".to_string(),
-            "mytest4".to_string(),
-            "mytest5".to_string(),
-            "mytest6".to_string(),*/
-            "mytest7".to_string(),
+            "mytest6".to_string(),
         ];
     }
 
@@ -77,13 +73,9 @@ fn main() {
         // p23,
         // p24,
         // p25,
-        //mytest1,
-        //mytest2,
-        //mytest3,
-        //mytest4,
-        //mytest5,
-        //mytest6,
-        mytest7,
+        mytest1,
+        mytest3,
+        mytest6,
     };
 
     for (name, p) in problems {
@@ -152,7 +144,7 @@ fn synthesize(
     context: &z3::Context,
     spec: &dyn Specification,
     library: &Library,
-    arr_len : u32
+    arr_len: u32
 ) -> SynthResult<Program> {
     Synthesizer::new(context, library, spec)?
         .set_timeout(opts.timeout)
@@ -175,18 +167,7 @@ fn synthesize(
 其余的都简单，直接改成数组即可，唯独component.rs里面的make_operator和make_expression需要大改，估计lib也得改，所以是个大工程o(╥﹏╥)o
 */
 
-fn mytest7(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
-    //TODO：测试一纬数组，然后只有一个abs函数
-
-    let library = Library::brahma_std();
-    let mut builder = ProgramBuilder::new();
-    
-    let a = builder.var();
-    let _ = builder.tf_abs(a);
-    let spec = builder.finish();
-
-    synthesize(opts, context, &spec, &library,4)
-}
+// 这里我们序号和benchmarks的序号保持一致，方便查找，所以序号会有跳跃，因为有些还没有实现
 
 /*
   examples = [
@@ -203,65 +184,20 @@ fn mytest7(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
   target_program = 'tf.add(in1, in2)'
   source = 'test'
 */
-// fn mytest1(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
-//     let library = Library::brahma_std();
-//     // 如果不需要常数，那么就去掉上面的mut，否则的加上mut来符合rust语法
-//     // 注意，这里是设置常数的，如果常数是0可以不用写，但是其余的值得写
-//     // 看起来非零常数只能声明一次，因为它只有一次声明
-//     // library
-//     //     .components
-//     //     .push(component::const_(if opts.synthesize_constants {
-//     //         None
-//     //     } else {
-//     //         Some(1)
-//     //     }));
-//     // 注意，不能没有var，而且var一定要在最前面！！！
-//     let mut builder = ProgramBuilder::new();
-//     let in1 = vec![builder.var()];
-//     let in2 = vec![builder.var()];
-//     let _ = builder.tf_add(in1[0], in2[0]);
-//     let spec = builder.finish();
 
-//     synthesize(opts, context, &spec, &library, 1)
-// }
-/*
-  examples = [
-      benchmark.Example(
-          inputs=[
-              [3, 4, 5],
-              [10, 20, 30],
-          ],
-          output=[[13, 14, 15], [23, 24, 25], [33, 34, 35]],
-      ),
-  ]
-  constants = []
-  description = 'Add two tensors with broadcasting'
-  target_program = 'tf.add(in1, tf.expand_dims(in2, 1))'
-  source = 'handwritten task'
-*/
-/*fn mytest2(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+fn mytest1(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+
     let library = Library::brahma_std();
     let mut builder = ProgramBuilder::new();
-    let in1 = vec![builder.var(), builder.var(), builder.var()];
-    // 手动实现tf.expand_dims(in2, 1)
-    // eg：tf.expand_dims([10, 20, 30], 1)) = [[10], [20], [30]]
-    let mut in2 : Vec<Vec<Id>> = vec![Vec::new(), Vec::new(), Vec::new()];
-    for value in &mut in2 {
-        for _ in 1..3 {
-            value.push(builder.var());
-        }
-    }
-    for value_in1 in in1 {
-        for sub_in2 in &in2 {
-            for value_in2 in sub_in2 {
-                let _ = builder.tf_add(value_in1, *value_in2);
-            }
-        }
-    }
+    
+    let in1 = builder.var();
+    let in2 = builder.var();
+    let _ = builder.tf_add(in1, in2);
     let spec = builder.finish();
 
-    synthesize(opts, context, &spec, &library)
-}*/
+    synthesize(opts, context, &spec, &library, 3)
+}
+
 /*
   examples = [
       benchmark.Example(
@@ -276,7 +212,8 @@ fn mytest7(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
   target_program = 'tf.add(in1, tf.constant(100))'
   source = 'handwritten task'
 */
-/*fn mytest3(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+
+fn mytest3(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     let mut library = Library::brahma_std();
     library
         .components
@@ -286,108 +223,14 @@ fn mytest7(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
             Some(100)
         }));
     let mut builder = ProgramBuilder::new();
-    let in1 = vec![builder.var(), builder.var(), builder.var()];
-    let const_ = builder.const_(100);
-    for value_in1 in in1 {
-        let _ = builder.tf_add(value_in1, const_);
-    }
-    let spec = builder.finish();
-
-    synthesize(opts, context, &spec, &library)
-}*/
-/*
-  examples = [
-      benchmark.Example(
-          inputs=[
-              tf.constant(7.0),
-          ],
-          output=[[7.0, 0.0, 0.0, 0.0, 0.0],
-                  [0.0, 7.0, 0.0, 0.0, 0.0],
-                  [0.0, 0.0, 7.0, 0.0, 0.0],
-                  [0.0, 0.0, 0.0, 7.0, 0.0],
-                  [0.0, 0.0, 0.0, 0.0, 7.0]]
-      ),
-  ]
-  constants = []
-  description = 'Multiply with the identity matrix'
-  target_program = 'tf.multiply(in1, tf.eye(5))'
-  source = 'handwritten task'
-*/
-/*fn mytest4(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
-    let mut library = Library::brahma_std();
-    library
-        .components
-        .push(component::const_(if opts.synthesize_constants {
-            None
-        } else {
-            Some(1)
-        }));
-    let mut builder = ProgramBuilder::new();
     let in1 = builder.var();
-    // 手动实现tf.eye
-    // 该表达式输入一个参数，输出行列长度均为该参数的的单位矩阵
-    let mut in2 : Vec<Vec<Id>> = vec![Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new()];
-    for outer_index in 1..5 {
-        for inner_index in 1..5 {
-            if outer_index == inner_index {
-                in2[outer_index - 1].push(builder.const_(1));
-            } else {
-                in2[outer_index - 1].push(builder.const_(0));
-            }
-        }
-    }
-    for index in 1..5 {
-        let _ = builder.tf_mul(in1, in2[index - 1][index - 1]);
-    }
+    let const100 = builder.const_(100);
+    let _ = builder.tf_add(in1, const100);
     let spec = builder.finish();
 
-    synthesize(opts, context, &spec, &library)
-}*/
-/*
-  examples = [
-      benchmark.Example(
-          inputs=[
-              [[0.0, 1.0, 0.0, 0.0],
-               [0.0, 1.0, 1.0, 0.0],
-               [1.0, 1.0, 1.0, 1.0]],
-          ],
-          output=[[0.0, 1.0, 0.0, 0.0],
-                  [0.0, 0.5, 0.5, 0.0],
-                  [0.25, 0.25, 0.25, 0.25]]
-      ),
-  ]
-  constants = []
-  description = 'Divide each row by the sum of that row'
-  target_program = 'tf.divide(in1, tf.expand_dims(tf.reduce_sum(in1, axis=1), 1))'
-  source = 'Real task encountered by Googler, 11/01/2018'
-*/
-/*fn mytest5(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
-    let library = Library::brahma_std();
-    let mut builder = ProgramBuilder::new();
-    let mut in1 : Vec<Vec<Id>> = vec![Vec::new(), Vec::new(), Vec::new()];
-    for value in &mut in1 {
-        for _ in 1..4 {
-            value.push(builder.var());
-        }
-    }
-    // 求in1每一行元素的和
-    let mut o1 : Vec<Id> = vec![];
-    for value in &in1 {
-        let mut ans = builder.const_(0);
-        for index in 1..4 {
-            ans = builder.tf_add(ans, value[index - 1]);
-        }
-        o1.push(ans);
-    }
-    for outer_index in 1..3 {
-        for inner_index in 1..4 {
-            let _ = builder.tf_div(in1[outer_index - 1][inner_index - 1], o1[outer_index - 1]);
-        }
-    }
-    let spec = builder.finish();
+    synthesize(opts, context, &spec, &library, 3)
+}
 
-    synthesize(opts, context, &spec, &library)
-}*/
 /*
   examples = [
       benchmark.Example(
@@ -404,25 +247,17 @@ fn mytest7(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
   source = ('Proposed by Googler at an internal demo on 8/13/2019, '
             'simplified slightly')
 */
-/*mytest6(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
-    let mut library = Library::brahma_std();
-    library
-        .components
-        .push(component::const_(if opts.synthesize_constants {
-            None
-        } else {
-            Some(1)
-        }));
+
+fn mytest6(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+    let library = Library::brahma_std();
     let mut builder = ProgramBuilder::new();
-    let in1 = vec![builder.var(), builder.var(), builder.var(), builder.var(), builder.var(), builder.var()];
-    let in2 = vec![builder.const_(1), builder.const_(1), builder.const_(0), builder.const_(1), builder.const_(0), builder.const_(1)];
-    for index in 1..6 {
-        let _ = builder.tf_boolean_mask(in1[index - 1], in2[index - 1]);
-    }
+    let in1 = builder.var();
+    let in2 = builder.var();
+    let _ = builder.tf_boolean_mask(in1, in2);
     let spec = builder.finish();
 
-    synthesize(opts, context, &spec, &library)
-}*/
+    synthesize(opts, context, &spec, &library, 6)
+}
 
 /* 
 
