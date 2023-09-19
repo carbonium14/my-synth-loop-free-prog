@@ -2,16 +2,16 @@ use crate::{Id, Operator};
 use std::fmt::Debug;
 use z3::ast::{Ast, BV as BitVec};
 
-macro_rules! vecnd {
-    ($([$($inner:tt)*]),+ $(,)?) => {
-        vec![$(
-            vecnd![$($inner)*]
-        ),+]
-    };
-    ($($t:tt)*) => {
-        vec![$($t)*]
-    };
-}
+// macro_rules! vecnd {
+//     ($([$($inner:tt)*]),+ $(,)?) => {
+//         vec![$(
+//             vecnd![$($inner)*]
+//         ),+]
+//     };
+//     ($($t:tt)*) => {
+//         vec![$($t)*]
+//     };
+// }
 
 fn bit_vec_from_u64(context: &z3::Context, val: u64, bit_width: u32) -> BitVec {
     BitVec::from_i64(context, val as i64, bit_width)
@@ -70,16 +70,11 @@ impl Component for Const {
     fn make_expression<'a>(
         &self,
         context: &'a z3::Context,
-        // immediates: &[BitVec<'a>],
-        // _operands: &[BitVec<'a>],
         immediates: &[Vec<BitVec<'a>>],
         _operands: &[Vec<BitVec<'a>>],
         bit_width: u32,
-    ) -> 
-        //BitVec<'a> 
-        Vec<BitVec<'a>>
-        {
-            
+    ) -> Vec<BitVec<'a>> {
+
         // if let Some(val) = self.0 {
         //     BitVec::from_i64(context, val as i64, bit_width)
         // } else {
@@ -93,7 +88,6 @@ impl Component for Const {
             result.push(immediates[0][0].clone());
         }
         return result;
-
     }
 
     fn immediate_arity(&self) -> usize {
@@ -1046,55 +1040,40 @@ impl Component for TfAbs {
     }
 
     fn make_operator(&self, _immediates: &Vec<Vec<u64>>, operands: &[Id]) -> Operator {
-        println!("{}", (&operands[0]));
         Operator::TfAbs(operands[0])
     }
 
     fn make_expression<'a>(
         &self,
         context: &'a z3::Context,
-        // _immediates: &[BitVec<'a>],
-        // operands: &[BitVec<'a>],
         _immediates: &[Vec<BitVec<'a>>],
         operands: &[Vec<BitVec<'a>>],
         bit_width: u32,
-    ) -> 
-        Vec<BitVec<'a>>
-        //BitVec<'a> 
-       {
-        /* 
-            a = operands[0]
-            b = const(0)
-            c = sub(0, a) 构造a的相反数
-            o1 = lts(a, b) 如果o1为正则a小于b，也就是a为负，反之则为a为正
-            _ = select(o1, c, a) 负数返回相反数，正数返回自身
-        */
-        // let const0 = zero(context, bit_width);
-        // let minus_num = const0.bvsub(&operands[0]);
-        // let plus_or_minus = operands[0].bvslt(&const0).ite(&one(context, bit_width), &zero(context, bit_width));
-        // plus_or_minus._eq(&one(context, bit_width)).ite(&minus_num, &operands[0])
-
+    ) -> Vec<BitVec<'a>> {
         //TODO：目前只是一维
 
+        // 取operands[0]作为输入
+        // 取相同长度并且填充为0的数组，作取相反数的结果用
         let const0 = zero(context, bit_width);
         let sz = operands[0].len();
-        let mut result : Vec<BitVec> = Vec::new();
-        for i in 1..sz {
-            let minus_num = const0.bvsub(&operands[0][i-1]);
-            let plus_or_minus = operands[0][i-1].bvslt(&const0).ite(&one(context, bit_width), &zero(context, bit_width));
-            result.push(plus_or_minus._eq(&one(context, bit_width)).ite(&minus_num, &operands[0][i-1]))
+        let mut result: Vec<BitVec> = Vec::new();
+        // 它（for循环）是标准库提供的类型，用来生成从一个数字开始到另一个数字之前结束的所有数字的序列。
+        // 所以这里是左闭右开区间
+        for i in 0..sz {
+            //计算每一个元素的相反数，作为后面的判断，如果是正数就直接返回，负数返回相反数
+            let minus_num = const0.bvsub(&operands[0][i]);
+            // 判断输入的数是正数还是负数
+            let plus_or_minus = operands[0][i].bvslt(&const0).ite(&one(context, bit_width), &zero(context, bit_width));
+            // 正数直接返回，负数返回相反数
+            result.push(plus_or_minus._eq(&one(context, bit_width)).ite(&minus_num, &operands[0][i]))
         }
         return result;
-        
-
     }
 }
 
 pub fn tf_abs() -> Box<dyn Component> {
     Box::new(TfAbs) as _
 }
-
-/* here
 
 #[derive(Debug)]
 struct TfAdd;
@@ -1104,23 +1083,48 @@ impl Component for TfAdd {
         2
     }
 
-    fn make_operator(&self, _immediates: &[u64], operands: &[Id]) -> Operator {
+    fn make_operator(&self, _immediates: &Vec<Vec<u64>>, operands: &[Id]) -> Operator {
         Operator::TfAdd(operands[0], operands[1])
     }
 
     fn make_expression<'a>(
         &self,
-        _context: &'a z3::Context,
-        _immediates: &[BitVec<'a>],
-        operands: &[BitVec<'a>],
-        _bit_width: u32,
-    ) -> BitVec<'a> {
-        /* 
-            a = operands[0]
-            b = operands[1]
-            _ = add(a, b)
-        */
-        operands[0].bvadd(&operands[1])
+        context: &'a z3::Context,
+        _immediates: &[Vec<BitVec<'a>>],
+        operands: &[Vec<BitVec<'a>>],
+        bit_width: u32,
+    ) -> Vec<BitVec<'a>> {
+        // 获取两个输入的长度
+        let size0 = operands[0].len();
+        let size1 = operands[1].len();
+        let mut result: Vec<BitVec> = Vec::new();
+        // 如果输入等长，那么数组每个元素进行相加计算
+        if size0 == size1 {
+            for index in 0..size0 {
+                result.push(operands[0][index].bvadd(&operands[1][index]));
+            }
+        } else { 
+            // 如果输入不等长，那么先把短的数组扩充到和长的数组一样长（填充0）然后再相加
+            let const0 = zero(context, bit_width);
+            if size0 < size1 {
+                // 第一个输入比第二个输入短，先计算公共部分，然后第二个输入多出来的部分加上0即可
+                for index in 0..size0 {
+                    result.push(operands[1][index].bvadd(&operands[0][index]));
+                }
+                for index in 0..(size1 - size0) {
+                    result.push(operands[1][index].bvadd(&const0));
+                }
+            } else {
+                // 第二个输入比第一个输入短，先计算公共部分，然后第一个输入多出来的部分加上0即可
+                for index in 0..size1 {
+                    result.push(operands[0][index].bvadd(&operands[1][index]));
+                }
+                for index in 0..(size0 - size1) {
+                    result.push(operands[0][index].bvadd(&const0));
+                }
+            }
+        }
+        return result;
     }
 }
 
@@ -1136,23 +1140,48 @@ impl Component for TfMul {
         2
     }
 
-    fn make_operator(&self, _immediates: &[u64], operands: &[Id]) -> Operator {
+    fn make_operator(&self, _immediates: &Vec<Vec<u64>>, operands: &[Id]) -> Operator {
         Operator::TfMul(operands[0], operands[1])
     }
 
     fn make_expression<'a>(
         &self,
-        _context: &'a z3::Context,
-        _immediates: &[BitVec<'a>],
-        operands: &[BitVec<'a>],
-        _bit_width: u32,
-    ) -> BitVec<'a> {
-        /* 
-            a = operands[0]
-            b = operands[1]
-            _ = mul(a, b)
-        */
-        operands[0].bvmul(&operands[1])
+        context: &'a z3::Context,
+        _immediates: &[Vec<BitVec<'a>>],
+        operands: &[Vec<BitVec<'a>>],
+        bit_width: u32,
+    ) -> Vec<BitVec<'a>> {
+        // 获取两个输入的长度
+        let size0 = operands[0].len();
+        let size1 = operands[1].len();
+        let mut result: Vec<BitVec> = Vec::new();
+        // 如果输入等长，那么数组每个元素进行相乘计算
+        if size0 == size1 {
+            for index in 0..size0 {
+                result.push(operands[0][index].bvmul(&operands[1][index]));
+            }
+        } else { 
+            // 如果输入不等长，那么先把短的数组扩充到和长的数组一样长（填充1）然后再相乘
+            let const1 = one(context, bit_width);
+            if size0 < size1 {
+                // 第一个输入比第二个输入短，先计算公共部分，然后第二个输入多出来的部分乘上1即可
+                for index in 0..size0 {
+                    result.push(operands[1][index].bvmul(&operands[0][index]));
+                }
+                for index in 0..(size1 - size0) {
+                    result.push(operands[1][index].bvmul(&const1));
+                }
+            } else {
+                // 第二个输入比第一个输入短，先计算公共部分，然后第一个输入多出来的部分乘上1即可
+                for index in 0..size1 {
+                    result.push(operands[0][index].bvmul(&operands[1][index]));
+                }
+                for index in 0..(size0 - size1) {
+                    result.push(operands[0][index].bvmul(&const1));
+                }
+            }
+        }
+        return result;
     }
 }
 
@@ -1168,23 +1197,48 @@ impl Component for TfDiv {
         2
     }
 
-    fn make_operator(&self, _immediates: &[u64], operands: &[Id]) -> Operator {
+    fn make_operator(&self, _immediates: &Vec<Vec<u64>>, operands: &[Id]) -> Operator {
         Operator::TfDiv(operands[0], operands[1])
     }
 
     fn make_expression<'a>(
         &self,
-        _context: &'a z3::Context,
-        _immediates: &[BitVec<'a>],
-        operands: &[BitVec<'a>],
-        _bit_width: u32,
-    ) -> BitVec<'a> {
-        /* 
-            a = operands[0]
-            b = operands[1]
-            _ = div(a, b)
-        */
-        operands[0].bvsdiv(&operands[1])
+        context: &'a z3::Context,
+        _immediates: &[Vec<BitVec<'a>>],
+        operands: &[Vec<BitVec<'a>>],
+        bit_width: u32,
+    ) -> Vec<BitVec<'a>> {
+        // 获取两个输入的长度
+        let size0 = operands[0].len();
+        let size1 = operands[1].len();
+        let mut result: Vec<BitVec> = Vec::new();
+        // 如果输入等长，那么数组每个元素进行相除计算
+        if size0 == size1 {
+            for index in 0..size0 {
+                result.push(operands[0][index].bvsdiv(&operands[1][index]));
+            }
+        } else { 
+            // 如果输入不等长，那么先把短的数组扩充到和长的数组一样长（填充1）然后再相除
+            let const1 = one(context, bit_width);
+            if size0 < size1 {
+                // 第一个输入比第二个输入短，先计算公共部分，然后第二个输入多出来的部分除以1即可
+                for index in 0..size0 {
+                    result.push(operands[1][index].bvsdiv(&operands[0][index]));
+                }
+                for index in 0..(size1 - size0) {
+                    result.push(operands[1][index].bvsdiv(&const1));
+                }
+            } else {
+                // 第二个输入比第一个输入短，先计算公共部分，然后第一个输入多出来的部分除以1即可
+                for index in 0..size1 {
+                    result.push(operands[0][index].bvsdiv(&operands[1][index]));
+                }
+                for index in 0..(size0 - size1) {
+                    result.push(operands[0][index].bvsdiv(&const1));
+                }
+            }
+        }
+        return result;
     }
 }
 
@@ -1200,32 +1254,39 @@ impl Component for TfBooleanMask {
         2
     }
 
-    fn make_operator(&self, _immediates: &[u64], operands: &[Id]) -> Operator {
+    fn make_operator(&self, _immediates: &Vec<Vec<u64>>, operands: &[Id]) -> Operator {
         Operator::TfBooleanMask(operands[0], operands[1])
     }
 
     fn make_expression<'a>(
         &self,
         context: &'a z3::Context,
-        _immediates: &[BitVec<'a>],
-        operands: &[BitVec<'a>],
+        _immediates: &[Vec<BitVec<'a>>],
+        operands: &[Vec<BitVec<'a>>],
         bit_width: u32,
-    ) -> BitVec<'a> {
-        /* 
-            a = operands[0]
-            b = operands[1]
-            _ = select(b, a, 0) 判断输入的数是不是1，如果是则返回原值，否则返回0
-        */
+    ) -> Vec<BitVec<'a>> {
+        // 获取两个输入的长度，等长后进行后续操作
+        let size0 = operands[0].len();
+        let size1 = operands[1].len();
+        let mut result: Vec<BitVec> = Vec::new();
+        // 填充物，如果掩码部分不是1，那么就返回0
         let const0 = zero(context, bit_width);
-        operands[1]._eq(&one(context, bit_width)).ite(&operands[0], &const0)
+        if size0 != size1 {
+            // TODO: 这里可以报错，或者干别的
+        } else {
+            for index in 0..size0 {
+                //如果掩码为1，则返回自身，如果掩码为0，则返回0
+                result.push(operands[1][index]._eq(&one(context, bit_width)).ite(&operands[0][index], &const0));
+            }
+        }
+        return result;
     }
 }
 
 pub fn tf_boolean_mask() -> Box<dyn Component> {
     Box::new(TfBooleanMask) as _
 }
-end
-*/
+
 macro_rules! with_operator_component {
     ( $me:expr , |$c:ident| $body:expr ) => {
         match $me {
@@ -1239,16 +1300,7 @@ macro_rules! with_operator_component {
                 let $c = Const(Some(*c));
                 $body
             }
-            // Operator::TfAdd(_, _) => {
-            //     let $c = TfAdd;
-            //     $body
-            // }
-            Operator::TfAbs(_)  => {
-                let $c = TfAbs;
-                $body
-            }
-           
-          /*  // Operator::Eqz(_) => {
+            // Operator::Eqz(_) => {
             //     let $c = Eqz;
             //     $body
             // }
@@ -1371,8 +1423,7 @@ macro_rules! with_operator_component {
             Operator::TfAbs(_) => {
                 let $c = TfAbs;
                 $body
-            } */
-            /* here
+            }
             Operator::TfAdd(_, _) => {
                 let $c = TfAdd;
                 $body
@@ -1389,7 +1440,6 @@ macro_rules! with_operator_component {
                 let $c = TfBooleanMask;
                 $body
             }
-            */
         }
     };
 }
