@@ -66,7 +66,7 @@ where
 //TODO:这里限定了数组是一维数组，并且直接给出了len的大小，正常来说这里应该传的是动态的纬度
 fn fresh_immediate(context: &z3::Context, bit_width: u32, len : u32) -> Vec<BitVec> {
     let mut result : Vec<BitVec> = Vec::new();
-    for _i in 1..len {
+    for _i in 1..len + 1 {
         result.push(BitVec::fresh_const(context, "immediate", bit_width));
     }
     return result;
@@ -74,7 +74,7 @@ fn fresh_immediate(context: &z3::Context, bit_width: u32, len : u32) -> Vec<BitV
 //TODO:这里限定了数组是一维数组，并且直接给出了len的大小，正常来说这里应该传的是动态的纬度
 fn fresh_param(context: &z3::Context, bit_width: u32, len : u32) -> Vec<BitVec> {
     let mut result : Vec<BitVec> = Vec::new();
-    for _i in 1..len {
+    for _i in 1..len + 1 {
         result.push(BitVec::fresh_const(context, "param", bit_width));
     }
     return result;
@@ -82,7 +82,7 @@ fn fresh_param(context: &z3::Context, bit_width: u32, len : u32) -> Vec<BitVec> 
 //TODO:这里限定了数组是一维数组，并且直接给出了len的大小，正常来说这里应该传的是动态的纬度
 fn fresh_result(context: &z3::Context, bit_width: u32, len : u32) -> Vec<BitVec> {
     let mut result : Vec<BitVec> = Vec::new();
-    for _i in 1..len {
+    for _i in 1..len + 1 {
         result.push(BitVec::fresh_const(context, "result", bit_width));
     }
     return result;
@@ -90,7 +90,7 @@ fn fresh_result(context: &z3::Context, bit_width: u32, len : u32) -> Vec<BitVec>
 //TODO:这里限定了数组是一维数组，并且直接给出了len的大小，正常来说这里应该传的是动态的纬度
 fn fresh_input(context: &z3::Context, bit_width: u32, len : u32) -> Vec<BitVec> {
     let mut result : Vec<BitVec> = Vec::new();
-    for _i in 1..len {
+    for _i in 1..len + 1{
         result.push(BitVec::fresh_const(context, "input", bit_width));
     }
     return result;
@@ -98,7 +98,7 @@ fn fresh_input(context: &z3::Context, bit_width: u32, len : u32) -> Vec<BitVec> 
 //TODO:这里限定了数组是一维数组，并且直接给出了len的大小，正常来说这里应该传的是动态的纬度
 fn fresh_output(context: &z3::Context, bit_width: u32, len : u32) -> Vec<BitVec> {
     let mut result : Vec<BitVec> = Vec::new();
-    for _i in 1..len {
+    for _i in 1..len + 1 {
         result.push(BitVec::fresh_const(context, "output", bit_width));
     }
     return result;
@@ -117,7 +117,7 @@ where
 
     for v in bvs.into_iter() {
         let mut temp : Vec<u64> = Vec::new();
-        for k in 1..v.len() {
+        for k in 1..v.len()+1 {
             temp.push(eval_bitvec(model, &v[k-1]));
         }
         result.push(temp);
@@ -1021,7 +1021,7 @@ impl<'a> Synthesizer<'a> {
 
                 //这边默认x和y的len相等
                 let mut temp = x[0]._eq(&y[0]);
-                for _k in 1..x.len() {
+                for _k in 1..x.len() + 1 {
                     temp = temp.and(&[&temp]);
                 }
 
@@ -1093,8 +1093,9 @@ impl<'a> Synthesizer<'a> {
             // if sz1 != sz2 {
             //     println!("error in library function!");
             // }
- 
-            for i in 1..sz1 {
+            //println!("{}, {}",sz1, _sz2);
+
+            for i in 1..sz1+1 {
                 exprs.push(expression[i-1]._eq(&result[i-1]));
 
             }
@@ -1148,7 +1149,7 @@ impl<'a> Synthesizer<'a> {
                     this_input.push(inp._eq(var));*/
                     let sz = inp.len();
                     let mut temp = BitVec::from_i64(self.context, inp[0] as i64, FULL_BIT_WIDTH)._eq(&var[0]);
-                    for i in 2..sz {
+                    for i in 2..sz+1 {
                         let temp2 = BitVec::from_i64(self.context, inp[i-1] as i64, FULL_BIT_WIDTH)._eq(&var[i-1]);
                         temp = temp.and(&[&temp2]);
                     }
@@ -1361,6 +1362,7 @@ impl Specification for Program {
         let mut temp = vars[0]._eq(&output[0]);
 
         for i in 2..vars.len() {
+            //println!("{}", vars.len());
             let temp2 = vars[i-1]._eq(&output[i-1]);
             temp = temp.and(&[&temp2]);
         }

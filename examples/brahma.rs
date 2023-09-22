@@ -215,20 +215,21 @@ fn mytest1(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
 
 fn mytest3(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     let mut library = Library::brahma_std();
+    let sz = 3;
     library
         .components
         .push(component::const_(if opts.synthesize_constants {
             None
         } else {
-            Some(100)
+            Some(sz)
         }));
     let mut builder = ProgramBuilder::new();
     let in1 = builder.var();
-    let const100 = builder.const_(100);
+    let const100 = builder.const_(sz);
     let _ = builder.tf_add(in1, const100);
     let spec = builder.finish();
 
-    synthesize(opts, context, &spec, &library, 3)
+    synthesize(opts, context, &spec, &library, sz as u32)
 }
 
 /*
