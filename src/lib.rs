@@ -287,6 +287,14 @@ impl Library {
                 component::tf_mul(),
                 component::tf_div(),
                 component::tf_boolean_mask(),
+                component::tf_clip_by_value(),
+                component::tf_equal(),
+                component::tf_fill(),
+                component::tf_greater(),
+                component::tf_greater_equal(),
+                component::tf_not_equal(),
+                component::tf_negative(),
+                component::tf_reciprocal(),
             ],
         }
     }

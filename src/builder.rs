@@ -380,4 +380,76 @@ impl ProgramBuilder {
         result
     }
 
+    pub fn tf_clip_by_value(&mut self, a: Id, b: Id, c: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfClipByValue(a, b, c),
+        });
+        result
+    }
+
+    pub fn tf_equal(&mut self, a: Id, b: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfEqual(a, b),
+        });
+        result
+    }
+
+    pub fn tf_fill(&mut self, a: Id, b: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfFill(a, b),
+        });
+        result
+    }
+
+    pub fn tf_greater(&mut self, a: Id, b: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfGreater(a, b),
+        });
+        result
+    }
+
+    pub fn tf_greater_equal(&mut self, a: Id, b: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfGreaterEqual(a, b),
+        });
+        result
+    }
+
+    pub fn tf_not_equal(&mut self, a: Id, b: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfNotEqual(a, b),
+        });
+        result
+    }
+
+    pub fn tf_negative(&mut self, a: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfNegative(a),
+        });
+        result
+    }
+
+    pub fn tf_reciprocal(&mut self, a: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfReciprocal(a),
+        });
+        result
+    }
+
 }

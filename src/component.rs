@@ -70,7 +70,7 @@ impl Component for Const {
     fn make_expression<'a>(
         &self,
         context: &'a z3::Context,
-        immediates: &[Vec<BitVec<'a>>],
+        _immediates: &[Vec<BitVec<'a>>],
         _operands: &[Vec<BitVec<'a>>],
         bit_width: u32,
     ) -> Vec<BitVec<'a>> {
@@ -85,13 +85,13 @@ impl Component for Const {
 
         if let Some(val) = self.0 {
             //直接设置出val个val数字
-            for i in 1 .. val + 1 {
+            for _i in 1 .. val + 1 {
                 result.push(BitVec::from_i64(context, val as i64, bit_width));
             }
             
         } else {
             //当没有手动设置的时候，就生产10个
-            for i in 1 .. 10+1 {
+            for _i in 1 .. 10 + 1 {
                 result.push(BitVec::from_i64(context, 10, bit_width));
             }
         }
@@ -1302,6 +1302,295 @@ pub fn tf_boolean_mask() -> Box<dyn Component> {
     Box::new(TfBooleanMask) as _
 }
 
+#[derive(Debug)]
+struct TfClipByValue;
+
+impl Component for TfClipByValue {
+    fn operand_arity(&self) -> usize {
+        3
+    }
+
+    fn make_operator(&self, _immediates: &Vec<Vec<u64>>, operands: &[Id]) -> Operator {
+        Operator::TfClipByValue(operands[0], operands[1], operands[2])
+    }
+
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vec<BitVec<'a>>],
+        operands: &[Vec<BitVec<'a>>],
+        bit_width: u32,
+    ) -> Vec<BitVec<'a>> {
+        // 第一个是输入的数组，第二个是最小值，第三个是最大值
+        // 要求数组里每一项都要和最大值和最小值比较，在此范围（含最大值和最小值）之外的，小的换成最小值，大的换成最大值
+        let size = operands[0].len();
+        // 目前仅有var数组的情况，还不清楚会不会单独搞一个var变量，先用数组的方法取值即可
+        let min_value = &operands[1][0];
+        let max_value = &operands[2][0];
+        let mut result: Vec<BitVec> = Vec::new();
+        for index in 0..size {
+            // 判断当前值是否小于等于最小值，当前值是否大于等于最大值，1则为成立，0则为不成立
+            let is_min = operands[0][index].bvsle(&min_value).ite(&one(context, bit_width), &zero(context, bit_width));
+            let is_max = operands[0][index].bvsge(&max_value).ite(&one(context, bit_width), &zero(context, bit_width));
+            // 先判断是不是比最小值小，如果是则取最小值，再比较是不是比最大值大，如果是则取最大值，其余情况原值返回
+            result.push(operands[0][index]._eq(&is_min).ite(&min_value, &operands[0][index]._eq(&is_max).ite(&max_value, &operands[0][index])));
+        }
+        return result;
+    }
+}
+
+pub fn tf_clip_by_value() -> Box<dyn Component> {
+    Box::new(TfClipByValue) as _
+}
+
+#[derive(Debug)]
+struct TfEqual;
+
+impl Component for TfEqual {
+    fn operand_arity(&self) -> usize {
+        2
+    }
+
+    fn make_operator(&self, _immediates: &Vec<Vec<u64>>, operands: &[Id]) -> Operator {
+        Operator::TfEqual(operands[0], operands[1])
+    }
+
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vec<BitVec<'a>>],
+        operands: &[Vec<BitVec<'a>>],
+        bit_width: u32,
+    ) -> Vec<BitVec<'a>> {
+        // 依次比较两个数组每个元素是否相等即可
+        // TODO：名义上如果不等长要考虑广播，下一步需要考虑不等长的情况
+        let size0 = operands[0].len();
+        let _size1 = operands[1].len();
+        let mut result: Vec<BitVec> = Vec::new();
+        for index in 0..size0 {
+            result.push(operands[0][index]._eq(&operands[1][index]).ite(&one(context, bit_width), &zero(context, bit_width)));
+        }
+        return result;
+    }
+}
+
+pub fn tf_equal() -> Box<dyn Component> {
+    Box::new(TfEqual) as _
+}
+
+#[derive(Debug)]
+struct TfFill;
+
+impl Component for TfFill {
+    fn operand_arity(&self) -> usize {
+        2
+    }
+
+    fn make_operator(&self, _immediates: &Vec<Vec<u64>>, operands: &[Id]) -> Operator {
+        Operator::TfFill(operands[0], operands[1])
+    }
+
+    fn make_expression<'a>(
+        &self,
+        _context: &'a z3::Context,
+        _immediates: &[Vec<BitVec<'a>>],
+        operands: &[Vec<BitVec<'a>>],
+        _bit_width: u32,
+    ) -> Vec<BitVec<'a>> {
+        // 根据第一个输入的长度填充第二个数
+        // 不过吧。。。具体实现的话，既然数组长度已经通过其他途径确定了，这第一个量有何用。。。
+        // 而且吧。。。咱所有的输入都是数组，那第二个输入可以看成一个数组，直接返回不就好了。。。
+        return operands[1].to_vec();
+        /* 好吧，这一段应该是想象中的填充，只不过第一个变量里面的长度不一定是最终的长度
+        let length = &operands[0][0];
+        let mut result: Vec<BitVec> = Vec::new();
+        for index in 0..length {
+            result.push(operands[1][index])
+        }
+        return result;
+        */
+    }
+}
+
+pub fn tf_fill() -> Box<dyn Component> {
+    Box::new(TfFill) as _
+}
+
+#[derive(Debug)]
+struct TfGreater;
+
+impl Component for TfGreater {
+    fn operand_arity(&self) -> usize {
+        2
+    }
+
+    fn make_operator(&self, _immediates: &Vec<Vec<u64>>, operands: &[Id]) -> Operator {
+        Operator::TfGreater(operands[0], operands[1])
+    }
+
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vec<BitVec<'a>>],
+        operands: &[Vec<BitVec<'a>>],
+        bit_width: u32,
+    ) -> Vec<BitVec<'a>> {
+        // 依次比较两个数组每个元素是否大于即可
+        // TODO：名义上如果不等长要考虑广播，下一步需要考虑不等长的情况
+        let size0 = operands[0].len();
+        let _size1 = operands[1].len();
+        let mut result: Vec<BitVec> = Vec::new();
+        for index in 0..size0 {
+            result.push(operands[0][index].bvsgt(&operands[1][index]).ite(&one(context, bit_width), &zero(context, bit_width)));
+        }
+        return result;
+    }
+}
+
+pub fn tf_greater() -> Box<dyn Component> {
+    Box::new(TfGreater) as _
+}
+
+#[derive(Debug)]
+struct TfGreaterEqual;
+
+impl Component for TfGreaterEqual {
+    fn operand_arity(&self) -> usize {
+        2
+    }
+
+    fn make_operator(&self, _immediates: &Vec<Vec<u64>>, operands: &[Id]) -> Operator {
+        Operator::TfGreaterEqual(operands[0], operands[1])
+    }
+
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vec<BitVec<'a>>],
+        operands: &[Vec<BitVec<'a>>],
+        bit_width: u32,
+    ) -> Vec<BitVec<'a>> {
+        // 依次比较两个数组每个元素是否大于等于即可
+        // TODO：名义上如果不等长要考虑广播，下一步需要考虑不等长的情况
+        let size0 = operands[0].len();
+        let _size1 = operands[1].len();
+        let mut result: Vec<BitVec> = Vec::new();
+        for index in 0..size0 {
+            result.push(operands[0][index].bvsge(&operands[1][index]).ite(&one(context, bit_width), &zero(context, bit_width)));
+        }
+        return result;
+    }
+}
+
+pub fn tf_greater_equal() -> Box<dyn Component> {
+    Box::new(TfGreaterEqual) as _
+}
+
+#[derive(Debug)]
+struct TfNotEqual;
+
+impl Component for TfNotEqual {
+    fn operand_arity(&self) -> usize {
+        2
+    }
+
+    fn make_operator(&self, _immediates: &Vec<Vec<u64>>, operands: &[Id]) -> Operator {
+        Operator::TfNotEqual(operands[0], operands[1])
+    }
+
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vec<BitVec<'a>>],
+        operands: &[Vec<BitVec<'a>>],
+        bit_width: u32,
+    ) -> Vec<BitVec<'a>> {
+        // 依次比较两个数组每个元素是否大于不等于即可
+        // TODO：名义上如果不等长要考虑广播，下一步需要考虑不等长的情况
+        let size0 = operands[0].len();
+        let _size1 = operands[1].len();
+        let mut result: Vec<BitVec> = Vec::new();
+        for index in 0..size0 {
+            result.push(operands[0][index].bvsge(&operands[1][index]).ite(&zero(context, bit_width), &one(context, bit_width)));
+        }
+        return result;
+    }
+}
+
+pub fn tf_not_equal() -> Box<dyn Component> {
+    Box::new(TfNotEqual) as _
+}
+
+#[derive(Debug)]
+struct TfNegative;
+
+impl Component for TfNegative {
+    fn operand_arity(&self) -> usize {
+        1
+    }
+
+    fn make_operator(&self, _immediates: &Vec<Vec<u64>>, operands: &[Id]) -> Operator {
+        Operator::TfNegative(operands[0])
+    }
+
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vec<BitVec<'a>>],
+        operands: &[Vec<BitVec<'a>>],
+        bit_width: u32,
+    ) -> Vec<BitVec<'a>> {
+        // 依次遍历每个数，取相反数即可
+        // 相反数可以采用常数零减去当前数的方法
+        let const0 = zero(context, bit_width);
+        let size = operands[0].len();
+        let mut result: Vec<BitVec> = Vec::new();
+        for index in 0..size {
+            result.push(const0.bvsub(&operands[0][index]));
+        }
+        return result;
+    }
+}
+
+pub fn tf_negative() -> Box<dyn Component> {
+    Box::new(TfNegative) as _
+}
+
+#[derive(Debug)]
+struct TfReciprocal;
+
+impl Component for TfReciprocal {
+    fn operand_arity(&self) -> usize {
+        1
+    }
+
+    fn make_operator(&self, _immediates: &Vec<Vec<u64>>, operands: &[Id]) -> Operator {
+        Operator::TfReciprocal(operands[0])
+    }
+
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vec<BitVec<'a>>],
+        operands: &[Vec<BitVec<'a>>],
+        bit_width: u32,
+    ) -> Vec<BitVec<'a>> {
+        // 依次遍历每个数，取倒数即可
+        // 倒数可以采用常数1除以当前数的方法
+        let const1 = one(context, bit_width);
+        let size = operands[0].len();
+        let mut result: Vec<BitVec> = Vec::new();
+        for index in 0..size {
+            result.push(const1.bvsdiv(&operands[0][index]));
+        }
+        return result;
+    }
+}
+
+pub fn tf_reciprocal() -> Box<dyn Component> {
+    Box::new(TfReciprocal) as _
+}
+
 macro_rules! with_operator_component {
     ( $me:expr , |$c:ident| $body:expr ) => {
         match $me {
@@ -1453,6 +1742,38 @@ macro_rules! with_operator_component {
             }
             Operator::TfBooleanMask(_, _) => {
                 let $c = TfBooleanMask;
+                $body
+            }
+            Operator::TfClipByValue(_, _, _) => {
+                let $c = TfClipByValue;
+                $body
+            }
+            Operator::TfEqual(_, _) => {
+                let $c = TfEqual;
+                $body
+            }
+            Operator::TfFill(_, _) => {
+                let $c = TfFill;
+                $body
+            }
+            Operator::TfGreater(_, _) => {
+                let $c = TfGreater;
+                $body
+            }
+            Operator::TfGreaterEqual(_, _) => {
+                let $c = TfGreaterEqual;
+                $body
+            }
+            Operator::TfNotEqual(_, _) => {
+                let $c = TfNotEqual;
+                $body
+            }
+            Operator::TfNegative(_) => {
+                let $c = TfNegative;
+                $body
+            }
+            Operator::TfReciprocal(_) => {
+                let $c = TfReciprocal;
                 $body
             }
         }

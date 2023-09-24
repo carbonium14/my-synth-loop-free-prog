@@ -198,6 +198,8 @@ fn mytest1(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     synthesize(opts, context, &spec, &library, 3)
 }
 
+// TODO：严格来说应该是const的长度和值都要定义，但是这里默认长度就是值，看看后续能不能改
+
 /*
   examples = [
       benchmark.Example(

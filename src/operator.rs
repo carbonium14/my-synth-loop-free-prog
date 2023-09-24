@@ -62,6 +62,22 @@ pub enum Operator {
     TfDiv(Id, Id),
     // 掩码，即如果为1则返回原值，为0则什么也不做
     TfBooleanMask(Id, Id),
+    // 限制在最大值和最小值之间取值
+    TfClipByValue(Id, Id, Id),
+    // 相等
+    TfEqual(Id, Id),
+    // 填充
+    TfFill(Id, Id),
+    // 大于
+    TfGreater(Id, Id),
+    // 大于等于
+    TfGreaterEqual(Id, Id),
+    // 不等于
+    TfNotEqual(Id, Id),
+    // 相反数
+    TfNegative(Id),
+    // 倒数
+    TfReciprocal(Id),
 }
 
 impl Operator {
@@ -96,8 +112,19 @@ impl Operator {
             // | Operator::Rotl(_, _)
             // | Operator::Rotr(_, _) => 2,
             // Operator::Select(_, _, _) => 3,
-            Operator::TfAbs(_) => 1,
-            Operator::TfAdd(_, _) | Operator::TfMul(_, _) | Operator::TfDiv(_, _) | Operator::TfBooleanMask(_, _) => 2,
+            Operator::TfAbs(_) 
+            | Operator::TfNegative(_) 
+            | Operator::TfReciprocal(_) => 1,
+            Operator::TfAdd(_, _) 
+            | Operator::TfMul(_, _) 
+            | Operator::TfDiv(_, _) 
+            | Operator::TfBooleanMask(_, _) 
+            | Operator::TfEqual(_, _)
+            | Operator::TfFill(_, _) 
+            | Operator::TfGreater(_, _) 
+            | Operator::TfGreaterEqual(_, _) 
+            | Operator::TfNotEqual(_, _) => 2,
+            Operator::TfClipByValue(_, _, _) => 3,
         }
     }
 
@@ -144,10 +171,25 @@ impl Operator {
             //     f(b);
             //     f(c);
             // }
-            Operator::TfAbs(a) => f(a),
-            Operator::TfAdd(a, b) | Operator::TfMul(a, b) | Operator::TfDiv(a, b) | Operator::TfBooleanMask(a, b) => {
+            Operator::TfAbs(a) 
+            | Operator::TfNegative(a) 
+            | Operator::TfReciprocal(a) => f(a),
+            Operator::TfAdd(a, b) 
+            | Operator::TfMul(a, b) 
+            | Operator::TfDiv(a, b) 
+            | Operator::TfBooleanMask(a, b) 
+            | Operator::TfEqual(a, b) 
+            | Operator::TfFill(a, b) 
+            | Operator::TfGreater(a, b) 
+            | Operator::TfGreaterEqual(a, b) 
+            | Operator::TfNotEqual(a, b) => {
                 f(a);
                 f(b);
+            },
+            Operator::TfClipByValue(a, b, c) => {
+                f(a);
+                f(b);
+                f(c);
             }
         }
     }
@@ -189,10 +231,25 @@ impl Operator {
             //     f(b);
             //     f(c);
             // }
-            Operator::TfAbs(a) => f(a),
-            Operator::TfAdd(a, b) | Operator::TfMul(a, b) | Operator::TfDiv(a, b) | Operator::TfBooleanMask(a, b) => {
+            Operator::TfAbs(a) 
+            | Operator::TfNegative(a) 
+            | Operator::TfReciprocal(a) => f(a),
+            Operator::TfAdd(a, b) 
+            | Operator::TfMul(a, b) 
+            | Operator::TfDiv(a, b) 
+            | Operator::TfBooleanMask(a, b) 
+            | Operator::TfEqual(a, b) 
+            | Operator::TfFill(a, b) 
+            | Operator::TfGreater(a, b) 
+            | Operator::TfGreaterEqual(a, b) 
+            | Operator::TfNotEqual(a, b) => {
                 f(a);
                 f(b);
+            },
+            Operator::TfClipByValue(a, b, c) => {
+                f(a);
+                f(b);
+                f(c);
             }
         }
     }
@@ -202,7 +259,7 @@ impl Display for Operator {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Operator::Var => write!(f, "var: vec"),
-            Operator::Const(c) => write!(f, "const {:#X}", c),
+            Operator::Const(c) => write!(f, "const: {:#X}", c),
             //Operator::Vecs(id) => write!(f, "Vecs {}", id),
             // Operator::Eqz(id) => write!(f, "eqz {}", id),
             // Operator::Clz(id) => write!(f, "clz {}", id),
@@ -234,11 +291,19 @@ impl Display for Operator {
             // Operator::Rotl(a, b) => write!(f, "rotl {}, {}", a, b),
             // Operator::Rotr(a, b) => write!(f, "rotr {}, {}", a, b),
             // Operator::Select(a, b, c) => write!(f, "select {}, {}, {}", a, b, c),
-            Operator::TfAbs(id) => write!(f, "TfAbs {}", id),
-            Operator::TfAdd(a, b) => write!(f, "TfAdd {}, {}", a, b),
-            Operator::TfMul(a, b) => write!(f, "TfMul {}, {}", a, b),
-            Operator::TfDiv(a, b) => write!(f, "TfDiv {}, {}", a, b),
-            Operator::TfBooleanMask(a, b) => write!(f, "TfBooleanMask, {}, {}", a, b),
+            Operator::TfAbs(a) => write!(f, "TfAbs: {}", a),
+            Operator::TfAdd(a, b) => write!(f, "TfAdd: {}, {}", a, b),
+            Operator::TfMul(a, b) => write!(f, "TfMul: {}, {}", a, b),
+            Operator::TfDiv(a, b) => write!(f, "TfDiv: {}, {}", a, b),
+            Operator::TfBooleanMask(a, b) => write!(f, "TfBooleanMask: {}, {}", a, b),
+            Operator::TfClipByValue(a, b, c) => write!(f, "TfClipByValue: {}, {}, {}", a, b, c),
+            Operator::TfEqual(a, b) => write!(f, "TfEqual: {}, {}", a, b),
+            Operator::TfFill(a, b) => write!(f, "TfFill: {}, {}", a, b),
+            Operator::TfGreater(a, b) => write!(f, "TfGreater: {}, {}", a, b),
+            Operator::TfGreaterEqual(a, b) => write!(f, "TfGreaterEqual: {}, {}", a, b),
+            Operator::TfNotEqual(a, b) => write!(f, "TfNotEqual: {}, {}", a, b),
+            Operator::TfNegative(id) => write!(f, "TfNegative: {}", id),
+            Operator::TfReciprocal(id) => write!(f, "TfReciprocal: {}", id),
         }
     }
 }
