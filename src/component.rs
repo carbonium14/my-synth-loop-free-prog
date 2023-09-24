@@ -82,11 +82,26 @@ impl Component for Const {
         // }
 
         let mut result : Vec<BitVec<'a>> = Vec::new();
+
         if let Some(val) = self.0 {
+            //直接设置出val个val数字
+            for i in 1 .. val + 1 {
+                result.push(BitVec::from_i64(context, val as i64, bit_width));
+            }
+            
+        } else {
+            //当没有手动设置的时候，就生产10个
+            for i in 1 .. 10+1 {
+                result.push(BitVec::from_i64(context, 10, bit_width));
+            }
+        }
+
+        /*if let Some(val) = self.0 {
             result.push(BitVec::from_i64(context, val as i64, bit_width));
         } else {
             result.push(immediates[0][0].clone());
-        }
+        }*/
+
         return result;
     }
 
