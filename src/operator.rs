@@ -60,8 +60,14 @@ pub enum Operator {
     TfMul(Id, Id),
     // 相除
     TfDiv(Id, Id),
+    // 数组最大值的下标
+    TfArgMax(Id),
+    // 数组最小值的下标
+    TfArgMin(Id),
     // 掩码，即如果为1则返回原值，为0则什么也不做
     TfBooleanMask(Id, Id),
+    // 类型转换，目前还是原样返回
+    TfCast(Id),
     // 限制在最大值和最小值之间取值
     TfClipByValue(Id, Id, Id),
     // 相等
@@ -114,7 +120,10 @@ impl Operator {
             // Operator::Select(_, _, _) => 3,
             Operator::TfAbs(_) 
             | Operator::TfNegative(_) 
-            | Operator::TfReciprocal(_) => 1,
+            | Operator::TfReciprocal(_)
+            | Operator::TfCast(_) 
+            | Operator::TfArgMax(_)
+            | Operator::TfArgMin(_)  => 1,
             Operator::TfAdd(_, _) 
             | Operator::TfMul(_, _) 
             | Operator::TfDiv(_, _) 
@@ -173,7 +182,10 @@ impl Operator {
             // }
             Operator::TfAbs(a) 
             | Operator::TfNegative(a) 
-            | Operator::TfReciprocal(a) => f(a),
+            | Operator::TfReciprocal(a)
+            | Operator::TfCast(a)
+            | Operator::TfArgMax(a)
+            | Operator::TfArgMin(a) => f(a),
             Operator::TfAdd(a, b) 
             | Operator::TfMul(a, b) 
             | Operator::TfDiv(a, b) 
@@ -233,7 +245,10 @@ impl Operator {
             // }
             Operator::TfAbs(a) 
             | Operator::TfNegative(a) 
-            | Operator::TfReciprocal(a) => f(a),
+            | Operator::TfReciprocal(a)
+            | Operator::TfCast(a)
+            | Operator::TfArgMax(a)
+            | Operator::TfArgMin(a) => f(a),
             Operator::TfAdd(a, b) 
             | Operator::TfMul(a, b) 
             | Operator::TfDiv(a, b) 
@@ -295,7 +310,10 @@ impl Display for Operator {
             Operator::TfAdd(a, b) => write!(f, "TfAdd: {}, {}", a, b),
             Operator::TfMul(a, b) => write!(f, "TfMul: {}, {}", a, b),
             Operator::TfDiv(a, b) => write!(f, "TfDiv: {}, {}", a, b),
+            Operator::TfArgMax(a) => write!(f, "TfArgMax: {}", a),
+            Operator::TfArgMin(a) => write!(f, "TfArgMin: {}", a),
             Operator::TfBooleanMask(a, b) => write!(f, "TfBooleanMask: {}, {}", a, b),
+            Operator::TfCast(a) => write!(f, "TfCast: {}", a),
             Operator::TfClipByValue(a, b, c) => write!(f, "TfClipByValue: {}, {}, {}", a, b, c),
             Operator::TfEqual(a, b) => write!(f, "TfEqual: {}, {}", a, b),
             Operator::TfFill(a, b) => write!(f, "TfFill: {}, {}", a, b),

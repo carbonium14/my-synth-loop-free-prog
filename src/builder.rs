@@ -371,11 +371,38 @@ impl ProgramBuilder {
         result
     }
 
+    pub fn tf_argmax(&mut self, a: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfArgMax(a),
+        });
+        result
+    }
+
+    pub fn tf_argmin(&mut self, a: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfArgMin(a),
+        });
+        result
+    }
+
     pub fn tf_boolean_mask(&mut self, a: Id, b: Id) -> Id {
         let result = self.next_id();
         self.program.instructions.push(Instruction {
             result,
             operator: Operator::TfBooleanMask(a, b),
+        });
+        result
+    }
+
+    pub fn tf_cast(&mut self, a: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfCast(a),
         });
         result
     }

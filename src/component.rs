@@ -1262,6 +1262,102 @@ pub fn tf_div() -> Box<dyn Component> {
 }
 
 #[derive(Debug)]
+struct TfArgMax;
+
+impl Component for TfArgMax {
+    fn operand_arity(&self) -> usize {
+        1
+    }
+
+    fn make_operator(&self, _immediates: &Vec<Vec<u64>>, operands: &[Id]) -> Operator {
+        Operator::TfArgMax(operands[0])
+    }
+
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vec<BitVec<'a>>],
+        operands: &[Vec<BitVec<'a>>],
+        bit_width: u32,
+    ) -> Vec<BitVec<'a>> {
+        // 寻找最大值的下标，就是遍历数组，然后依次比较出最大值，再找到对应的下标即可
+        let size = operands[0].len();
+        // 记录下标，初始值设为0，这个0要用bitvec版本的0
+        let mut ans = zero(context, bit_width);
+        // 记录目标值，为了能和“最大”比较，初始值应该设为最小值，当然也得是bitvec版本的值
+        let mut val = zero(context, bit_width);
+        // 淦！rust不能像其他语言那样for循环的时候同时取到下标和值，所以得遍历两遍
+        for index in 0..size {
+            // 你说for里面用下标，循环体用下标取值？不好意思，ast提供的函数不允许同时返回两个值，所以处理下标和值得分开来
+            val = operands[0][index].bvsgt(&val).ite(&operands[0][index], &val);
+        }
+        for index in 0..size {
+            // 先遍历值，然后根据值确定下标就遍历看哪个相等就可以了，注意值是bitvec版本的值
+            ans = operands[0][index]._eq(&val).ite(&BitVec::from_i64(context, index as i64, bit_width), &zero(context, bit_width))
+        }
+        // 目前的结构，必须要返回一个和输入长度相等的数组，否则会报错！！！
+        let mut result: Vec<BitVec> = Vec::new();
+        for _index in 0..size {
+            // 我这边费老大劲找如何解决use moved value的问题，改了好多地方都不行，结果一个clone就解决了？？？？
+            // 淦！我感觉我的时间都浪费在这上面了！！！
+            result.push(ans.clone());
+        }
+        return result;
+    }
+}
+
+pub fn tf_argmax() -> Box<dyn Component> {
+    Box::new(TfArgMax) as _
+}
+
+#[derive(Debug)]
+struct TfArgMin;
+
+impl Component for TfArgMin {
+    fn operand_arity(&self) -> usize {
+        1
+    }
+
+    fn make_operator(&self, _immediates: &Vec<Vec<u64>>, operands: &[Id]) -> Operator {
+        Operator::TfArgMin(operands[0])
+    }
+
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vec<BitVec<'a>>],
+        operands: &[Vec<BitVec<'a>>],
+        bit_width: u32,
+    ) -> Vec<BitVec<'a>> {
+        // 寻找最大值的下标，就是遍历数组，然后依次比较出最小值，再找到对应的下标即可
+        let size = operands[0].len();
+        // 记录下标，初始值设为最大值，这个最大值要用bitvec版本的最大值
+        let mut ans = BitVec::from_i64(context, 9223372036854775807, bit_width);
+        // 记录目标值，为了能和“最小”比较，初始值应该设为最大值，当然也得是bitvec版本的值
+        let mut val = zero(context, bit_width);
+        // 淦！rust不能像其他语言那样for循环的时候同时取到下标和值，所以得遍历两遍
+        for index in 0..size {
+            // 你说for里面用下标，循环体用下标取值？不好意思，ast提供的函数不允许同时返回两个值，所以处理下标和值得分开来
+            val = operands[0][index].bvslt(&val).ite(&operands[0][index], &val);
+        }
+        for index in 0..size {
+            // 先遍历值，然后根据值确定下标就遍历看哪个相等就可以了，注意值是bitvec版本的值
+            ans = operands[0][index]._eq(&val).ite(&BitVec::from_i64(context, index as i64, bit_width), &zero(context, bit_width))
+        }
+        // 目前的结构，必须要返回一个和输入长度相等的数组，否则会报错！！！
+        let mut result: Vec<BitVec> = Vec::new();
+        for _index in 0..size {
+            result.push(ans.clone());
+        }
+        return result;
+    }
+}
+
+pub fn tf_argmin() -> Box<dyn Component> {
+    Box::new(TfArgMin) as _
+}
+
+#[derive(Debug)]
 struct TfBooleanMask;
 
 impl Component for TfBooleanMask {
@@ -1300,6 +1396,35 @@ impl Component for TfBooleanMask {
 
 pub fn tf_boolean_mask() -> Box<dyn Component> {
     Box::new(TfBooleanMask) as _
+}
+
+#[derive(Debug)]
+struct TfCast;
+
+impl Component for TfCast {
+    fn operand_arity(&self) -> usize {
+        1
+    }
+
+    fn make_operator(&self, _immediates: &Vec<Vec<u64>>, operands: &[Id]) -> Operator {
+        Operator::TfCast(operands[0])
+    }
+
+    fn make_expression<'a>(
+        &self,
+        _context: &'a z3::Context,
+        _immediates: &[Vec<BitVec<'a>>],
+        operands: &[Vec<BitVec<'a>>],
+        _bit_width: u32,
+    ) -> Vec<BitVec<'a>> {
+        // 类型转换之后返回
+        // 只不过目前还没有类型，所以直接返回就行
+        return operands[0].to_vec();
+    }
+}
+
+pub fn tf_cast() -> Box<dyn Component> {
+    Box::new(TfCast) as _
 }
 
 #[derive(Debug)]
@@ -1740,8 +1865,20 @@ macro_rules! with_operator_component {
                 let $c = TfDiv;
                 $body
             }
+            Operator::TfArgMax(_) => {
+                let $c = TfArgMax;
+                $body
+            }
+            Operator::TfArgMin(_) => {
+                let $c = TfArgMin;
+                $body
+            }
             Operator::TfBooleanMask(_, _) => {
                 let $c = TfBooleanMask;
+                $body
+            }
+            Operator::TfCast(_) => {
+                let $c = TfCast;
                 $body
             }
             Operator::TfClipByValue(_, _, _) => {

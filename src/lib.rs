@@ -295,6 +295,9 @@ impl Library {
                 component::tf_not_equal(),
                 component::tf_negative(),
                 component::tf_reciprocal(),
+                component::tf_cast(),
+                component::tf_argmax(),
+                component::tf_argmin(),
             ],
         }
     }

@@ -33,8 +33,10 @@ fn main() {
     if opts.mytest {
         opts.problems = vec![
             "mytest1".to_string(),
+            "mytest2".to_string(),
             "mytest3".to_string(),
-            "mytest6".to_string(),
+            "mytest4".to_string(),
+            "mytest5".to_string(),
         ];
     }
 
@@ -74,8 +76,10 @@ fn main() {
         // p24,
         // p25,
         mytest1,
+        mytest2,
         mytest3,
-        mytest6,
+        mytest4,
+        mytest5,
     };
 
     for (name, p) in problems {
@@ -167,9 +171,9 @@ fn synthesize(
 其余的都简单，直接改成数组即可，唯独component.rs里面的make_operator和make_expression需要大改，估计lib也得改，所以是个大工程o(╥﹏╥)o
 */
 
-// 这里我们序号和benchmarks的序号保持一致，方便查找，所以序号会有跳跃，因为有些还没有实现
+// 注释中写入每个样例的名字，方便查找，所以函数命名就随意了
 
-/*
+/* test_add
   examples = [
       benchmark.Example(
           inputs=[
@@ -200,7 +204,7 @@ fn mytest1(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
 
 // TODO：严格来说应该是const的长度和值都要定义，但是这里默认长度就是值，看看后续能不能改
 
-/*
+/* simple_using_constant
   examples = [
       benchmark.Example(
           inputs=[
@@ -215,7 +219,7 @@ fn mytest1(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
   source = 'handwritten task'
 */
 
-fn mytest3(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+fn mytest2(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     let mut library = Library::brahma_std();
     let sz = 3;
     library
@@ -234,7 +238,7 @@ fn mytest3(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     synthesize(opts, context, &spec, &library, sz as u32)
 }
 
-/*
+/* google_10
   examples = [
       benchmark.Example(
           inputs=[
@@ -251,7 +255,7 @@ fn mytest3(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
             'simplified slightly')
 */
 
-fn mytest6(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+fn mytest3(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     let library = Library::brahma_std();
     let mut builder = ProgramBuilder::new();
     let in1 = builder.var();
@@ -260,6 +264,66 @@ fn mytest6(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     let spec = builder.finish();
 
     synthesize(opts, context, &spec, &library, 6)
+}
+
+/* simple_cast
+  examples = [
+      benchmark.Example(
+          inputs=[
+              [12, 34, 56]
+          ],
+          output=[12.0, 34.0, 56.0],
+      ),
+  ]
+  constants = []
+  description = 'Cast an int tensor into a float tensor'
+  target_program = 'tf.cast(in1, tf.float32)'
+  source = 'handwritten task' 
+*/
+
+fn mytest4(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+    let in1 = builder.var();
+    let _ = builder.tf_cast(in1);
+    let spec = builder.finish();
+
+    synthesize(opts, context, &spec, &library, 3)
+}
+
+/* simple_using_primitive_input
+  examples = [
+      benchmark.Example(
+          inputs=[
+              123,
+              tf.constant(45),
+          ],
+          output=tf.constant(168),
+      ),
+  ]
+  constants = []
+  description = 'Add primitive int and scalar int tensor'
+  target_program = 'tf.add(in2, tf.constant(in1))'
+  source = 'handwritten task'
+ */
+
+ fn mytest5(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+    let mut library = Library::brahma_std();
+    let sz = 1;
+    library
+        .components
+        .push(component::const_(if opts.synthesize_constants {
+            None
+        } else {
+            Some(sz)
+        }));
+    let mut builder = ProgramBuilder::new();
+    let in1 = builder.var();
+    let in2 = builder.const_(sz);
+    let _ = builder.tf_add(in1, in2);
+    let spec = builder.finish();
+
+    synthesize(opts, context, &spec, &library, 1)
 }
 
 /* 
