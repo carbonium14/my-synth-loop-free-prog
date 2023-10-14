@@ -42,6 +42,23 @@ where
     Bool::from_bool(context, false).or(&exprs)
 }
 
+//对于多维数组的扩散，我们可以使用一个纬度数组，然后动态创建一个嵌套了这么多层的vecs
+//TODO : 但是目前找不到一个方法将vecs的类型泛型表示出来，对于几纬就只能固定为几个Vec<Vec<...>>
+#[derive(Debug)]
+pub struct Vecs<'a>{
+    dims : Vec<usize>,
+    vecs : Vec<Vec<BitVec<'a>>>,
+}
+
+impl<'a> Vecs<'a>{
+    pub const fn new(_dims: Vec<usize>) -> Self {
+        let sz = _dims.len();
+        let vecs : Vec<Vec<BitVec>> = Vec::new();
+        let dims = _dims;
+        return Vecs{dims, vecs};
+    }   
+}
+
 //here
 // fn fresh_immediate(context: &z3::Context, bit_width: u32) -> BitVec {
 //     BitVec::fresh_const(context, "immediate", bit_width)
@@ -63,43 +80,108 @@ where
 //     BitVec::fresh_const(context, "output", bit_width)
 // }
 
-//TODO:这里限定了数组是一维数组，并且直接给出了len的大小，正常来说这里应该传的是动态的纬度
-fn fresh_immediate(context: &z3::Context, bit_width: u32, len : u32) -> Vec<BitVec> {
-    let mut result : Vec<BitVec> = Vec::new();
-    for _i in 1..len + 1 {
-        result.push(BitVec::fresh_const(context, "immediate", bit_width));
+// //TODO:这里限定了数组是一维数组，并且直接给出了len的大小，正常来说这里应该传的是动态的纬度
+// fn fresh_immediate(context: &z3::Context, bit_width: u32, len : u32) -> Vec<BitVec> {
+//     let mut result : Vec<BitVec> = Vec::new();
+//     for _i in 1..len + 1 {
+//         result.push(BitVec::fresh_const(context, "immediate", bit_width));
+//     }
+//     return result;
+// }
+// //TODO:这里限定了数组是一维数组，并且直接给出了len的大小，正常来说这里应该传的是动态的纬度
+// fn fresh_param(context: &z3::Context, bit_width: u32, len : u32) -> Vec<BitVec> {
+//     let mut result : Vec<BitVec> = Vec::new();
+//     for _i in 1..len + 1 {
+//         result.push(BitVec::fresh_const(context, "param", bit_width));
+//     }
+//     return result;
+// }
+// //TODO:这里限定了数组是一维数组，并且直接给出了len的大小，正常来说这里应该传的是动态的纬度
+// fn fresh_result(context: &z3::Context, bit_width: u32, len : u32) -> Vec<BitVec> {
+//     let mut result : Vec<BitVec> = Vec::new();
+//     for _i in 1..len + 1 {
+//         result.push(BitVec::fresh_const(context, "result", bit_width));
+//     }
+//     return result;
+// }
+// //TODO:这里限定了数组是一维数组，并且直接给出了len的大小，正常来说这里应该传的是动态的纬度
+// fn fresh_input(context: &z3::Context, bit_width: u32, len : u32) -> Vec<BitVec> {
+//     let mut result : Vec<BitVec> = Vec::new();
+//     for _i in 1..len + 1{
+//         result.push(BitVec::fresh_const(context, "input", bit_width));
+//     }
+//     return result;
+// }
+// //TODO:这里限定了数组是一维数组，并且直接给出了len的大小，正常来说这里应该传的是动态的纬度
+// fn fresh_output(context: &z3::Context, bit_width: u32, len : u32) -> Vec<BitVec> {
+//     let mut result : Vec<BitVec> = Vec::new();
+//     for _i in 1..len + 1 {
+//         result.push(BitVec::fresh_const(context, "output", bit_width));
+//     }
+//     return result;
+// }
+
+//TODO: 动态维度，不过目前只能实现二维
+fn fresh_immediate(context: &z3::Context, bit_width: u32, dims: Vec<usize>) -> Vecs {
+    let mut result = Vecs::new(dims);
+    let x = dims[0];
+    let y = dims[1];
+    for i in 0 .. x {
+        for j in 0 .. y {
+            result.vecs[i].push(BitVec::fresh_const(context, "immediate", bit_width));
+        }
     }
     return result;
 }
-//TODO:这里限定了数组是一维数组，并且直接给出了len的大小，正常来说这里应该传的是动态的纬度
-fn fresh_param(context: &z3::Context, bit_width: u32, len : u32) -> Vec<BitVec> {
-    let mut result : Vec<BitVec> = Vec::new();
-    for _i in 1..len + 1 {
-        result.push(BitVec::fresh_const(context, "param", bit_width));
+
+//TODO: 动态维度，不过目前只能实现二维
+fn fresh_param(context: &z3::Context, bit_width: u32, dims: Vec<usize>) -> Vecs {
+    let mut result = Vecs::new(dims);
+    let x = dims[0];
+    let y = dims[1];
+    for i in 0 .. x {
+        for j in 0 .. y {
+            result.vecs[i].push(BitVec::fresh_const(context, "param", bit_width));
+        }
     }
     return result;
 }
-//TODO:这里限定了数组是一维数组，并且直接给出了len的大小，正常来说这里应该传的是动态的纬度
-fn fresh_result(context: &z3::Context, bit_width: u32, len : u32) -> Vec<BitVec> {
-    let mut result : Vec<BitVec> = Vec::new();
-    for _i in 1..len + 1 {
-        result.push(BitVec::fresh_const(context, "result", bit_width));
+
+//TODO: 动态维度，不过目前只能实现二维
+fn fresh_result(context: &z3::Context, bit_width: u32, dims: Vec<usize>) -> Vecs {
+    let mut result = Vecs::new(dims);
+    let x = dims[0];
+    let y = dims[1];
+    for i in 0 .. x {
+        for j in 0 .. y {
+            result.vecs[i].push(BitVec::fresh_const(context, "result", bit_width));
+        }
     }
     return result;
 }
-//TODO:这里限定了数组是一维数组，并且直接给出了len的大小，正常来说这里应该传的是动态的纬度
-fn fresh_input(context: &z3::Context, bit_width: u32, len : u32) -> Vec<BitVec> {
-    let mut result : Vec<BitVec> = Vec::new();
-    for _i in 1..len + 1{
-        result.push(BitVec::fresh_const(context, "input", bit_width));
+
+//TODO: 动态维度，不过目前只能实现二维
+fn fresh_input(context: &z3::Context, bit_width: u32, dims: Vec<usize>) -> Vecs {
+    let mut result = Vecs::new(dims);
+    let x = dims[0];
+    let y = dims[1];
+    for i in 0 .. x {
+        for j in 0 .. y {
+            result.vecs[i].push(BitVec::fresh_const(context, "input", bit_width));
+        }
     }
     return result;
 }
-//TODO:这里限定了数组是一维数组，并且直接给出了len的大小，正常来说这里应该传的是动态的纬度
-fn fresh_output(context: &z3::Context, bit_width: u32, len : u32) -> Vec<BitVec> {
-    let mut result : Vec<BitVec> = Vec::new();
-    for _i in 1..len + 1 {
-        result.push(BitVec::fresh_const(context, "output", bit_width));
+
+//TODO: 动态维度，不过目前只能实现二维
+fn fresh_output(context: &z3::Context, bit_width: u32, dims: Vec<usize>) -> Vecs {
+    let mut result = Vecs::new(dims);
+    let x = dims[0];
+    let y = dims[1];
+    for i in 0 .. x {
+        for j in 0 .. y {
+            result.vecs[i].push(BitVec::fresh_const(context, "output", bit_width));
+        }
     }
     return result;
 }
