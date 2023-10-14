@@ -479,4 +479,67 @@ impl ProgramBuilder {
         result
     }
 
+    pub fn tf_count_nonzero(&mut self, a: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfCountNonzero(a),
+        });
+        result
+    }
+
+    pub fn tf_cumsum(&mut self, a: Id, b: Id, c: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfCumsum(a, b, c),
+        });
+        result
+    }
+
+    pub fn tf_maximum(&mut self, a: Id, b: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfMaximum(a, b),
+        });
+        result
+    }
+
+    pub fn tf_minimum(&mut self, a: Id, b: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfMinimum(a, b),
+        });
+        result
+    }
+
+    pub fn tf_reverse(&mut self, a: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfReverse(a),
+        });
+        result
+    }
+
+    pub fn tf_sign(&mut self, a: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfSign(a),
+        });
+        result
+    }
+
+    pub fn tf_square(&mut self, a: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfSquare(a),
+        });
+        result
+    }
+
 }

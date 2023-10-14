@@ -84,6 +84,20 @@ pub enum Operator {
     TfNegative(Id),
     // 倒数
     TfReciprocal(Id),
+    // 统计非0个数出现的次数
+    TfCountNonzero(Id),
+    // 遍历依次累加求和，每次的结果放在每一项里
+    TfCumsum(Id, Id, Id),
+    // 两个数组每一项的最大值
+    TfMaximum(Id, Id),
+    // 两个数组每一项的最小值
+    TfMinimum(Id, Id),
+    // 顺序颠倒
+    TfReverse(Id),
+    // 确定符号
+    TfSign(Id),
+    // 每个数的平方
+    TfSquare(Id),
 }
 
 impl Operator {
@@ -123,7 +137,11 @@ impl Operator {
             | Operator::TfReciprocal(_)
             | Operator::TfCast(_) 
             | Operator::TfArgMax(_)
-            | Operator::TfArgMin(_)  => 1,
+            | Operator::TfArgMin(_) 
+            | Operator::TfCountNonzero(_) 
+            | Operator::TfReverse(_) 
+            | Operator::TfSign(_) 
+            | Operator::TfSquare(_) => 1,
             Operator::TfAdd(_, _) 
             | Operator::TfMul(_, _) 
             | Operator::TfDiv(_, _) 
@@ -132,8 +150,11 @@ impl Operator {
             | Operator::TfFill(_, _) 
             | Operator::TfGreater(_, _) 
             | Operator::TfGreaterEqual(_, _) 
-            | Operator::TfNotEqual(_, _) => 2,
-            Operator::TfClipByValue(_, _, _) => 3,
+            | Operator::TfNotEqual(_, _) 
+            | Operator::TfMaximum(_, _) 
+            | Operator::TfMinimum(_, _) => 2,
+            Operator::TfClipByValue(_, _, _) 
+            | Operator::TfCumsum(_, _, _) => 3,
         }
     }
 
@@ -185,7 +206,11 @@ impl Operator {
             | Operator::TfReciprocal(a)
             | Operator::TfCast(a)
             | Operator::TfArgMax(a)
-            | Operator::TfArgMin(a) => f(a),
+            | Operator::TfArgMin(a) 
+            | Operator::TfCountNonzero(a) 
+            | Operator::TfReverse(a) 
+            | Operator::TfSign(a) 
+            | Operator::TfSquare(a) => f(a),
             Operator::TfAdd(a, b) 
             | Operator::TfMul(a, b) 
             | Operator::TfDiv(a, b) 
@@ -194,11 +219,14 @@ impl Operator {
             | Operator::TfFill(a, b) 
             | Operator::TfGreater(a, b) 
             | Operator::TfGreaterEqual(a, b) 
-            | Operator::TfNotEqual(a, b) => {
+            | Operator::TfNotEqual(a, b) 
+            | Operator::TfMaximum(a, b) 
+            | Operator::TfMinimum(a, b) => {
                 f(a);
                 f(b);
             },
-            Operator::TfClipByValue(a, b, c) => {
+            Operator::TfClipByValue(a, b, c) 
+            | Operator::TfCumsum(a, b, c) => {
                 f(a);
                 f(b);
                 f(c);
@@ -248,7 +276,11 @@ impl Operator {
             | Operator::TfReciprocal(a)
             | Operator::TfCast(a)
             | Operator::TfArgMax(a)
-            | Operator::TfArgMin(a) => f(a),
+            | Operator::TfArgMin(a) 
+            | Operator::TfCountNonzero(a) 
+            | Operator::TfReverse(a) 
+            | Operator::TfSign(a) 
+            | Operator::TfSquare(a) => f(a),
             Operator::TfAdd(a, b) 
             | Operator::TfMul(a, b) 
             | Operator::TfDiv(a, b) 
@@ -257,11 +289,14 @@ impl Operator {
             | Operator::TfFill(a, b) 
             | Operator::TfGreater(a, b) 
             | Operator::TfGreaterEqual(a, b) 
-            | Operator::TfNotEqual(a, b) => {
+            | Operator::TfNotEqual(a, b) 
+            | Operator::TfMaximum(a, b) 
+            | Operator::TfMinimum(a, b) => {
                 f(a);
                 f(b);
             },
-            Operator::TfClipByValue(a, b, c) => {
+            Operator::TfClipByValue(a, b, c) 
+            | Operator::TfCumsum(a, b, c) => {
                 f(a);
                 f(b);
                 f(c);
@@ -322,6 +357,13 @@ impl Display for Operator {
             Operator::TfNotEqual(a, b) => write!(f, "TfNotEqual: {}, {}", a, b),
             Operator::TfNegative(id) => write!(f, "TfNegative: {}", id),
             Operator::TfReciprocal(id) => write!(f, "TfReciprocal: {}", id),
+            Operator::TfCountNonzero(id) => write!(f, "TfCountNonzero: {}", id),
+            Operator::TfCumsum(a, b, c) => write!(f, "TfCumsum: {}, {}, {}", a, b, c),
+            Operator::TfMaximum(a, b) => write!(f, "TfMaximum, {}, {}", a, b),
+            Operator::TfMinimum(a, b) => write!(f, "TfMinimum, {}, {}", a, b),
+            Operator::TfReverse(a) => write!(f, "TfReverse: {}", a),
+            Operator::TfSign(a) => write!(f, "TfSign: {}", a),
+            Operator::TfSquare(a) => write!(f, "TfSquare: {}", a),
         }
     }
 }

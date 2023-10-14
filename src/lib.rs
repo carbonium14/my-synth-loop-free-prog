@@ -298,6 +298,13 @@ impl Library {
                 component::tf_cast(),
                 component::tf_argmax(),
                 component::tf_argmin(),
+                component::tf_count_nonzero(),
+                component::tf_cumsum(),
+                component::tf_maximum(),
+                component::tf_minimum(),
+                component::tf_reverse(),
+                component::tf_sign(),
+                component::tf_square(),
             ],
         }
     }

@@ -1716,6 +1716,271 @@ pub fn tf_reciprocal() -> Box<dyn Component> {
     Box::new(TfReciprocal) as _
 }
 
+#[derive(Debug)]
+struct TfCountNonzero;
+
+impl Component for TfCountNonzero {
+    fn operand_arity(&self) -> usize {
+        1
+    }
+
+    fn make_operator(&self, _immediates: &Vec<Vec<u64>>, operands: &[Id]) -> Operator {
+        Operator::TfCountNonzero(operands[0])
+    }
+
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vec<BitVec<'a>>],
+        operands: &[Vec<BitVec<'a>>],
+        bit_width: u32,
+    ) -> Vec<BitVec<'a>> {
+        // 遍历输入，找出非0的数并统计个数即可
+        let size = operands[0].len();
+        let mut ans = zero(context, bit_width);
+        for index in 0..size {
+            // 为了方便计数，可以用z3判断是不是为0，然后用z3的方式相加
+            let is_zero = operands[0][index]._eq(&zero(context, bit_width)).ite(&zero(context, bit_width),&one(context, bit_width));
+            ans = ans.bvadd(&is_zero);
+        }
+        // 还是要保持返回的数组长度和输入的长度一致
+        let mut result: Vec<BitVec> = Vec::new();
+        for _index in 0..size {
+            result.push(ans.clone());
+        }
+        return result;
+    }
+}
+
+pub fn tf_count_nonzero() -> Box<dyn Component> {
+    Box::new(TfCountNonzero) as _
+}
+
+#[derive(Debug)]
+struct TfCumsum;
+
+impl Component for TfCumsum {
+    fn operand_arity(&self) -> usize {
+        3
+    }
+
+    fn make_operator(&self, _immediates: &Vec<Vec<u64>>, operands: &[Id]) -> Operator {
+        Operator::TfCumsum(operands[0], operands[1], operands[2])
+    }
+
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vec<BitVec<'a>>],
+        operands: &[Vec<BitVec<'a>>],
+        bit_width: u32,
+    ) -> Vec<BitVec<'a>> {
+        // 第一个是输入的数组，第三个是判断是正序还是倒序
+        // 第二个是判断算不算第一个，加入一个数组[a, b, c]，如果第二个参数是真，那么结果是[a, a + b, a + b + c]，否则就是[0, a, a + b]
+        let size = operands[0].len();
+        let mut ans = zero(context, bit_width);
+        let mut result: Vec<BitVec> = Vec::new();
+        // 1为true，0为false
+        let is_add_first = operands[1][0]._eq(&one(context, bit_width)).ite(&one(context, bit_width),&zero(context, bit_width));
+        let is_reverse = operands[2][0]._eq(&one(context, bit_width)).ite(&one(context, bit_width),&zero(context, bit_width));
+        if is_add_first == zero(context, bit_width) {
+            for index in 0..size {
+                result.push(ans.bvadd(&operands[0][index]));
+                ans = ans.bvadd(&operands[0][index]);
+            }
+        } else {
+            result.push(zero(context, bit_width));
+            for index in 0..size - 1 {
+                result.push(ans.bvadd(&operands[0][index]));
+                ans = ans.bvadd(&operands[0][index]);
+            }
+        }
+        if is_reverse == one(context, bit_width) {
+            result.reverse();
+        }
+        return result;
+    }
+}
+
+pub fn tf_cumsum() -> Box<dyn Component> {
+    Box::new(TfCumsum) as _
+}
+
+#[derive(Debug)]
+struct TfMaximum;
+
+impl Component for TfMaximum {
+    fn operand_arity(&self) -> usize {
+        2
+    }
+
+    fn make_operator(&self, _immediates: &Vec<Vec<u64>>, operands: &[Id]) -> Operator {
+        Operator::TfMaximum(operands[0], operands[1])
+    }
+
+    fn make_expression<'a>(
+        &self,
+        _context: &'a z3::Context,
+        _immediates: &[Vec<BitVec<'a>>],
+        operands: &[Vec<BitVec<'a>>],
+        _bit_width: u32,
+    ) -> Vec<BitVec<'a>> {
+        // 遍历比较求出最大的那个并放入结果中即可
+        // TODO：由于限制只要求长度一致，还要考虑长度不一致的情况
+        let size0 = operands[0].len();
+        let _size1 = operands[1].len();
+        let mut result: Vec<BitVec> = Vec::new();
+        for index in 0..size0 {
+            result.push(operands[0][index].bvsgt(&operands[1][index]).ite(&operands[0][index], &operands[1][index]));
+        }
+        return result;
+    }
+}
+
+pub fn tf_maximum() -> Box<dyn Component> {
+    Box::new(TfMaximum) as _
+}
+
+#[derive(Debug)]
+struct TfMinimum;
+
+impl Component for TfMinimum {
+    fn operand_arity(&self) -> usize {
+        2
+    }
+
+    fn make_operator(&self, _immediates: &Vec<Vec<u64>>, operands: &[Id]) -> Operator {
+        Operator::TfMinimum(operands[0], operands[1])
+    }
+
+    fn make_expression<'a>(
+        &self,
+        _context: &'a z3::Context,
+        _immediates: &[Vec<BitVec<'a>>],
+        operands: &[Vec<BitVec<'a>>],
+        _bit_width: u32,
+    ) -> Vec<BitVec<'a>> {
+        // 遍历比较求出最小的那个并放入结果中即可
+        // TODO：由于限制只要求长度一致，还要考虑长度不一致的情况
+        let size0 = operands[0].len();
+        let _size1 = operands[1].len();
+        let mut result: Vec<BitVec> = Vec::new();
+        for index in 0..size0 {
+            result.push(operands[0][index].bvslt(&operands[1][index]).ite(&operands[0][index], &operands[1][index]));
+        }
+        return result;
+    }
+}
+
+pub fn tf_minimum() -> Box<dyn Component> {
+    Box::new(TfMinimum) as _
+}
+
+#[derive(Debug)]
+struct TfReverse;
+
+impl Component for TfReverse {
+    fn operand_arity(&self) -> usize {
+        1
+    }
+
+    fn make_operator(&self, _immediates: &Vec<Vec<u64>>, operands: &[Id]) -> Operator {
+        Operator::TfReverse(operands[0])
+    }
+
+    fn make_expression<'a>(
+        &self,
+        _context: &'a z3::Context,
+        _immediates: &[Vec<BitVec<'a>>],
+        operands: &[Vec<BitVec<'a>>],
+        _bit_width: u32,
+    ) -> Vec<BitVec<'a>> {
+        // 倒序，就是把第size - index个放到index下标里
+        let size = operands[0].len();
+        let mut result: Vec<BitVec> = Vec::new();
+        for index in 0..size {
+            result.push(operands[0][size - index].clone());
+        }
+        return result;
+    }
+}
+
+pub fn tf_reverse() -> Box<dyn Component> {
+    Box::new(TfReverse) as _
+}
+
+#[derive(Debug)]
+struct TfSign;
+
+impl Component for TfSign {
+    fn operand_arity(&self) -> usize {
+        1
+    }
+
+    fn make_operator(&self, _immediates: &Vec<Vec<u64>>, operands: &[Id]) -> Operator {
+        Operator::TfSign(operands[0])
+    }
+
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vec<BitVec<'a>>],
+        operands: &[Vec<BitVec<'a>>],
+        bit_width: u32,
+    ) -> Vec<BitVec<'a>> {
+        // 确定每个数字的正负，正数1、负数-1、0为0
+        let size = operands[0].len();
+        let mut result: Vec<BitVec> = Vec::new();
+        // 手动定义1、-1、0，只不过-1没有函数，得自己用方法设定
+        let plus_one = one(context, bit_width);
+        let zero = zero(context, bit_width);
+        let minus_one = BitVec::from_i64(context, -1, bit_width);
+        for index in 0..size {
+            // 先判断是否为负，是则返回-1，否则判断是否为正，是则返回1，否则不是正数也不是负数，则为0
+            result.push(operands[0][index].bvslt(&zero).ite(&minus_one, &operands[0][index].bvsgt(&zero).ite(&plus_one, &zero)));
+        }
+        return result;
+    }
+}
+
+pub fn tf_sign() -> Box<dyn Component> {
+    Box::new(TfSign) as _
+}
+
+#[derive(Debug)]
+struct TfSquare;
+
+impl Component for TfSquare {
+    fn operand_arity(&self) -> usize {
+        1
+    }
+
+    fn make_operator(&self, _immediates: &Vec<Vec<u64>>, operands: &[Id]) -> Operator {
+        Operator::TfSquare(operands[0])
+    }
+
+    fn make_expression<'a>(
+        &self,
+        _context: &'a z3::Context,
+        _immediates: &[Vec<BitVec<'a>>],
+        operands: &[Vec<BitVec<'a>>],
+        _bit_width: u32,
+    ) -> Vec<BitVec<'a>> {
+        // 遍历每个元素，返回每个元素的平方即可
+        let size = operands[0].len();
+        let mut result: Vec<BitVec> = Vec::new();
+        for index in 0..size {
+            // 平方就是自己乘以自己
+            result.push(operands[0][index].bvmul(&operands[0][index]));
+        }
+        return result;
+    }
+}
+
+pub fn tf_square() -> Box<dyn Component> {
+    Box::new(TfSquare) as _
+}
+
 macro_rules! with_operator_component {
     ( $me:expr , |$c:ident| $body:expr ) => {
         match $me {
@@ -1911,6 +2176,34 @@ macro_rules! with_operator_component {
             }
             Operator::TfReciprocal(_) => {
                 let $c = TfReciprocal;
+                $body
+            }
+            Operator::TfCountNonzero(_) => {
+                let $c = TfCountNonzero;
+                $body
+            }
+            Operator::TfCumsum(_, _, _) => {
+                let $c = TfCumsum;
+                $body
+            }
+            Operator::TfMaximum(_, _) => {
+                let $c = TfMaximum;
+                $body
+            }
+            Operator::TfMinimum(_, _) => {
+                let $c = TfMinimum;
+                $body
+            }
+            Operator::TfReverse(_) => {
+                let $c = TfReverse;
+                $body
+            }
+            Operator::TfSign(_) => {
+                let $c = TfSign;
+                $body
+            }
+            Operator::TfSquare(_) => {
+                let $c = TfSquare;
                 $body
             }
         }
