@@ -282,8 +282,10 @@ pub trait Specification: fmt::Debug {
     fn make_expression<'a>(
         &self,
         context: &'a z3::Context,
-        inputs: &Vec<Vec<BitVec<'a>>>,
-        output: &Vec<BitVec<'a>>,
+        // inputs: &Vec<Vec<BitVec<'a>>>,
+        // output: &Vec<BitVec<'a>>,
+        inputs: &Vec<Vecs<'a>>,
+        output: &Vecs<'a>,
         bit_width: u32,
     ) -> Bool<'a>;
 }
@@ -804,30 +806,30 @@ impl<'a> Synthesizer<'a> {
     // }
 
 
-    fn fresh_immediates(&self, bit_width: u32, len: u32) -> Vec<Vec<BitVec<'a>>> {
+    fn fresh_immediates(&self, bit_width: u32, dims: Vec<usize>) -> Vec<Vecs<'a>> {
         self.library
             .components
             .iter()
             .flat_map(|c| {
-                (0..c.immediate_arity()).map(|_| fresh_immediate(self.context, bit_width, len))
+                (0..c.immediate_arity()).map(|_| fresh_immediate(self.context, bit_width, dims))
             })
             .collect()
     }
 
-    fn fresh_param_vars(&self, bit_width: u32, len: u32) -> Vec<Vec<BitVec<'a>>> {
+    fn fresh_param_vars(&self, bit_width: u32, dims: Vec<usize>) -> Vec<Vecs<'a>> {
         self.library
             .components
             .iter()
-            .flat_map(|c| (0..c.operand_arity()).map(|_| fresh_param(self.context, bit_width, len)))
+            .flat_map(|c| (0..c.operand_arity()).map(|_| fresh_param(self.context, bit_width, dims)))
             .collect()
     }
 
 
-    fn fresh_result_vars(&self, bit_width: u32, len : u32) -> Vec<Vec<BitVec<'a>>> {
+    fn fresh_result_vars(&self, bit_width: u32, dims: Vec<usize>) -> Vec<Vecs<'a>> {
         self.library
             .components
             .iter()
-            .map(|_| fresh_result(self.context, bit_width, len))
+            .map(|_| fresh_result(self.context, bit_width, dims))
             .collect()
     }
 
@@ -964,7 +966,7 @@ impl<'a> Synthesizer<'a> {
         inputs: &HashSet<Vec<Vec<u64>>>,
         output_line: u32,
         bit_width: u32,
-        array_len: u32
+        array_dims: Vec<usize>
     ) -> Result<Assignments> {
         debug!(
             "finite synthesis at bit width {} with inputs = {:#018X?}",
@@ -976,12 +978,12 @@ impl<'a> Synthesizer<'a> {
             }
         );
 
-        let immediates = self.fresh_immediates(bit_width, array_len);
+        let immediates = self.fresh_immediates(bit_width, array_dims);
         let mut works_for_inputs = Vec::with_capacity(inputs.len() * 4);
 
         for input in inputs {
-            let params = self.fresh_param_vars(bit_width, array_len);
-            let results = self.fresh_result_vars(bit_width, array_len);
+            let params = self.fresh_param_vars(bit_width, array_dims);
+            let results = self.fresh_result_vars(bit_width, array_dims);
             let inputs: Vec<_> = input
                 .iter()
                 .map(|i| 
@@ -989,7 +991,7 @@ impl<'a> Synthesizer<'a> {
                 )
                 .collect();
             //i[0] ?
-            let output = fresh_output(self.context, bit_width, array_len);
+            let output = fresh_output(self.context, bit_width, array_dims);
 
             let lib = self.library(&immediates, &params, &results, bit_width);
             works_for_inputs.push(lib);
@@ -1095,10 +1097,10 @@ impl<'a> Synthesizer<'a> {
     /// 5.2 Encoding Dataflow in Programs
     fn connectivity(
         &self,
-        inputs: &Vec<Vec<BitVec<'a>>>,
-        output: &Vec<BitVec<'a>>,
-        params: &Vec<Vec<BitVec<'a>>>,
-        results: &Vec<Vec<BitVec<'a>>>,
+        inputs: &Vec<Vecs<'a>>,
+        output: &Vecs<'a>,
+        params: &Vec<Vecs<'a>>,
+        results: &Vec<Vecs<'a>>,
     ) -> Bool<'a> {
         let locs_to_vars: Vec<_> = self
             .locations
@@ -1165,9 +1167,9 @@ impl<'a> Synthesizer<'a> {
 
     fn library(
         &self,
-        immediates: &[Vec<BitVec<'a>>],
-        params: &[Vec<BitVec<'a>>],
-        results: &[Vec<BitVec<'a>>],
+        immediates: &[Vecs<'a>],
+        params: &[Vecs<'a>],
+        results: &[Vecs<'a>],
         bit_width: u32,
     ) -> Bool<'a> {
         let mut exprs = Vec::with_capacity(self.library.components.len());
@@ -1186,8 +1188,8 @@ impl<'a> Synthesizer<'a> {
 
             let expression = c.make_expression(self.context, imms, inputs, bit_width);
 
-            let sz1 = result.len();
-            let _sz2 = expression.len();
+            let sz1 = result.dims.len();
+            let _sz2 = expression.dims.len();
 
             // 暂时不需要这个...毕竟这个东西很影响输出结果，不管能不能跑都会输出这个
             // if sz1 != sz2 {
@@ -1195,8 +1197,11 @@ impl<'a> Synthesizer<'a> {
             // }
             //println!("{}, {}",sz1, _sz2);
 
-            for i in 1..sz1+1 {
-                exprs.push(expression[i-1]._eq(&result[i-1]));
+            for i in 0..sz1 {
+                for j in 0 .. result.vecs[i].len() {
+                    exprs.push(expression.vecs[i][j]._eq(&result.vecs[i][j]));
+                }
+                
 
             }
             // exprs.push(
@@ -1215,17 +1220,17 @@ impl<'a> Synthesizer<'a> {
     /// took this technique from Souper. Presumably it lets the solver choose
     /// inputs that are more interesting than an RNG would have chosen, which
     /// later helps it synthesize better solutions more quickly.
-    fn initial_concrete_inputs(&mut self, array_len: u32) -> Result<HashSet<Vec<Vec<u64>>>> {
+    fn initial_concrete_inputs(&mut self, array_dims: Vec<usize>) -> Result<HashSet<Vec<Vec<u64>>>> {
         // Taken from Souper.
         const NUM_INITIAL_INPUTS: usize = 4;
 
         let mut inputs: HashSet<Vec<Vec<u64>>> = HashSet::with_capacity(NUM_INITIAL_INPUTS);
         
 
-        let input_vars: Vec<Vec<_>> = (0..self.spec.arity())
-            .map(|_| fresh_input(self.context, FULL_BIT_WIDTH, array_len))
+        let input_vars : Vec<Vecs<'_>> = (0..self.spec.arity())
+            .map(|_| fresh_input(self.context, FULL_BIT_WIDTH, array_dims))
             .collect();
-        let output_var = fresh_output(self.context, FULL_BIT_WIDTH, array_len);
+        let output_var = fresh_output(self.context, FULL_BIT_WIDTH, array_dims);
         let spec =
             self.spec
                 .make_expression(self.context, &input_vars, &output_var, FULL_BIT_WIDTH);
@@ -1287,8 +1292,8 @@ impl<'a> Synthesizer<'a> {
     ///
     /// The synthesizer has been configured, and we're ready to create a
     /// program.
-    pub fn synthesize(&mut self, array_len: u32) -> Result<Program> {
-        let mut inputs = self.initial_concrete_inputs(array_len)?;
+    pub fn synthesize(&mut self, array_dims: Vec<usize>) -> Result<Program> {
+        let mut inputs = self.initial_concrete_inputs(array_dims)?;
         assert!(!inputs.is_empty());
 
         let arity = self.spec.arity();
