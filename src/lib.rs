@@ -44,16 +44,20 @@ where
 
 //对于多维数组的扩散，我们可以使用一个纬度数组，然后动态创建一个嵌套了这么多层的vecs
 //TODO : 但是目前找不到一个方法将vecs的类型泛型表示出来，对于几纬就只能固定为几个Vec<Vec<...>>
-#[derive(Debug)]
-pub struct Vecs<'a>{
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Vecs<T>{
     dims : Vec<usize>,
-    vecs : Vec<Vec<BitVec<'a>>>,
+    vecs : Vec<Vec<T>>,
 }
 
-impl<'a> Vecs<'a>{
-    pub const fn new(_dims: Vec<usize>) -> Self {
+impl<T> Vecs<T>{
+    pub fn new(_dims: Vec<usize>) -> Self {
         let sz = _dims.len();
-        let vecs : Vec<Vec<BitVec>> = Vec::new();
+        let mut vecs : Vec<Vec<T>> = Vec::new();
+        for _ in 0 .. _dims[0] {
+            let temp : Vec<T> = Vec::new();
+            vecs.push(temp);
+        }
         let dims = _dims;
         return Vecs{dims, vecs};
     }   
@@ -122,8 +126,8 @@ impl<'a> Vecs<'a>{
 // }
 
 //TODO: 动态维度，不过目前只能实现二维
-fn fresh_immediate(context: &z3::Context, bit_width: u32, dims: Vec<usize>) -> Vecs {
-    let mut result = Vecs::new(dims);
+fn fresh_immediate(context: &z3::Context, bit_width: u32, dims: Vec<usize>) ->  Vecs<BitVec<'_>> {
+    let mut result: Vecs<BitVec<'_>> = Vecs::new(dims);
     let x = dims[0];
     let y = dims[1];
     for i in 0 .. x {
@@ -135,7 +139,7 @@ fn fresh_immediate(context: &z3::Context, bit_width: u32, dims: Vec<usize>) -> V
 }
 
 //TODO: 动态维度，不过目前只能实现二维
-fn fresh_param(context: &z3::Context, bit_width: u32, dims: Vec<usize>) -> Vecs {
+fn fresh_param(context: &z3::Context, bit_width: u32, dims: Vec<usize>) ->  Vecs<BitVec<'_>> {
     let mut result = Vecs::new(dims);
     let x = dims[0];
     let y = dims[1];
@@ -148,7 +152,7 @@ fn fresh_param(context: &z3::Context, bit_width: u32, dims: Vec<usize>) -> Vecs 
 }
 
 //TODO: 动态维度，不过目前只能实现二维
-fn fresh_result(context: &z3::Context, bit_width: u32, dims: Vec<usize>) -> Vecs {
+fn fresh_result(context: &z3::Context, bit_width: u32, dims: Vec<usize>) ->  Vecs<BitVec<'_>> {
     let mut result = Vecs::new(dims);
     let x = dims[0];
     let y = dims[1];
@@ -161,7 +165,7 @@ fn fresh_result(context: &z3::Context, bit_width: u32, dims: Vec<usize>) -> Vecs
 }
 
 //TODO: 动态维度，不过目前只能实现二维
-fn fresh_input(context: &z3::Context, bit_width: u32, dims: Vec<usize>) -> Vecs {
+fn fresh_input(context: &z3::Context, bit_width: u32, dims: Vec<usize>) ->  Vecs<BitVec<'_>> {
     let mut result = Vecs::new(dims);
     let x = dims[0];
     let y = dims[1];
@@ -174,7 +178,7 @@ fn fresh_input(context: &z3::Context, bit_width: u32, dims: Vec<usize>) -> Vecs 
 }
 
 //TODO: 动态维度，不过目前只能实现二维
-fn fresh_output(context: &z3::Context, bit_width: u32, dims: Vec<usize>) -> Vecs {
+fn fresh_output(context: &z3::Context, bit_width: u32, dims: Vec<usize>) ->  Vecs<BitVec<'_>> {
     let mut result = Vecs::new(dims);
     let x = dims[0];
     let y = dims[1];
@@ -190,19 +194,26 @@ fn eval_bitvec(model: &z3::Model, bv: &BitVec) -> u64 {
     model.eval(bv).unwrap().as_u64().unwrap()
 }
 
-//bitvec -> u64
-fn eval_bitvecs<'a, I>(model: &'a z3::Model, bvs:I) -> Vec<Vec<u64>>
+//将bitvec转化为u64类型
+fn eval_bitvecs<'a, I>(model: &'a z3::Model, bvs:I) -> Vec<Vecs<u64>>
 where
-    I: IntoIterator<Item = &'a Vec< BitVec<'a>>>,
+    I: IntoIterator<Item = &'a Vecs< BitVec<'a>>>,
 {
-    let mut result : Vec<Vec<u64>> = Vec::new();
+    let mut result : Vec<Vecs<u64>> = Vec::new();
 
     for v in bvs.into_iter() {
-        let mut temp : Vec<u64> = Vec::new();
-        for k in 1..v.len()+1 {
-            temp.push(eval_bitvec(model, &v[k-1]));
+        let mut temp : Vecs<u64> = Vecs::new(v.dims);
+        for i in 0 .. v.dims[0] {
+            for j in 0 .. v.dims[1] {
+                temp.vecs[i].push(eval_bitvec(model, &v.vecs[i][j]));
+            }
         }
         result.push(temp);
+
+        // for k in 1..v.len()+1 {
+        //     temp.push(eval_bitvec(model, &v[k-1]));
+        // }
+        // result.push(temp);
 
     }
     return result;
@@ -284,8 +295,8 @@ pub trait Specification: fmt::Debug {
         context: &'a z3::Context,
         // inputs: &Vec<Vec<BitVec<'a>>>,
         // output: &Vec<BitVec<'a>>,
-        inputs: &Vec<Vecs<'a>>,
-        output: &Vecs<'a>,
+        inputs: &Vec<Vecs<BitVec<'a>>>,
+        output: &Vecs<BitVec<'a>>,
         bit_width: u32,
     ) -> Bool<'a>;
 }
@@ -367,28 +378,28 @@ impl Library {
                 // // 12.
                 // component::xor(),
                 component::tf_abs(),
-                component::tf_add(),
-                component::tf_mul(),
-                component::tf_div(),
-                component::tf_boolean_mask(),
-                component::tf_clip_by_value(),
-                component::tf_equal(),
-                component::tf_fill(),
-                component::tf_greater(),
-                component::tf_greater_equal(),
-                component::tf_not_equal(),
-                component::tf_negative(),
-                component::tf_reciprocal(),
-                component::tf_cast(),
-                component::tf_argmax(),
-                component::tf_argmin(),
-                component::tf_count_nonzero(),
-                component::tf_cumsum(),
-                component::tf_maximum(),
-                component::tf_minimum(),
-                component::tf_reverse(),
-                component::tf_sign(),
-                component::tf_square(),
+                // component::tf_add(),
+                // component::tf_mul(),
+                // component::tf_div(),
+                // component::tf_boolean_mask(),
+                // component::tf_clip_by_value(),
+                // component::tf_equal(),
+                // component::tf_fill(),
+                // component::tf_greater(),
+                // component::tf_greater_equal(),
+                // component::tf_not_equal(),
+                // component::tf_negative(),
+                // component::tf_reciprocal(),
+                // component::tf_cast(),
+                // component::tf_argmax(),
+                // component::tf_argmin(),
+                // component::tf_count_nonzero(),
+                // component::tf_cumsum(),
+                // component::tf_maximum(),
+                // component::tf_minimum(),
+                // component::tf_reverse(),
+                // component::tf_sign(),
+                // component::tf_square(),
             ],
         }
     }
@@ -606,7 +617,7 @@ impl<'a> LocationVars<'a> {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 struct Assignments {
-    immediates: Vec<Vec<u64>>,
+    immediates: Vec<Vecs<u64>>,
     // The line in the program where the i^th input is defined (for all inputs
     // of all components).
     params: Vec<u32>,
@@ -665,7 +676,7 @@ impl Display for Program {
 
 enum Verification {
     WorksForAllInputs,
-    Counterexample(Vec<Vec<u64>>),
+    Counterexample(Vec<Vecs<u64>>),
 }
 
 #[derive(Debug, Clone)]
@@ -806,7 +817,7 @@ impl<'a> Synthesizer<'a> {
     // }
 
 
-    fn fresh_immediates(&self, bit_width: u32, dims: Vec<usize>) -> Vec<Vecs<'a>> {
+    fn fresh_immediates(&self, bit_width: u32, dims: Vec<usize>) -> Vec<Vecs<BitVec<'a>>> {
         self.library
             .components
             .iter()
@@ -816,7 +827,7 @@ impl<'a> Synthesizer<'a> {
             .collect()
     }
 
-    fn fresh_param_vars(&self, bit_width: u32, dims: Vec<usize>) -> Vec<Vecs<'a>> {
+    fn fresh_param_vars(&self, bit_width: u32, dims: Vec<usize>) -> Vec<Vecs<BitVec<'a>>> {
         self.library
             .components
             .iter()
@@ -825,7 +836,7 @@ impl<'a> Synthesizer<'a> {
     }
 
 
-    fn fresh_result_vars(&self, bit_width: u32, dims: Vec<usize>) -> Vec<Vecs<'a>> {
+    fn fresh_result_vars(&self, bit_width: u32, dims: Vec<usize>) -> Vec<Vecs<BitVec<'a>>> {
         self.library
             .components
             .iter()
@@ -963,12 +974,12 @@ impl<'a> Synthesizer<'a> {
 
     fn finite_synthesis(
         &mut self,
-        inputs: &HashSet<Vec<Vec<u64>>>,
+        inputs: &HashSet<Vec<Vecs<u64>>>,
         output_line: u32,
         bit_width: u32,
         array_dims: Vec<usize>
     ) -> Result<Assignments> {
-        debug!(
+        /*debug!(
             "finite synthesis at bit width {} with inputs = {:#018X?}",
             bit_width,
             {
@@ -976,7 +987,7 @@ impl<'a> Synthesizer<'a> {
                 inputs.sort();
                 inputs
             }
-        );
+        );*/
 
         let immediates = self.fresh_immediates(bit_width, array_dims);
         let mut works_for_inputs = Vec::with_capacity(inputs.len() * 4);
@@ -984,12 +995,29 @@ impl<'a> Synthesizer<'a> {
         for input in inputs {
             let params = self.fresh_param_vars(bit_width, array_dims);
             let results = self.fresh_result_vars(bit_width, array_dims);
-            let inputs: Vec<_> = input
+
+            //
+            //将Vec<Vecs<u64>>类型的inputs转化为Vec<Vecs<BV<'_>>>,
+            let input_iter = input.iter();
+            let inputs : Vec<Vecs<BitVec<'_>>> = Vec::new();
+            for v in input_iter {
+                let temp : Vecs<BitVec<'_>> = Vecs::new(v.dims);
+                for i in 0..v.dims[0] {
+                    for j in 0..v.dims[1] {
+                        temp.vecs[i].push(BitVec::from_i64(self.context, v.vecs[i][j] as i64, bit_width));
+                    }
+                }
+                inputs.push(temp);
+            }
+            
+            /*let inputs: Vec<_> = input
                 .iter()
                 .map(|i| 
-                    (0..i.len()).map(|_| BitVec::from_i64(self.context, i[0] as i64, bit_width)).collect()
-                )
-                .collect();
+                    (0..i.vecs.len())
+                    .map(|_| BitVec::from_i64(self.context, i[0] as i64, bit_width))
+                    .collect()
+                ).collect();*/
+            
             //i[0] ?
             let output = fresh_output(self.context, bit_width, array_dims);
 
@@ -1052,11 +1080,11 @@ impl<'a> Synthesizer<'a> {
         }
     }
 
-    fn verification(&mut self, assignments: &Assignments, bit_width: u32, array_len: u32) -> Result<Verification> {
+    fn verification(&mut self, assignments: &Assignments, bit_width: u32, array_dims: Vec<usize>) -> Result<Verification> {
         let inputs: Vec<_> = (0..self.spec.arity())
-            .map(|_| fresh_input(self.context, bit_width, array_len))
+            .map(|_| fresh_input(self.context, bit_width, array_dims))
             .collect();
-        let output = fresh_output(self.context, bit_width, array_len);
+        let output = fresh_output(self.context, bit_width, array_dims);
 
         let mut prog = assignments.to_program(self.spec.arity(), self.library);
         prog.dce();
@@ -1097,10 +1125,10 @@ impl<'a> Synthesizer<'a> {
     /// 5.2 Encoding Dataflow in Programs
     fn connectivity(
         &self,
-        inputs: &Vec<Vecs<'a>>,
-        output: &Vecs<'a>,
-        params: &Vec<Vecs<'a>>,
-        results: &Vec<Vecs<'a>>,
+        inputs: &Vec<Vecs<BitVec<'a>>>,
+        output: &Vecs<BitVec<'a>>,
+        params: &Vec<Vecs<BitVec<'a>>>,
+        results: &Vec<Vecs<BitVec<'a>>>,
     ) -> Bool<'a> {
         let locs_to_vars: Vec<_> = self
             .locations
@@ -1167,9 +1195,9 @@ impl<'a> Synthesizer<'a> {
 
     fn library(
         &self,
-        immediates: &[Vecs<'a>],
-        params: &[Vecs<'a>],
-        results: &[Vecs<'a>],
+        immediates: &[Vecs<BitVec<'a>>],
+        params: &[Vecs<BitVec<'a>>],
+        results: &[Vecs<BitVec<'a>>],
         bit_width: u32,
     ) -> Bool<'a> {
         let mut exprs = Vec::with_capacity(self.library.components.len());
@@ -1220,11 +1248,14 @@ impl<'a> Synthesizer<'a> {
     /// took this technique from Souper. Presumably it lets the solver choose
     /// inputs that are more interesting than an RNG would have chosen, which
     /// later helps it synthesize better solutions more quickly.
-    fn initial_concrete_inputs(&mut self, array_dims: Vec<usize>) -> Result<HashSet<Vec<Vec<u64>>>> {
+    fn initial_concrete_inputs(&mut self, array_dims: Vec<usize>) -> Result<HashSet<Vec<Vecs<u64>>>> {
         // Taken from Souper.
         const NUM_INITIAL_INPUTS: usize = 4;
 
-        let mut inputs: HashSet<Vec<Vec<u64>>> = HashSet::with_capacity(NUM_INITIAL_INPUTS);
+        //返回值参数用hashset保证其不重复，原先hashset的参数是Vec<Vec<u64>>，代表生成NUM_INITIAL_INPUTS组输入，每组输入是self.spec.arity()个包含了arraylen个元素的一维数组
+        //现在修改完后，需要返回的是生成NUM_INITIAL_INPUTS组输入，每组输入是self.spec.arity()个Vecs变量，因此返回值是HashSet<Vec<Vecs<u64>>>
+
+        let mut inputs: HashSet<Vec<Vecs<u64>>> = HashSet::with_capacity(NUM_INITIAL_INPUTS);
         
 
         let input_vars : Vec<Vecs<'_>> = (0..self.spec.arity())
@@ -1241,6 +1272,7 @@ impl<'a> Synthesizer<'a> {
         let in2 = &input_vars;
 
 
+        //每次一次循环，产生一个<Vec<Vecs<u64>>放到inputs中，
         for _ in 0..NUM_INITIAL_INPUTS {
             // Make sure that we don't find the same concrete inputs that we've
             // already found.
@@ -1249,16 +1281,26 @@ impl<'a> Synthesizer<'a> {
                 //对于每一组输出，可能有好几个数组作为输入
                 let mut this_input = Vec::with_capacity(self.spec.arity());
                 for (inp, var) in input_set.iter().zip(in1) {
+                    //遍历inp中的实际Vecs.vesc数组，判断是否相等
+                    //TODO : 二维到多维
+                    let mut temp = BitVec::from_i64(self.context, inp.vecs[0][0] as i64, FULL_BIT_WIDTH)._eq(&var.vecs[0][0]);
+                    for i in 0 .. inp.dims[0] {
+                        for j in 0 .. inp.dims[1] {
+                            let temp2 = BitVec::from_i64(self.context, inp.vecs[i][j] as i64, FULL_BIT_WIDTH)._eq(&var.vecs[i][j]);
+                            temp = temp.and(&[&temp2]);
+                        }
+                    }
+                    this_input.push(temp);
 
                     /*let inp = BitVec::from_i64(self.context, *inp as i64, FULL_BIT_WIDTH);
                     this_input.push(inp._eq(var));*/
-                    let sz = inp.len();
+                    /*let sz = inp.len();
                     let mut temp = BitVec::from_i64(self.context, inp[0] as i64, FULL_BIT_WIDTH)._eq(&var[0]);
                     for i in 2..sz+1 {
                         let temp2 = BitVec::from_i64(self.context, inp[i-1] as i64, FULL_BIT_WIDTH)._eq(&var[i-1]);
                         temp = temp.and(&[&temp2]);
                     }
-                    this_input.push(temp);
+                    this_input.push(temp);*/
 
                 }
                 let this_input = and(self.context, &this_input);
@@ -1315,7 +1357,7 @@ impl<'a> Synthesizer<'a> {
         let mut best = Err(Error::SynthesisUnknown);
         let mut length = longest;
         while length >= shortest {
-            match self.synthesize_with_length(length, &mut inputs, array_len) {
+            match self.synthesize_with_length(length, &mut inputs, array_dims) {
                 Ok(mut program) => {
                     program.dce();
 
@@ -1341,19 +1383,19 @@ impl<'a> Synthesizer<'a> {
     fn synthesize_with_length(
         &mut self,
         program_length: u32,
-        inputs: &mut HashSet<Vec<Vec<u64>>>,
-        array_len: u32
+        inputs: &mut HashSet<Vec<Vecs<u64>>>,
+        array_dims: Vec<usize>
     ) -> Result<Program> {
         debug!("synthesizing a program of length = {}", program_length);
 
         let mut bit_width = 2;
         'cegis: loop {
-            let assignments = self.finite_synthesis(inputs, program_length - 1, bit_width, array_len)?;
+            let assignments = self.finite_synthesis(inputs, program_length - 1, bit_width, array_dims)?;
 
             let mut verifying_with_more_bits = false;
             loop {
                 debug!("verifying at bit width = {}", bit_width);
-                match self.verification(&assignments, bit_width, array_len)? {
+                match self.verification(&assignments, bit_width, array_dims)? {
                     Verification::WorksForAllInputs => {
                         debug_assert!(bit_width <= FULL_BIT_WIDTH);
                         debug_assert!(bit_width.is_power_of_two());
