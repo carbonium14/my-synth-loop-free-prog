@@ -999,9 +999,9 @@ impl<'a> Synthesizer<'a> {
             //
             //将Vec<Vecs<u64>>类型的inputs转化为Vec<Vecs<BV<'_>>>,
             let input_iter = input.iter();
-            let inputs : Vec<Vecs<BitVec<'_>>> = Vec::new();
+            let mut inputs : Vec<Vecs<BitVec<'_>>> = Vec::new();
             for v in input_iter {
-                let temp : Vecs<BitVec<'_>> = Vecs::new(v.dims);
+                let mut temp : Vecs<BitVec<'_>> = Vecs::new(v.dims);
                 for i in 0..v.dims[0] {
                     for j in 0..v.dims[1] {
                         temp.vecs[i].push(BitVec::from_i64(self.context, v.vecs[i][j] as i64, bit_width));
@@ -1150,12 +1150,23 @@ impl<'a> Synthesizer<'a> {
                 }
 
                 //这边默认x和y的len相等
-                let mut temp = x[0]._eq(&y[0]);
-                for _k in 1..x.len() + 1 {
-                    temp = temp.and(&[&temp]);
-                }
+                //判断类型为Vecs<BV<'_>>的x和y中的元素相等关系
+                let mut temp = x.vecs[0][0]._eq(&y.vecs[0][0]);
+                for i in 0..x.dims[0] {
+                    for j in 0..x.dims[1] {
+                        let temp2 = x.vecs[0][0]._eq(&y.vecs[0][0]);
+                        temp = temp.and(&[&temp2]);
 
+                    }
+                }
                 conn.push(l_x._eq(l_y).implies(&temp));
+
+                // let mut temp = x[0]._eq(&y[0]);
+                // for _k in 1..x.len() + 1 {
+                //     temp = temp.and(&[&temp]);
+                // }
+
+                // conn.push(l_x._eq(l_y).implies(&temp));
             }
         }
 
@@ -1258,7 +1269,7 @@ impl<'a> Synthesizer<'a> {
         let mut inputs: HashSet<Vec<Vecs<u64>>> = HashSet::with_capacity(NUM_INITIAL_INPUTS);
         
 
-        let input_vars : Vec<Vecs<'_>> = (0..self.spec.arity())
+        let input_vars : Vec<Vecs<_>> = (0..self.spec.arity())
             .map(|_| fresh_input(self.context, FULL_BIT_WIDTH, array_dims))
             .collect();
         let output_var = fresh_output(self.context, FULL_BIT_WIDTH, array_dims);
@@ -1426,10 +1437,10 @@ impl Program {
         context: &'a z3::Context,
         spec: &impl Specification,
         library: &Library,
-        arr_len : u32
+        arr_dims : Vec<usize>
     ) -> Result<Program> {
         let mut synthesizer = Synthesizer::new(context, library, spec)?;
-        synthesizer.synthesize(arr_len)
+        synthesizer.synthesize(arr_dims)
     }
 
     pub fn dce(&mut self) {
@@ -1477,8 +1488,8 @@ impl Specification for Program {
     fn make_expression<'a>(
         &self,
         context: &'a z3::Context,
-        inputs: &Vec<Vec<BitVec<'a>>>,
-        output: &Vec<BitVec<'a>>,
+        inputs: &Vec<Vecs<BitVec<'a>>>,
+        output: &Vecs<BitVec<'a>>,
         bit_width: u32,
     ) -> Bool<'a> {
         assert!(self.instructions.len() > inputs.len());
@@ -1506,13 +1517,23 @@ impl Specification for Program {
 
         let vars = vars.pop().unwrap();
 
-        let mut temp = vars[0]._eq(&output[0]);
-
-        for i in 2..vars.len() {
-            //println!("{}", vars.len());
-            let temp2 = vars[i-1]._eq(&output[i-1]);
-            temp = temp.and(&[&temp2]);
+        //判断vars和output中的元素相等
+        let mut temp = vars.vecs[0][0]._eq(&output.vecs[0][0]);
+        for i in 0..vars.dims[0] {
+            for j in 0..vars.dims[1] {
+                let temp2 = vars.vecs[0][0]._eq(&output.vecs[0][0]);
+                temp = temp.and(&[&temp2]);
+            }
         }
+        
+
+        // let mut temp = vars[0]._eq(&output[0]);
+
+        // for i in 2..vars.len() {
+        //     //println!("{}", vars.len());
+        //     let temp2 = vars[i-1]._eq(&output[i-1]);
+        //     temp = temp.and(&[&temp2]);
+        // }
         
         return temp;
         

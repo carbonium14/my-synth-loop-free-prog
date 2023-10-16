@@ -28,7 +28,7 @@ fn one(context: &z3::Context, bit_width: u32) -> BitVec {
 pub trait Component: Debug {
     fn operand_arity(&self) -> usize;
 
-    fn make_operator(&self, immediates: &Vec<Vec<u64>>, operands: &[Id]) -> Operator;
+    fn make_operator(&self, immediates: &Vec<Vecs<u64>>, operands: &[Id]) -> Operator;
 
     fn make_expression<'a>(
         &self,
@@ -59,7 +59,7 @@ impl Component for Const {
         0
     }
 
-    fn make_operator(&self, immediates: &Vec<Vec<u64>>, _operands: &[Id]) -> Operator {
+    fn make_operator(&self, immediates: &Vec<Vecs<u64>>, _operands: &[Id]) -> Operator {
         Operator::Const(self.0)
     }
 
@@ -122,7 +122,7 @@ impl Component for TfAbs {
         1
     }
 
-    fn make_operator(&self, _immediates: &Vec<Vec<u64>>, operands: &[Id]) -> Operator {
+    fn make_operator(&self, _immediates: &Vec<Vecs<u64>>, operands: &[Id]) -> Operator {
         Operator::TfAbs(operands[0])
     }
 
@@ -1164,7 +1164,7 @@ impl Component for Operator {
         Operator::arity(self)
     }
 
-    fn make_operator(&self, immediates: &Vec<Vec<u64>>, operands: &[Id]) -> Operator {
+    fn make_operator(&self, immediates: &Vec<Vecs<u64>>, operands: &[Id]) -> Operator {
         with_operator_component!(self, |c| c.make_operator(immediates, operands))
     }
 
