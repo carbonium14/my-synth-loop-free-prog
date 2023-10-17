@@ -28,7 +28,7 @@ fn one(context: &z3::Context, bit_width: u32) -> BitVec {
 pub trait Component: Debug {
     fn operand_arity(&self) -> usize;
 
-    fn make_operator(&self, immediates: &Vec<Vecs<u64>>, operands: &[Id]) -> Operator;
+    fn make_operator(&self, immediates: &Vec<Vec<Vec<u64>>>, operands: &[Id]) -> Operator;
 
     fn make_expression<'a>(
         &self,
@@ -38,12 +38,12 @@ pub trait Component: Debug {
         // immediates: &[Vec<BitVec<'a>>],
         // operands: &[Vec<BitVec<'a>>],
 
-        immediates: &[Vecs<BitVec<'a>>],
-        operands: &[Vecs<BitVec<'a>>],
+        immediates: &[Vec<Vec<BitVec<'a>>>],
+        operands: &[Vec<Vec<BitVec<'a>>>],
         bit_width: u32,
     ) -> 
         //BitVec<'a> 
-        Vecs<BitVec<'a>>;
+        Vec<Vec<BitVec<'a>>>;
         
     /// How many immediates does this component require?
     fn immediate_arity(&self) -> usize {
@@ -1164,21 +1164,9 @@ impl Component for Operator {
         Operator::arity(self)
     }
 
-    fn make_operator(&self, immediates: &Vec<Vecs<u64>>, operands: &[Id]) -> Operator {
+    fn make_operator(&self, immediates: &Vec<Vec<Vec<u64>>>, operands: &[Id]) -> Operator {
         with_operator_component!(self, |c| c.make_operator(immediates, operands))
     }
-
-    // fn make_expression<'a>(
-    //     &self,
-    //     context: &'a z3::Context,
-    //     immediates: &[BitVec<'a>],
-    //     operands: &[BitVec<'a>],
-    //     bit_width: u32,
-    // ) -> BitVec<'a> {
-    //     with_operator_component!(self, |c| {
-    //         c.make_expression(context, immediates, operands, bit_width)
-    //     })
-    // }
 
     fn make_expression<'a>(
         &self,
