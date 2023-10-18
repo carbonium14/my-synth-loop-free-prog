@@ -46,19 +46,19 @@ where
 //TODO : 但是目前找不到一个方法将vecs的类型泛型表示出来，对于几纬就只能固定为几个Vec<Vec<...>>
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Vecs<T>{
-    dims : Vec<usize>,
+    dims : [usize ; 2],
     vecs : Vec<Vec<T>>,
 }
 
 impl<T> Vecs<T>{
-    pub fn new(_dims: Vec<usize>) -> Self {
+    pub fn new(_dims: [usize ; 2]) -> Self {
         let sz = _dims.len();
         let mut vecs : Vec<Vec<T>> = Vec::new();
         for _ in 0 .. _dims[0] {
             let temp : Vec<T> = Vec::new();
             vecs.push(temp);
         }
-        let dims = _dims;
+        let mut dims = _dims;
         return Vecs{dims, vecs};
     }   
 }
@@ -126,7 +126,7 @@ impl<T> Vecs<T>{
 // }
 
 //TODO: 动态维度，不过目前只能实现二维
-fn fresh_immediate(context: &z3::Context, bit_width: u32, dims: Vec<usize>) ->  Vecs<BitVec<'_>> {
+fn fresh_immediate(context: &z3::Context, bit_width: u32, dims:[usize; 2] ) ->  Vecs<BitVec<'_>> {
     let mut result: Vecs<BitVec<'_>> = Vecs::new(dims);
     let x = dims[0];
     let y = dims[1];
@@ -139,7 +139,7 @@ fn fresh_immediate(context: &z3::Context, bit_width: u32, dims: Vec<usize>) ->  
 }
 
 //TODO: 动态维度，不过目前只能实现二维
-fn fresh_param(context: &z3::Context, bit_width: u32, dims: Vec<usize>) ->  Vecs<BitVec<'_>> {
+fn fresh_param(context: &z3::Context, bit_width: u32, dims: [usize ; 2]) ->  Vecs<BitVec<'_>> {
     let mut result = Vecs::new(dims);
     let x = dims[0];
     let y = dims[1];
@@ -152,7 +152,7 @@ fn fresh_param(context: &z3::Context, bit_width: u32, dims: Vec<usize>) ->  Vecs
 }
 
 //TODO: 动态维度，不过目前只能实现二维
-fn fresh_result(context: &z3::Context, bit_width: u32, dims: Vec<usize>) ->  Vecs<BitVec<'_>> {
+fn fresh_result(context: &z3::Context, bit_width: u32, dims: [usize ; 2]) ->  Vecs<BitVec<'_>> {
     let mut result = Vecs::new(dims);
     let x = dims[0];
     let y = dims[1];
@@ -165,7 +165,7 @@ fn fresh_result(context: &z3::Context, bit_width: u32, dims: Vec<usize>) ->  Vec
 }
 
 //TODO: 动态维度，不过目前只能实现二维
-fn fresh_input(context: &z3::Context, bit_width: u32, dims: Vec<usize>) ->  Vecs<BitVec<'_>> {
+fn fresh_input(context: &z3::Context, bit_width: u32, dims: [usize ; 2]) ->  Vecs<BitVec<'_>> {
     let mut result = Vecs::new(dims);
     let x = dims[0];
     let y = dims[1];
@@ -178,7 +178,7 @@ fn fresh_input(context: &z3::Context, bit_width: u32, dims: Vec<usize>) ->  Vecs
 }
 
 //TODO: 动态维度，不过目前只能实现二维
-fn fresh_output(context: &z3::Context, bit_width: u32, dims: Vec<usize>) ->  Vecs<BitVec<'_>> {
+fn fresh_output(context: &z3::Context, bit_width: u32, dims: [usize ; 2]) ->  Vecs<BitVec<'_>> {
     let mut result = Vecs::new(dims);
     let x = dims[0];
     let y = dims[1];
@@ -289,6 +289,9 @@ impl Display for Instruction {
 
 pub trait Specification: fmt::Debug {
     fn arity(&self) -> usize;
+
+    //获取输入
+    fn inputs(&self) -> Vec<&Vecs<u64>>;
 
     fn make_expression<'a>(
         &self,
@@ -632,7 +635,8 @@ impl Assignments {
     fn to_program(&self, num_inputs: usize, library: &Library) -> Program {
         let mut b = ProgramBuilder::new();
         for _ in 0..num_inputs {
-            b.var();
+            //这里没必要传数组参数了，直接给值就行
+            b.var(Vec::new());
         }
         let mut program = b.finish();
 
@@ -663,6 +667,7 @@ impl Assignments {
 #[derive(Debug)]
 pub struct Program {
     instructions: Vec<Instruction>,
+    inputs: Vec<Vecs<u64>>
 }
 
 impl Display for Program {
@@ -817,7 +822,9 @@ impl<'a> Synthesizer<'a> {
     // }
 
 
-    fn fresh_immediates(&self, bit_width: u32, dims: Vec<usize>) -> Vec<Vecs<BitVec<'a>>> {
+    //要为每个部件都生成这样一个bitvec的数组，但是在运行的过程中数组的dims会有变化，因此该怎样
+    // 目前想法，产生一个很大的bitvec二维数组，此处默认是30*30，通过dims来控制，然后新添加一个变量dims[2]，用来表示这个数组中的哪些元素是有用的
+    fn fresh_immediates(&self, bit_width: u32, dims : [usize; 2]) -> Vec<Vecs<BitVec<'a>>> {
         self.library
             .components
             .iter()
@@ -827,7 +834,7 @@ impl<'a> Synthesizer<'a> {
             .collect()
     }
 
-    fn fresh_param_vars(&self, bit_width: u32, dims: Vec<usize>) -> Vec<Vecs<BitVec<'a>>> {
+    fn fresh_param_vars(&self, bit_width: u32, dims : [usize; 2]) -> Vec<Vecs<BitVec<'a>>> {
         self.library
             .components
             .iter()
@@ -836,7 +843,7 @@ impl<'a> Synthesizer<'a> {
     }
 
 
-    fn fresh_result_vars(&self, bit_width: u32, dims: Vec<usize>) -> Vec<Vecs<BitVec<'a>>> {
+    fn fresh_result_vars(&self, bit_width: u32, dims : [usize; 2]) -> Vec<Vecs<BitVec<'a>>> {
         self.library
             .components
             .iter()
@@ -972,12 +979,12 @@ impl<'a> Synthesizer<'a> {
     }
     */
 
+    //111111
     fn finite_synthesis(
         &mut self,
-        inputs: &HashSet<Vec<Vecs<u64>>>,
+        input: &Vec<Vecs<u64>>,
         output_line: u32,
         bit_width: u32,
-        array_dims: Vec<usize>
     ) -> Result<Assignments> {
         /*debug!(
             "finite synthesis at bit width {} with inputs = {:#018X?}",
@@ -989,49 +996,57 @@ impl<'a> Synthesizer<'a> {
             }
         );*/
 
-        let immediates = self.fresh_immediates(bit_width, array_dims);
-        let mut works_for_inputs = Vec::with_capacity(inputs.len() * 4);
+        // 控制dims大于所有可能的size
+        let dims = [30, 30];
 
-        for input in inputs {
-            let params = self.fresh_param_vars(bit_width, array_dims);
-            let results = self.fresh_result_vars(bit_width, array_dims);
+        let immediates = self.fresh_immediates(bit_width, dims);
+        
+        //let mut works_for_inputs = Vec::with_capacity(inputs.len() * 4);
+        //现在就一组输入直接就是4，用来存储bool们
+        let mut works_for_inputs = Vec::with_capacity(4);
 
-            //
-            //将Vec<Vecs<u64>>类型的inputs转化为Vec<Vecs<BV<'_>>>,
-            let input_iter = input.iter();
-            let mut inputs : Vec<Vecs<BitVec<'_>>> = Vec::new();
-            for v in input_iter {
-                let mut temp : Vecs<BitVec<'_>> = Vecs::new(v.dims);
-                for i in 0..v.dims[0] {
-                    for j in 0..v.dims[1] {
-                        temp.vecs[i].push(BitVec::from_i64(self.context, v.vecs[i][j] as i64, bit_width));
-                    }
+        
+        let params = self.fresh_param_vars(bit_width, dims);
+        let results = self.fresh_result_vars(bit_width, dims);
+
+        
+        //将Vec<Vecs<u64>>类型的inputs转化为Vec<Vecs<BV<'_>>>,
+        let input_iter = input.iter();
+        let mut inputs : Vec<Vecs<BitVec<'_>>> = Vec::new();
+        for v in input_iter {
+            let mut temp : Vecs<BitVec<'_>> = Vecs::new(v.dims);
+            for i in 0..v.dims[0] {
+                for j in 0..v.dims[1] {
+                    temp.vecs[i].push(BitVec::from_i64(self.context, v.vecs[i][j] as i64, bit_width));
                 }
-                inputs.push(temp);
             }
-            
-            /*let inputs: Vec<_> = input
-                .iter()
-                .map(|i| 
-                    (0..i.vecs.len())
-                    .map(|_| BitVec::from_i64(self.context, i[0] as i64, bit_width))
-                    .collect()
-                ).collect();*/
-            
-            //i[0] ?
-            let output = fresh_output(self.context, bit_width, array_dims);
-
-            let lib = self.library(&immediates, &params, &results, bit_width);
-            works_for_inputs.push(lib);
-
-            let conn = self.connectivity(&inputs, &output, &params, &results);
-            works_for_inputs.push(conn);
-
-            let spec = self
-                .spec
-                .make_expression(self.context, &inputs, &output, bit_width);
-            works_for_inputs.push(spec);
+            inputs.push(temp);
         }
+            
+        /*let inputs: Vec<_> = input
+            .iter()
+            .map(|i| 
+                (0..i.vecs.len())
+                .map(|_| BitVec::from_i64(self.context, i[0] as i64, bit_width))
+                .collect()
+            ).collect();*/
+            
+        //i[0] ?
+        let output = fresh_output(self.context, bit_width, dims);
+
+        ////用library中components按顺序构造出语句
+        let lib = self.library(&immediates, &params, &results, bit_width);
+        works_for_inputs.push(lib);
+
+        //建立行数和值之间的关系
+        let conn = self.connectivity(&inputs, &output, &params, &results);
+        works_for_inputs.push(conn);
+
+        let spec = self
+            .spec
+            .make_expression(self.context, &inputs, &output, bit_width);
+        works_for_inputs.push(spec);
+        
 
         let works_for_inputs: Vec<&_> = works_for_inputs.iter().collect();
 
@@ -1080,7 +1095,7 @@ impl<'a> Synthesizer<'a> {
         }
     }
 
-    fn verification(&mut self, assignments: &Assignments, bit_width: u32, array_dims: Vec<usize>) -> Result<Verification> {
+    /*fn verification(&mut self, assignments: &Assignments, bit_width: u32, array_dims: Vec<usize>) -> Result<Verification> {
         let inputs: Vec<_> = (0..self.spec.arity())
             .map(|_| fresh_input(self.context, bit_width, array_dims))
             .collect();
@@ -1120,7 +1135,7 @@ impl<'a> Synthesizer<'a> {
                 Ok(Verification::Counterexample(inputs))
             }
         }
-    }
+    }*/
 
     /// 5.2 Encoding Dataflow in Programs
     fn connectivity(
@@ -1259,7 +1274,7 @@ impl<'a> Synthesizer<'a> {
     /// took this technique from Souper. Presumably it lets the solver choose
     /// inputs that are more interesting than an RNG would have chosen, which
     /// later helps it synthesize better solutions more quickly.
-    fn initial_concrete_inputs(&mut self, array_dims: Vec<usize>) -> Result<HashSet<Vec<Vecs<u64>>>> {
+    /*fn initial_concrete_inputs(&mut self, array_dims: Vec<usize>) -> Result<HashSet<Vec<Vecs<u64>>>> {
         // Taken from Souper.
         const NUM_INITIAL_INPUTS: usize = 4;
 
@@ -1339,15 +1354,19 @@ impl<'a> Synthesizer<'a> {
         }
 
         Ok(inputs)
-    }
+    }*/
 
     /// Synthesize a program!
     ///
     /// The synthesizer has been configured, and we're ready to create a
     /// program.
-    pub fn synthesize(&mut self, array_dims: Vec<usize>) -> Result<Program> {
-        let mut inputs = self.initial_concrete_inputs(array_dims)?;
-        assert!(!inputs.is_empty());
+    pub fn synthesize(&mut self) -> Result<Program> {
+        // 将输入从产生随即的输入改称我们自己的输入
+        //let mut inputs = self.initial_concrete_inputs(array_dims)?;
+        //assert!(!inputs.is_empty());
+
+        //直接获取输入
+        let mut input = self.spec.inputs();
 
         let arity = self.spec.arity();
         assert!(arity > 0);
@@ -1368,7 +1387,8 @@ impl<'a> Synthesizer<'a> {
         let mut best = Err(Error::SynthesisUnknown);
         let mut length = longest;
         while length >= shortest {
-            match self.synthesize_with_length(length, &mut inputs, array_dims) {
+            //总共一组输入
+            match self.synthesize_with_length(length, &mut input) {
                 Ok(mut program) => {
                     program.dce();
 
@@ -1394,14 +1414,20 @@ impl<'a> Synthesizer<'a> {
     fn synthesize_with_length(
         &mut self,
         program_length: u32,
-        inputs: &mut HashSet<Vec<Vecs<u64>>>,
-        array_dims: Vec<usize>
+        input: &mut Vec<Vecs<u64>>
     ) -> Result<Program> {
         debug!("synthesizing a program of length = {}", program_length);
 
         let mut bit_width = 2;
-        'cegis: loop {
-            let assignments = self.finite_synthesis(inputs, program_length - 1, bit_width, array_dims)?;
+
+        //只有一组输入，所以也没有cegis的循环了
+        let assignments = self.finite_synthesis(input, program_length - 1, bit_width)?;
+
+        return Ok(assignments.to_program(self.spec.arity(), self.library));
+
+
+        /*'cegis: loop {
+            let assignments = self.finite_synthesis(input, program_length - 1, bit_width)?;
 
             let mut verifying_with_more_bits = false;
             loop {
@@ -1428,9 +1454,10 @@ impl<'a> Synthesizer<'a> {
                     }
                 }
             }
-        }
+        }*/
     }
 }
+
 
 impl Program {
     pub fn synthesize<'a>(
@@ -1440,7 +1467,7 @@ impl Program {
         arr_dims : Vec<usize>
     ) -> Result<Program> {
         let mut synthesizer = Synthesizer::new(context, library, spec)?;
-        synthesizer.synthesize(arr_dims)
+        synthesizer.synthesize()
     }
 
     pub fn dce(&mut self) {
@@ -1477,12 +1504,22 @@ impl Program {
     }
 }
 
+
 impl Specification for Program {
     fn arity(&self) -> usize {
         self.instructions
             .iter()
             .take_while(|inst| inst.operator == Operator::Var)
             .count()
+    }
+
+    fn inputs(&self) -> Vec<&Vecs<u64>> {
+        let inputs : Vec<_> = self.inputs
+        .iter()
+        .clone()
+        .collect();
+     
+        return inputs;
     }
 
     fn make_expression<'a>(
@@ -1535,107 +1572,107 @@ impl Specification for Program {
         //     temp = temp.and(&[&temp2]);
         // }
         
-        return temp;
-        
+        return temp;    
     }
+
 }
+/* 
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
+    #[test]
+    fn display_id() {
+        assert_eq!(Id(0).to_string(), "a");
+        assert_eq!(Id(1).to_string(), "b");
+        assert_eq!(Id(2).to_string(), "c");
+        assert_eq!(Id(25).to_string(), "z");
 
-//     #[test]
-//     fn display_id() {
-//         assert_eq!(Id(0).to_string(), "a");
-//         assert_eq!(Id(1).to_string(), "b");
-//         assert_eq!(Id(2).to_string(), "c");
-//         assert_eq!(Id(25).to_string(), "z");
+        assert_eq!(Id(26).to_string(), "aa");
+        assert_eq!(Id(27).to_string(), "ab");
+        assert_eq!(Id(28).to_string(), "ac");
+        assert_eq!(Id(51).to_string(), "az");
 
-//         assert_eq!(Id(26).to_string(), "aa");
-//         assert_eq!(Id(27).to_string(), "ab");
-//         assert_eq!(Id(28).to_string(), "ac");
-//         assert_eq!(Id(51).to_string(), "az");
+        assert_eq!(Id(52).to_string(), "ba");
+        assert_eq!(Id(53).to_string(), "bb");
+        assert_eq!(Id(54).to_string(), "bc");
 
-//         assert_eq!(Id(52).to_string(), "ba");
-//         assert_eq!(Id(53).to_string(), "bb");
-//         assert_eq!(Id(54).to_string(), "bc");
+        assert_eq!(Id(0 * 26 + 1 * 26 + 26 * 26 - 1).to_string(), "zz");
+        assert_eq!(Id(0 * 26 + 1 * 26 + 26 * 26).to_string(), "aaa");
+    }
 
-//         assert_eq!(Id(0 * 26 + 1 * 26 + 26 * 26 - 1).to_string(), "zz");
-//         assert_eq!(Id(0 * 26 + 1 * 26 + 26 * 26).to_string(), "aaa");
-//     }
+    #[test]
+    fn display_operator() {
+        assert_eq!(Operator::Mul(Id(1), Id(2)).to_string(), "mul b, c");
+    }
 
-//     #[test]
-//     fn display_operator() {
-//         assert_eq!(Operator::Mul(Id(1), Id(2)).to_string(), "mul b, c");
-//     }
+    #[test]
+    fn display_instruction() {
+        let instr = Instruction {
+            result: Id(3),
+            operator: Operator::And(Id(1), Id(2)),
+        };
+        assert_eq!(instr.to_string(), "d ← and b, c");
+    }
 
-//     #[test]
-//     fn display_instruction() {
-//         let instr = Instruction {
-//             result: Id(3),
-//             operator: Operator::And(Id(1), Id(2)),
-//         };
-//         assert_eq!(instr.to_string(), "d ← and b, c");
-//     }
+    #[test]
+    fn display_program() {
+        let mut builder = ProgramBuilder::new();
+        let a = builder.var();
+        let b = builder.var();
+        let c = builder.const_(1);
+        let d = builder.add(a, c);
+        let _e = builder.and(b, d);
+        let program = builder.finish();
+        assert_eq!(
+            program.to_string(),
+            "a ← var\n\
+             b ← var\n\
+             c ← const 0x1\n\
+             d ← add a, c\n\
+             e ← and b, d\n\
+             "
+        );
+    }
 
-//     #[test]
-//     fn display_program() {
-//         let mut builder = ProgramBuilder::new();
-//         let a = builder.var();
-//         let b = builder.var();
-//         let c = builder.const_(1);
-//         let d = builder.add(a, c);
-//         let _e = builder.and(b, d);
-//         let program = builder.finish();
-//         assert_eq!(
-//             program.to_string(),
-//             "a ← var\n\
-//              b ← var\n\
-//              c ← const 0x1\n\
-//              d ← add a, c\n\
-//              e ← and b, d\n\
-//              "
-//         );
-//     }
+    #[test]
+    fn synthesize() {
+        let mut config = z3::Config::new();
+        config.set_model_generation(true);
 
-//     #[test]
-//     fn synthesize() {
-//         let mut config = z3::Config::new();
-//         config.set_model_generation(true);
+        let context = z3::Context::new(&config);
 
-//         let context = z3::Context::new(&config);
+        let library = Library::brahma_std();
+        let mut builder = ProgramBuilder::new();
+        let a = builder.var();
+        let b = builder.const_(2);
+        let _ = builder.mul(a, b);
+        let spec = builder.finish();
 
-//         let library = Library::brahma_std();
-//         let mut builder = ProgramBuilder::new();
-//         let a = builder.var();
-//         let b = builder.const_(2);
-//         let _ = builder.mul(a, b);
-//         let spec = builder.finish();
+        let mut p = Program::synthesize(&context, &spec, &library).unwrap();
+        p.dce();
+        println!("{}", p.to_string());
+    }
 
-//         let mut p = Program::synthesize(&context, &spec, &library).unwrap();
-//         p.dce();
-//         println!("{}", p.to_string());
-//     }
+    #[test]
+    fn synthesize_select() {
+        let mut config = z3::Config::new();
+        config.set_model_generation(true);
 
-//     #[test]
-//     fn synthesize_select() {
-//         let mut config = z3::Config::new();
-//         config.set_model_generation(true);
+        let context = z3::Context::new(&config);
 
-//         let context = z3::Context::new(&config);
+        let mut library = Library::brahma_std();
+        library.components.push(component::select());
 
-//         let mut library = Library::brahma_std();
-//         library.components.push(component::select());
+        let mut builder = ProgramBuilder::new();
+        let a = builder.var();
+        let b = builder.var();
+        let c = builder.var();
+        let _ = builder.select(a, b, c);
+        let spec = builder.finish();
 
-//         let mut builder = ProgramBuilder::new();
-//         let a = builder.var();
-//         let b = builder.var();
-//         let c = builder.var();
-//         let _ = builder.select(a, b, c);
-//         let spec = builder.finish();
-
-//         let mut p = Program::synthesize(&context, &spec, &library).unwrap();
-//         p.dce();
-//         println!("{}", p.to_string());
-//     }
-// }
+        let mut p = Program::synthesize(&context, &spec, &library).unwrap();
+        p.dce();
+        println!("{}", p.to_string());
+    }
+}*/
