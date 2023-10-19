@@ -382,27 +382,27 @@ impl Library {
                 // component::xor(),
                 component::tf_abs(),
                 component::tf_add(),
-                component::tf_mul(),
-                component::tf_div(),
-                component::tf_boolean_mask(),
-                component::tf_clip_by_value(),
-                component::tf_equal(),
-                component::tf_fill(),
-                component::tf_greater(),
-                component::tf_greater_equal(),
-                component::tf_not_equal(),
-                component::tf_negative(),
-                component::tf_reciprocal(),
-                component::tf_cast(),
-                component::tf_argmax(),
-                component::tf_argmin(),
-                component::tf_count_nonzero(),
-                component::tf_cumsum(),
-                component::tf_maximum(),
-                component::tf_minimum(),
-                component::tf_reverse(),
-                component::tf_sign(),
-                component::tf_square(),
+                // component::tf_mul(),
+                // component::tf_div(),
+                // component::tf_boolean_mask(),
+                // component::tf_clip_by_value(),
+                // component::tf_equal(),
+                // component::tf_fill(),
+                // component::tf_greater(),
+                // component::tf_greater_equal(),
+                // component::tf_not_equal(),
+                // component::tf_negative(),
+                // component::tf_reciprocal(),
+                // component::tf_cast(),
+                // component::tf_argmax(),
+                // component::tf_argmin(),
+                // component::tf_count_nonzero(),
+                // component::tf_cumsum(),
+                // component::tf_maximum(),
+                // component::tf_minimum(),
+                // component::tf_reverse(),
+                // component::tf_sign(),
+                // component::tf_square(),
             ],
         }
     }
@@ -982,7 +982,7 @@ impl<'a> Synthesizer<'a> {
     //111111
     fn finite_synthesis(
         &mut self,
-        input: &Vec<Vecs<u64>>,
+        input: &Vec<&Vecs<u64>>,
         output_line: u32,
         bit_width: u32,
     ) -> Result<Assignments> {
@@ -1414,7 +1414,7 @@ impl<'a> Synthesizer<'a> {
     fn synthesize_with_length(
         &mut self,
         program_length: u32,
-        input: &mut Vec<Vecs<u64>>
+        input: &mut Vec<&Vecs<u64>>
     ) -> Result<Program> {
         debug!("synthesizing a program of length = {}", program_length);
 
