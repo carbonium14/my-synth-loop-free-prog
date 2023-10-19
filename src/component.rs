@@ -52,7 +52,7 @@ pub trait Component: Debug {
 }
 
 #[derive(Debug)]
-struct Const(Vec<u64>);
+struct Const([usize; 2]);
 
 impl Component for Const {
     fn operand_arity(&self) -> usize {
@@ -79,12 +79,9 @@ impl Component for Const {
         //     immediates[0][0].clone()
         // }
 
-        let mut result: Vecs<BitVec<'a>> = Vecs::new({
-            let mut dims : Vec<usize> = Vec::new();
-            for v in self.0 {
-                dims.push(v as usize);
-            } 
-            dims
+
+        let mut result : Vecs<BitVec<'a>> = Vecs::new({
+            self.0
         });
 
         let dims = self.0;
@@ -110,7 +107,7 @@ impl Component for Const {
 }
 
 
-pub fn const_(val: Vec<u64>) -> Box<dyn Component> {
+pub fn const_(val: [usize; 2]) -> Box<dyn Component> {
     Box::new(Const(val)) as _
 }
 
@@ -1265,7 +1262,7 @@ impl Component for Operator {
         Operator::arity(self)
     }
 
-    fn make_operator(&self, immediates: &Vec<Vec<Vec<u64>>>, operands: &[Id]) -> Operator {
+    fn make_operator(&self, immediates: &Vec<Vecs<u64>>, operands: &[Id]) -> Operator {
         with_operator_component!(self, |c| c.make_operator(immediates, operands))
     }
 

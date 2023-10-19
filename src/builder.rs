@@ -1,4 +1,4 @@
-use crate::{Id, Instruction, Operator, Program};
+use crate::{Id, Instruction, Operator, Program, Vecs};
 
 #[derive(Debug)]
 pub struct ProgramBuilder {
@@ -10,6 +10,7 @@ impl ProgramBuilder {
         ProgramBuilder {
             program: Program {
                 instructions: vec![],
+                inputs: vec![]
             },
         }
     }
@@ -22,7 +23,7 @@ impl ProgramBuilder {
         Id(self.program.instructions.len() as u32)
     }
 
-    pub fn var(&mut self) -> Id {
+    pub fn var(&mut self, input : Vec<Vec<u64>>) -> Id {
         /*assert!(
             self.program
                 .instructions
@@ -36,6 +37,11 @@ impl ProgramBuilder {
             result,
             operator: Operator::Var,
         });
+
+        //将输入存入program中
+        let mut input_vecs : Vecs<u64> = Vecs::new([input.len(), input[0].len()]);
+        input_vecs.vecs = input;
+        self.program.inputs.push(input_vecs);
         result
     }
 
@@ -56,7 +62,7 @@ impl ProgramBuilder {
         result
     }*/
 
-    pub fn const_(&mut self, c: Vec<u64>) -> Id {
+    pub fn const_(&mut self, c: [usize; 2]) -> Id {
         let result = self.next_id();
         self.program.instructions.push(Instruction {
             result,

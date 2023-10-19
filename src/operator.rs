@@ -7,7 +7,7 @@ pub enum Operator {
     Var,
 
     // A constant value.
-    Const(Vec<u64>),
+    Const([usize; 2]),
 
     // 我自己的操作符号
 
@@ -89,7 +89,7 @@ impl Operator {
         }
     }
 
-    pub fn immediates(&self, mut f: impl FnMut(Vec<u64>)) {
+    pub fn immediates(&self, mut f: impl FnMut([usize; 2])) {
         if let Operator::Const(c) = *self {
             f(c);
         }
