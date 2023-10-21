@@ -23,7 +23,7 @@ impl ProgramBuilder {
         Id(self.program.instructions.len() as u32)
     }
 
-    pub fn var(&mut self, input : Vec<Vec<u64>>) -> Id {
+    pub fn var(&mut self, input : Vec<Vec<i64>>) -> Id {
         /*assert!(
             self.program
                 .instructions
@@ -38,14 +38,14 @@ impl ProgramBuilder {
             operator: Operator::Var,
         });
 
-        println!("{:?}", input);
+        //println!("{:?}", input);
         //将输入存入program中
         let mut dims : [usize; 2] = [0, 0];
         if input.len() != 0 {
            dims[0] = input.len();
            dims[1] = input[0].len();
         }
-        let mut input_vecs : Vecs<u64> = Vecs::new(dims);
+        let mut input_vecs : Vecs<i64> = Vecs::new(dims);
         input_vecs.vecs = input;
         self.program.inputs.push(input_vecs);
         result

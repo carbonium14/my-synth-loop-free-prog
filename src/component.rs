@@ -1,6 +1,6 @@
-use crate::{Id, Operator, Vecs};
-use std::fmt::Debug;
-use z3::ast::{Ast, BV as BitVec};
+use crate::{Id, Operator, Vecs, Type};
+use std::{fmt::Debug, ops::Sub};
+use z3::ast::{Ast, Int};
 
 // macro_rules! vecnd {
 //     ($([$($inner:tt)*]),+ $(,)?) => {
@@ -13,22 +13,33 @@ use z3::ast::{Ast, BV as BitVec};
 //     };
 // }
 
-fn bit_vec_from_u64(context: &z3::Context, val: u64, bit_width: u32) -> BitVec {
-    BitVec::from_i64(context, val as i64, bit_width)
+// fn bit_vec_from_u64(context: &z3::Context, val: u64, bit_width: u32) -> BitVec {
+//     BitVec::from_i64(context, val as i64, bit_width)
+// }
+
+//fn zero(context: &z3::Context, bit_width: u32) -> BitVec {
+//     bit_vec_from_u64(context, 0, bit_width)
+// }
+
+// fn one(context: &z3::Context, bit_width: u32) -> BitVec {
+//     bit_vec_from_u64(context, 1, bit_width)
+// }
+fn Int_from_i64(context: &z3::Context, val: u64, bit_width: u32) -> Int {
+    Int::from_i64(context, val as i64)
 }
 
-fn zero(context: &z3::Context, bit_width: u32) -> BitVec {
-    bit_vec_from_u64(context, 0, bit_width)
+fn zero(context: &z3::Context, bit_width: u32) -> Int {
+    Int_from_i64(context, 0, bit_width)
 }
 
-fn one(context: &z3::Context, bit_width: u32) -> BitVec {
-    bit_vec_from_u64(context, 1, bit_width)
-}
+fn one(context: &z3::Context, bit_width: u32) -> Int {
+    Int_from_i64(context, 1, bit_width)
+} 
 
 pub trait Component: Debug {
     fn operand_arity(&self) -> usize;
 
-    fn make_operator(&self, immediates: &Vec<Vecs<u64>>, operands: &[Id]) -> Operator;
+    fn make_operator(&self, immediates: &Vec<Vecs<i64>>, operands: &[Id]) -> Operator;
 
     fn make_expression<'a>(
         &self,
@@ -38,12 +49,12 @@ pub trait Component: Debug {
         // immediates: &[Vec<BitVec<'a>>],
         // operands: &[Vec<BitVec<'a>>],
 
-        immediates: &[Vecs<BitVec<'a>>],
-        operands: &[Vecs<BitVec<'a>>],
+        immediates: &[Vecs<Int<'a>>],
+        operands: &[Vecs<Int<'a>>],
         bit_width: u32,
     ) -> 
         //BitVec<'a> 
-        Vecs<BitVec<'a>>;
+        Vecs<Int<'a>>;
         
     /// How many immediates does this component require?
     fn immediate_arity(&self) -> usize {
@@ -59,7 +70,7 @@ impl Component for Const {
         0
     }
 
-    fn make_operator(&self, immediates: &Vec<Vecs<u64>>, _operands: &[Id]) -> Operator {
+    fn make_operator(&self, immediates: &Vec<Vecs<i64>>, _operands: &[Id]) -> Operator {
         Operator::Const(self.0)
     }
 
@@ -68,10 +79,10 @@ impl Component for Const {
         context: &'a z3::Context,
         // _immediates: &[Vec<BitVec<'a>>],
         // _operands: &[Vec<BitVec<'a>>],
-        immediates: &[Vecs<BitVec<'a>>],
-        operands: &[Vecs<BitVec<'a>>],
+        immediates: &[Vecs<Int<'a>>],
+        operands: &[Vecs<Int<'a>>],
         bit_width: u32,
-    ) -> Vecs<BitVec<'a>> {
+    ) -> Vecs<Int<'a>> {
 
         // if let Some(val) = self.0 {
         //     BitVec::from_i64(context, val as i64, bit_width)
@@ -80,14 +91,14 @@ impl Component for Const {
         // }
 
 
-        let mut result : Vecs<BitVec<'a>> = Vecs::new({
+        let mut result : Vecs<Int<'a>> = Vecs::new({
             self.0
         });
 
         let dims = self.0;
         for i in 0 .. dims[0] {
             for j in 0 .. dims[1] {
-                result.vecs[i as usize].push(BitVec::from_i64(context, 10 as i64, bit_width));
+                result.vecs[i as usize].push(Int::from_i64(context, 10 as i64));
             }
         }
 
@@ -119,35 +130,37 @@ impl Component for TfAbs {
         1
     }
 
-    fn make_operator(&self, _immediates: &Vec<Vecs<u64>>, operands: &[Id]) -> Operator {
+    fn make_operator(&self, _immediates: &Vec<Vecs<i64>>, operands: &[Id]) -> Operator {
         Operator::TfAbs(operands[0])
     }
 
     fn make_expression<'a>(
         &self,
         context: &'a z3::Context,
-        _immediates: &[Vecs<BitVec<'a>>],
-        operands: &[Vecs<BitVec<'a>>],
+        _immediates: &[Vecs<Int<'a>>],
+        operands: &[Vecs<Int<'a>>],
         bit_width: u32,
-    ) -> Vecs<BitVec<'a>> {
+    ) -> Vecs<Int<'a>> {
         //TODO：目前只是二维,对于一维的数组，我们用x[1][m]表示长度为m的一维数组，他的dims = [1,m]
 
         // 取相同长度并且填充为0的数组，作取相反数的结果用
         let const0 = zero(context, bit_width);
         let sz = operands[0].dims;
-        let mut result: Vecs<BitVec> = Vecs::new(operands[0].dims);
+        let mut result: Vecs<Int> = Vecs::new(operands[0].dims);
         // 它（for循环）是标准库提供的类型，用来生成从一个数字开始到另一个数字之前结束的所有数字的序列。
         // 所以这里是左闭右开区间
         for i in 0..sz[0] {
             for j in 0..sz[1] {
-                 //计算每一个元素的相反数，作为后面的判断，如果是正数就直接返回，负数返回相反数
-                let minus_num = const0.bvsub(&operands[0].vecs[i][j]);
+                //计算每一个元素的相反数，作为后面的判断，如果是正数就直接返回，负数返回相反数
+                let minus_num = const0.clone().sub(&operands[0].vecs[i][j]);
                 // 判断输入的数是正数还是负数
-                let plus_or_minus = operands[0].vecs[i][j].bvslt(&const0).ite(&one(context, bit_width), &zero(context, bit_width));
+                let plus_or_minus = operands[0].vecs[i][j].lt(&const0).ite(&one(context, bit_width), &zero(context, bit_width));
                 // 正数直接返回，负数返回相反数
                 result.vecs[i].push(plus_or_minus._eq(&one(context, bit_width)).ite(&minus_num, &operands[0].vecs[i][j]))
             }   
         }
+
+        println!("{:?}", result.dims);
         return result;
     }
 }
@@ -164,17 +177,17 @@ impl Component for TfAdd {
         2
     }
 
-    fn make_operator(&self, _immediates: &Vec<Vecs<u64>>, operands: &[Id]) -> Operator {
+    fn make_operator(&self, _immediates: &Vec<Vecs<i64>>, operands: &[Id]) -> Operator {
         Operator::TfAdd(operands[0], operands[1])
     }
 
     fn make_expression<'a>(
         &self,
         context: &'a z3::Context,
-        _immediates: &[Vecs<BitVec<'a>>],
-        operands: &[Vecs<BitVec<'a>>],
+        _immediates: &[Vecs<Int<'a>>],
+        operands: &[Vecs<Int<'a>>],
         bit_width: u32,
-    ) -> Vecs<BitVec<'a>> {
+    ) -> Vecs<Int<'a>> {
         // 获取两个输入的长度
         let size0 = operands[0].dims;
         let size1 = operands[1].dims;
@@ -191,12 +204,12 @@ impl Component for TfAdd {
         } else {
             size1[1]
         };
-        let mut result: Vecs<BitVec> = Vecs::new([size_x_max, size_y_max]);
+        let mut result: Vecs<Int> = Vecs::new([size_x_max, size_y_max]);
         // TODO：需要对长度不同的数组进行扩充，目前没有实现
         // 如果两个数组维度和长度相同，那么遍历然后直接相加即可，否则得先扩充然后再实现
         for i in 0..size_x_max {
             for j in 0..size_y_max {
-                result.vecs[i].push(operands[0].vecs[i][j].bvadd(&operands[1].vecs[i][j]));
+                result.vecs[i].push(Int::<'a>::add(context, &[&operands[0].vecs[i][j], &operands[1].vecs[i][j]]));
             }
         }
         return result;
@@ -1262,17 +1275,17 @@ impl Component for Operator {
         Operator::arity(self)
     }
 
-    fn make_operator(&self, immediates: &Vec<Vecs<u64>>, operands: &[Id]) -> Operator {
+    fn make_operator(&self, immediates: &Vec<Vecs<i64>>, operands: &[Id]) -> Operator {
         with_operator_component!(self, |c| c.make_operator(immediates, operands))
     }
 
     fn make_expression<'a>(
         &self,
         context: &'a z3::Context,
-        immediates: &[Vecs<BitVec<'a>>],
-        operands: &[Vecs<BitVec<'a>>],
+        immediates: &[Vecs<Int<'a>>],
+        operands: &[Vecs<Int<'a>>],
         bit_width: u32,
-    ) -> Vecs<BitVec<'a>> {
+    ) -> Vecs<Int<'a>> {
         with_operator_component!(self, |c| {
             c.make_expression(context, immediates, operands, bit_width)
         })
