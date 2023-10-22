@@ -151,16 +151,18 @@ impl Component for TfAbs {
         // 所以这里是左闭右开区间
         for i in 0..sz[0] {
             for j in 0..sz[1] {
-                //计算每一个元素的相反数，作为后面的判断，如果是正数就直接返回，负数返回相反数
-                let minus_num = const0.clone().sub(&operands[0].vecs[i][j]);
-                // 判断输入的数是正数还是负数
-                let plus_or_minus = operands[0].vecs[i][j].lt(&const0).ite(&one(context, bit_width), &zero(context, bit_width));
-                // 正数直接返回，负数返回相反数
-                result.vecs[i].push(plus_or_minus._eq(&one(context, bit_width)).ite(&minus_num, &operands[0].vecs[i][j]))
+                // //计算每一个元素的相反数，作为后面的判断，如果是正数就直接返回，负数返回相反数
+                // let minus_num = const0.clone().sub(&operands[0].vecs[i][j]);
+                // // 判断输入的数是正数还是负数
+                // let plus_or_minus = operands[0].vecs[i][j].lt(&const0).ite(&one(context, bit_width), &zero(context, bit_width));
+                // // 正数直接返回，负数返回相反数
+                // result.vecs[i].push(plus_or_minus._eq(&one(context, bit_width)).ite(&minus_num, &operands[0].vecs[i][j]))
+
+                result.vecs[i].push(operands[0].vecs[i][j].lt(&(const0.clone())).ite(&(const0.clone().sub(&operands[0].vecs[i][j])), &&operands[0].vecs[i][j]));
             }   
         }
 
-        println!("{:?}", result.dims);
+        //println!("{:?}", result.dims);
         return result;
     }
 }

@@ -850,20 +850,20 @@ impl<'a> Synthesizer<'a> {
         // 控制dims大于所有可能的size
 
 
-        let dims = [30, 30];
+        let dims = [5, 20];
 
         let immediates = self.fresh_immediates(bit_width, dims);
         
         //let mut works_for_inputs = Vec::with_capacity(inputs.len() * 4);
         //现在就一组输入直接就是4，用来存储bool们
-        let mut works_for_inputs = Vec::with_capacity(4);
+        let mut works_for_inputs = Vec::with_capacity(3);
 
         
         let params = self.fresh_param_vars(bit_width, dims);
         let results = self.fresh_result_vars(bit_width, dims);
 
         
-        //将Vec<Vecs<i64>>类型的inputs转化为Vec<Vecs<BV<'_>>>,
+        //将Vec<Vecs<i64>>类型的inputs转化为Vec<Vecs<Int<'_>>>,
         let input_iter = input.iter();
         let mut inputs : Vec<Vecs<Int<'_>>> = Vec::new();
         for v in input_iter {
@@ -873,6 +873,7 @@ impl<'a> Synthesizer<'a> {
                     temp.vecs[i].push(Int::from_i64(self.context, v.vecs[i][j] as i64));
                 }
             }
+            //println!("{:?}", temp);
             inputs.push(temp);
         }
             
@@ -889,15 +890,20 @@ impl<'a> Synthesizer<'a> {
 
         ////用library中components按顺序构造出语句
         let lib = self.library(&immediates, &params, &results, bit_width);
+        //println!("lib : {}", lib);
+        //55555
         works_for_inputs.push(lib);
 
         //建立行数和值之间的关系
         let conn = self.connectivity(&inputs, &output, &params, &results);
+        //println!("conn : {}", conn);
         works_for_inputs.push(conn);
+        
 
         let spec = self
             .spec
             .make_expression(self.context, &inputs, &output, bit_width);
+        //println!("spec : {}", spec);
         works_for_inputs.push(spec);
         
 
@@ -1023,6 +1029,8 @@ impl<'a> Synthesizer<'a> {
             .chain(Some((&self.locations.output, output)))
             .collect();
 
+        //println!("location_len : {:?}", locs_to_vars);
+
         let mut conn =
             Vec::with_capacity(locs_to_vars.len() * locs_to_vars.len() + locs_to_vars.len());
 
@@ -1037,7 +1045,7 @@ impl<'a> Synthesizer<'a> {
                 let mut temp = x.vecs[0][0]._eq(&y.vecs[0][0]);
                 for i in 0..x.dims[0] {
                     for j in 0..x.dims[1] {
-                        let temp2 = x.vecs[0][0]._eq(&y.vecs[0][0]);
+                        let temp2 = x.vecs[i][j]._eq(&y.vecs[i][j]);
                         temp = z3::ast::Bool::<'_>::and(self.context, &[&temp, &temp2]);
                         //temp = temp.and(&[&temp2]);
 
@@ -1053,6 +1061,7 @@ impl<'a> Synthesizer<'a> {
                 // conn.push(l_x._eq(l_y).implies(&temp));
             }
         }
+        //println!("conn : {:?}", conn);
 
         and(self.context, &conn)
     }
@@ -1111,21 +1120,13 @@ impl<'a> Synthesizer<'a> {
 
             let expression = c.make_expression(self.context, imms, inputs, bit_width);
 
-            let sz1 = result.dims.len();
-            let _sz2 = expression.dims.len();
-
-            // 暂时不需要这个...毕竟这个东西很影响输出结果，不管能不能跑都会输出这个
-            // if sz1 != sz2 {
-            //     println!("error in library function!");
-            // }
-            //println!("{}, {}",sz1, _sz2);
+            let sz1 = result.dims[0];
+            let sz2 = result.dims[1];
 
             for i in 0..sz1 {
-                for j in 0 .. result.vecs[i].len() {
+                for j in 0 .. sz2 {
                     exprs.push(expression.vecs[i][j]._eq(&result.vecs[i][j]));
                 }
-                
-
             }
             // exprs.push(
             //     c.make_expression(self.context, imms, inputs, bit_width)[0]
@@ -1133,6 +1134,7 @@ impl<'a> Synthesizer<'a> {
             // );
         }
 
+        //println!("exprs : {:?}", exprs);
         and(self.context, &exprs)
     }
 
@@ -1402,6 +1404,10 @@ impl Specification for Program {
 
         let mut vars: Vec<_> = inputs.iter().cloned().collect();
 
+        //测试输入有没有被正确传达到
+        // let x : Vec<_> = vars.iter().clone().collect();
+        // println!("inputs : {:?}", x);
+
         let mut operands = vec![];
         for instr in self.instructions.iter().skip(inputs.len()) {
             // NB: programs cannot contain unbound constants, so specifications
@@ -1419,15 +1425,26 @@ impl Specification for Program {
                     .operator
                     .make_expression(context, &immediates, &operands, bit_width),
             );
+            
+            // let x : Vec<_> = vars.iter().clone().collect();
+            // println!("vars : {:?}", x);
         }
 
+        //最后的结果
         let vars = vars.pop().unwrap();
+        // let x  = vars.clone();
+        // println!("vars : {:?}", x);
 
-        //判断vars和output中的元素相等
+        // let x  = output.clone();
+        // println!("output : {:?}", output);
+
+        //利用vars和output中的元素相等构成逻辑表达式
         let mut temp: Bool<'_> = vars.vecs[0][0]._eq(&output.vecs[0][0]);
+
+        // println!("temp0 : {}", temp);
         for i in 0..vars.dims[0] {
             for j in 0..vars.dims[1] {
-                let temp2 = vars.vecs[0][0]._eq(&output.vecs[0][0]);
+                let temp2 = vars.vecs[i][j]._eq(&output.vecs[i][j]);
                 //temp = temp.and(&[&temp2]);
                 temp = z3::ast::Bool::<'_>::and(&context, &[&temp, &temp2]);
             }
@@ -1441,6 +1458,8 @@ impl Specification for Program {
         //     let temp2 = vars[i-1]._eq(&output[i-1]);
         //     temp = temp.and(&[&temp2]);
         // }
+
+        // println!("temp : {}", temp);
         
         return temp;    
     }

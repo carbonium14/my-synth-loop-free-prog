@@ -158,17 +158,19 @@ fn mytest1(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     // Modify：调用var()的时候接收一个参数，将输入的vec传入到spec中
     
     let mut input1 : Vec<Vec<i64>> = Vec::new();
-    input1.push(vec![1,-1,1]);
+    input1.push(vec![1,-1,3]);
 
     let mut input2 : Vec<Vec<i64>> = Vec::new();
-    input2.push(vec![2,-3,2]);
+    input2.push(vec![2,-2,-4]);
 
     let in1 = builder.var(input1);
     let in2 = builder.var(input2);
 
-    
+    let x = builder.tf_abs(in1);
+    let y = builder.tf_abs(in2);  
 
-    let _ = builder.tf_add(in1, in2);
+    let z = builder.tf_add(x, y);
+    //let t = builder.tf_add(z, y);
     let spec = builder.finish();
 
     return synthesize(opts, context, &spec, &library);
