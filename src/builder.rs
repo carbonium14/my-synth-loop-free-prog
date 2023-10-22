@@ -161,6 +161,15 @@ impl ProgramBuilder {
         result
     }
 
+    pub fn tf_eye(&mut self, a: Id, b: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfEye(a, b),
+        });
+        result
+    }
+
     pub fn tf_fill(&mut self, a: Id, b: Id) -> Id {
         let result = self.next_id();
         self.program.instructions.push(Instruction {
@@ -211,6 +220,15 @@ impl ProgramBuilder {
         self.program.instructions.push(Instruction {
             result,
             operator: Operator::TfReciprocal(a),
+        });
+        result
+    }
+
+    pub fn tf_bincount(&mut self, a: Id, b: Id, c: Id, d: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfBincount(a, b, c, d),
         });
         result
     }

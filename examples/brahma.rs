@@ -38,10 +38,10 @@ fn main() {
         fn(&z3::Context, &Options) -> SynthResult<Program>,
     )> = benchmarks! { 
         mytest1,
-        mytest2,
-        mytest3,
-        mytest4,
-        mytest5,
+        // mytest2,
+        // mytest3,
+        // mytest4,
+        // mytest5,
     };
 
     for (name, p) in problems {
@@ -155,13 +155,13 @@ fn mytest1(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     let library = Library::brahma_std();
     let mut builder = ProgramBuilder::new();
     
-    ///Modify：调用var()的时候接收一个参数，将输入的vec传入到spec中
+    // Modify：调用var()的时候接收一个参数，将输入的vec传入到spec中
     
     let mut input1 : Vec<Vec<u64>> = Vec::new();
-    input1.push(vec![1,-1,1]);
+    input1.push(vec![1,1,1]);
 
     let mut input2 : Vec<Vec<u64>> = Vec::new();
-    input2.push(vec![2,-2,2]);
+    input2.push(vec![2,2,2]);
 
     let in1 = builder.var(input1);
     let in2 = builder.var(input2);

@@ -1,8 +1,8 @@
 #![deny(missing_debug_implementations)]
 
-#[cfg(feature = "log")]
-#[macro_use]
-extern crate log;
+// #[cfg(feature = "log")]
+// #[macro_use]
+// extern crate log;
 
 #[cfg(not(feature = "log"))]
 #[macro_use]
@@ -23,7 +23,7 @@ use std::ops::Range;
 use std::time;
 use z3::ast::{Ast, Bool, BV as BitVec};
 
-const FULL_BIT_WIDTH: u32 = 32;
+const _FULL_BIT_WIDTH: u32 = 32;
 
 
 fn and<'a, 'b>(context: &'a z3::Context, exprs: impl IntoIterator<Item = &'b Bool<'a>>) -> Bool<'a>
@@ -34,7 +34,7 @@ where
     Bool::from_bool(context, true).and(&exprs)
 }
 
-fn or<'a, 'b>(context: &'a z3::Context, exprs: impl IntoIterator<Item = &'b Bool<'a>>) -> Bool<'a>
+fn _or<'a, 'b>(context: &'a z3::Context, exprs: impl IntoIterator<Item = &'b Bool<'a>>) -> Bool<'a>
 where
     'a: 'b,
 {
@@ -52,13 +52,13 @@ pub struct Vecs<T>{
 
 impl<T> Vecs<T>{
     pub fn new(_dims: [usize ; 2]) -> Self {
-        let sz = _dims.len();
+        let _sz = _dims.len();
         let mut vecs : Vec<Vec<T>> = Vec::new();
         for _ in 0 .. _dims[0] {
             let temp : Vec<T> = Vec::new();
             vecs.push(temp);
         }
-        let mut dims = _dims;
+        let dims = _dims;
         return Vecs{dims, vecs};
     }   
 }
@@ -131,7 +131,7 @@ fn fresh_immediate(context: &z3::Context, bit_width: u32, dims:[usize; 2] ) ->  
     let x = dims[0];
     let y = dims[1];
     for i in 0 .. x {
-        for j in 0 .. y {
+        for _j in 0 .. y {
             result.vecs[i].push(BitVec::fresh_const(context, "immediate", bit_width));
         }
     }
@@ -144,7 +144,7 @@ fn fresh_param(context: &z3::Context, bit_width: u32, dims: [usize ; 2]) ->  Vec
     let x = dims[0];
     let y = dims[1];
     for i in 0 .. x {
-        for j in 0 .. y {
+        for _j in 0 .. y {
             result.vecs[i].push(BitVec::fresh_const(context, "param", bit_width));
         }
     }
@@ -157,7 +157,7 @@ fn fresh_result(context: &z3::Context, bit_width: u32, dims: [usize ; 2]) ->  Ve
     let x = dims[0];
     let y = dims[1];
     for i in 0 .. x {
-        for j in 0 .. y {
+        for _j in 0 .. y {
             result.vecs[i].push(BitVec::fresh_const(context, "result", bit_width));
         }
     }
@@ -165,12 +165,12 @@ fn fresh_result(context: &z3::Context, bit_width: u32, dims: [usize ; 2]) ->  Ve
 }
 
 //TODO: 动态维度，不过目前只能实现二维
-fn fresh_input(context: &z3::Context, bit_width: u32, dims: [usize ; 2]) ->  Vecs<BitVec<'_>> {
+fn _fresh_input(context: &z3::Context, bit_width: u32, dims: [usize ; 2]) ->  Vecs<BitVec<'_>> {
     let mut result = Vecs::new(dims);
     let x = dims[0];
     let y = dims[1];
     for i in 0 .. x {
-        for j in 0 .. y {
+        for _j in 0 .. y {
             result.vecs[i].push(BitVec::fresh_const(context, "input", bit_width));
         }
     }
@@ -183,7 +183,7 @@ fn fresh_output(context: &z3::Context, bit_width: u32, dims: [usize ; 2]) ->  Ve
     let x = dims[0];
     let y = dims[1];
     for i in 0 .. x {
-        for j in 0 .. y {
+        for _j in 0 .. y {
             result.vecs[i].push(BitVec::fresh_const(context, "output", bit_width));
         }
     }
@@ -386,7 +386,13 @@ impl Library {
                 component::tf_div(),
                 component::tf_boolean_mask(),
                 component::tf_clip_by_value(),
+                component::tf_concat(),
                 component::tf_equal(),
+                component::tf_eye(),
+                component::tf_zeros(),
+                component::tf_ones(),
+                component::tf_zeros_like(),
+                component::tf_ones_like(),
                 component::tf_fill(),
                 component::tf_greater(),
                 component::tf_greater_equal(),
@@ -396,6 +402,7 @@ impl Library {
                 component::tf_cast(),
                 component::tf_argmax(),
                 component::tf_argmin(),
+                component::tf_bincount(),
                 component::tf_count_nonzero(),
                 component::tf_cumsum(),
                 component::tf_maximum(),
@@ -403,6 +410,7 @@ impl Library {
                 component::tf_reverse(),
                 component::tf_sign(),
                 component::tf_square(),
+                component::tf_where(),
             ],
         }
     }
@@ -679,7 +687,7 @@ impl Display for Program {
     }
 }
 
-enum Verification {
+enum _Verification {
     WorksForAllInputs,
     Counterexample(Vec<Vecs<u64>>),
 }
@@ -851,7 +859,7 @@ impl<'a> Synthesizer<'a> {
             .collect()
     }
 
-    fn add_invalid_assignment(&mut self, assignments: &Assignments) {
+    fn _add_invalid_assignment(&mut self, assignments: &Assignments) {
         // TODO: like souper, we should have multiple cases here for if we're
         // trying to synthesize any constants or not. When we're synthesizing
         // constants, allow reusing the same location assignments N times with
@@ -982,7 +990,7 @@ impl<'a> Synthesizer<'a> {
     //111111
     fn finite_synthesis(
         &mut self,
-        input: &Vec<Vecs<u64>>,
+        input: &Vec<&Vecs<u64>>,
         output_line: u32,
         bit_width: u32,
     ) -> Result<Assignments> {
@@ -1167,8 +1175,8 @@ impl<'a> Synthesizer<'a> {
                 //这边默认x和y的len相等
                 //判断类型为Vecs<BV<'_>>的x和y中的元素相等关系
                 let mut temp = x.vecs[0][0]._eq(&y.vecs[0][0]);
-                for i in 0..x.dims[0] {
-                    for j in 0..x.dims[1] {
+                for _i in 0..x.dims[0] {
+                    for _j in 0..x.dims[1] {
                         let temp2 = x.vecs[0][0]._eq(&y.vecs[0][0]);
                         temp = temp.and(&[&temp2]);
 
@@ -1414,11 +1422,11 @@ impl<'a> Synthesizer<'a> {
     fn synthesize_with_length(
         &mut self,
         program_length: u32,
-        input: &mut Vec<Vecs<u64>>
+        input: &mut Vec<&Vecs<u64>>
     ) -> Result<Program> {
         debug!("synthesizing a program of length = {}", program_length);
 
-        let mut bit_width = 2;
+        let bit_width = 2;
 
         //只有一组输入，所以也没有cegis的循环了
         let assignments = self.finite_synthesis(input, program_length - 1, bit_width)?;
@@ -1464,7 +1472,7 @@ impl Program {
         context: &'a z3::Context,
         spec: &impl Specification,
         library: &Library,
-        arr_dims : Vec<usize>
+        _arr_dims : Vec<usize>
     ) -> Result<Program> {
         let mut synthesizer = Synthesizer::new(context, library, spec)?;
         synthesizer.synthesize()
@@ -1556,8 +1564,8 @@ impl Specification for Program {
 
         //判断vars和output中的元素相等
         let mut temp = vars.vecs[0][0]._eq(&output.vecs[0][0]);
-        for i in 0..vars.dims[0] {
-            for j in 0..vars.dims[1] {
+        for _i in 0..vars.dims[0] {
+            for _j in 0..vars.dims[1] {
                 let temp2 = vars.vecs[0][0]._eq(&output.vecs[0][0]);
                 temp = temp.and(&[&temp2]);
             }
