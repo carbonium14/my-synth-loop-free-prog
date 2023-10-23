@@ -1,8 +1,8 @@
 #![deny(missing_debug_implementations)]
 
-#[cfg(feature = "log")]
-#[macro_use]
-extern crate log;
+// #[cfg(feature = "log")]
+// #[macro_use]
+// extern crate log;
 
 #[cfg(not(feature = "log"))]
 #[macro_use]
@@ -43,7 +43,7 @@ where
     &(z3::ast::Bool::<'a>::and(&context, &exprs))]);
 }
 
-fn or<'a, 'b>(context: &'a z3::Context, exprs: impl IntoIterator<Item = &'b Bool<'a>>) -> Bool<'a>
+fn _or<'a, 'b>(context: &'a z3::Context, exprs: impl IntoIterator<Item = &'b Bool<'a>>) -> Bool<'a>
 where
     'a: 'b,
 {
@@ -64,13 +64,13 @@ pub struct Vecs<T>{
 
 impl<T> Vecs<T>{
     pub fn new(_dims: [usize ; 2]) -> Self {
-        let sz = _dims.len();
+        let _sz = _dims.len();
         let mut vecs : Vec<Vec<T>> = Vec::new();
         for _ in 0 .. _dims[0] {
             let temp : Vec<T> = Vec::new();
             vecs.push(temp);
         }
-        let mut dims = _dims;
+        let dims = _dims;
         return Vecs{dims, vecs};
     }   
 }
@@ -348,27 +348,35 @@ impl Library {
                 // component::xor(),
                 component::tf_abs(),
                 component::tf_add(),
-                // component::tf_mul(),
-                // component::tf_div(),
-                // component::tf_boolean_mask(),
-                // component::tf_clip_by_value(),
-                // component::tf_equal(),
-                // component::tf_fill(),
-                // component::tf_greater(),
-                // component::tf_greater_equal(),
-                // component::tf_not_equal(),
-                // component::tf_negative(),
-                // component::tf_reciprocal(),
-                // component::tf_cast(),
-                // component::tf_argmax(),
-                // component::tf_argmin(),
-                // component::tf_count_nonzero(),
-                // component::tf_cumsum(),
-                // component::tf_maximum(),
-                // component::tf_minimum(),
-                // component::tf_reverse(),
-                // component::tf_sign(),
-                // component::tf_square(),
+                component::tf_mul(),
+                component::tf_div(),
+                component::tf_boolean_mask(),
+                component::tf_clip_by_value(),
+                component::tf_concat(),
+                component::tf_equal(),
+                component::tf_eye(),
+                component::tf_zeros(),
+                component::tf_ones(),
+                component::tf_zeros_like(),
+                component::tf_ones_like(),
+                component::tf_fill(),
+                component::tf_greater(),
+                component::tf_greater_equal(),
+                component::tf_not_equal(),
+                component::tf_negative(),
+                component::tf_reciprocal(),
+                component::tf_cast(),
+                component::tf_argmax(),
+                component::tf_argmin(),
+                component::tf_bincount(),
+                component::tf_count_nonzero(),
+                component::tf_cumsum(),
+                component::tf_maximum(),
+                component::tf_minimum(),
+                component::tf_reverse(),
+                component::tf_sign(),
+                component::tf_square(),
+                component::tf_where(),
             ],
         }
     }
@@ -645,7 +653,7 @@ impl Display for Program {
     }
 }
 
-enum Verification {
+enum _Verification {
     WorksForAllInputs,
     Counterexample(Vec<Vecs<u64>>),
 }
@@ -789,7 +797,7 @@ impl<'a> Synthesizer<'a> {
             .collect()
     }
 
-    fn add_invalid_assignment(&mut self, assignments: &Assignments) {
+    fn _add_invalid_assignment(&mut self, assignments: &Assignments) {
         // TODO: like souper, we should have multiple cases here for if we're
         // trying to synthesize any constants or not. When we're synthesizing
         // constants, allow reusing the same location assignments N times with
@@ -1335,7 +1343,7 @@ impl Program {
         context: &'a z3::Context,
         spec: &impl Specification,
         library: &Library,
-        arr_dims : Vec<usize>
+        _arr_dims : Vec<usize>
     ) -> Result<Program> {
         let mut synthesizer = Synthesizer::new(context, library, spec)?;
         synthesizer.synthesize()
