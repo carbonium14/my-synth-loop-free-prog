@@ -1,5 +1,5 @@
-use crate::{Id, Operator, Vecs};
-use std::{fmt::Debug, usize, collections::HashMap};
+use crate::{Id, Operator, Vecs, Type};
+use std::{fmt::Debug, ops::Sub, ops::Add, ops::Mul, usize, collections::HashMap};
 use z3::ast::{Ast, Int};
 
 // macro_rules! vecnd {
@@ -151,12 +151,14 @@ impl Component for TfAbs {
         // 所以这里是左闭右开区间
         for i in 0..sz[0] {
             for j in 0..sz[1] {
-                 //计算每一个元素的相反数，作为后面的判断，如果是正数就直接返回，负数返回相反数
-                let minus_num = const0.sub(&operands[0].vecs[i][j]);
+                //计算每一个元素的相反数，作为后面的判断，如果是正数就直接返回，负数返回相反数
+                let minus_num = const0.clone().sub(&operands[0].vecs[i][j]);
                 // 判断输入的数是正数还是负数
                 let plus_or_minus = operands[0].vecs[i][j].lt(&const0).ite(&one(context, bit_width), &zero(context, bit_width));
                 // 正数直接返回，负数返回相反数
                 result.vecs[i].push(plus_or_minus._eq(&one(context, bit_width)).ite(&minus_num, &operands[0].vecs[i][j]))
+                //
+                //operands[0].vecs[i][j].lt(&const0).ite(Int::<'a>::sub(context, ))
             }   
         }
         return result;
@@ -271,7 +273,7 @@ impl Component for TfAdd {
         // 如果两个数组维度和长度相同，那么遍历然后直接相加即可，否则得先扩充然后再实现
         for i in 0..size_x_max {
             for j in 0..size_y_max {
-                result.vecs[i].push(operands[0].vecs[i][j].add(&operands[1].vecs[i][j]));
+                result.vecs[i].push(operands[0].vecs[i][j].clone().add(&operands[1].vecs[i][j]));
             }
         }
         return result;
@@ -385,7 +387,7 @@ impl Component for TfMul {
         // 如果两个数组维度和长度相同，那么遍历然后直接相乘即可，否则得先扩充然后再实现
         for i in 0..size_x_max {
             for j in 0..size_y_max {
-                result.vecs[i].push(operands[0].vecs[i][j].bvmul(&operands[1].vecs[i][j]));
+                result.vecs[i].push(operands[0].vecs[i][j].clone().mul(&operands[1].vecs[i][j]));
             }
         }
         return result;
@@ -499,7 +501,7 @@ impl Component for TfDiv {
         // 如果两个数组维度和长度相同，那么遍历然后直接相除即可，否则得先扩充然后再实现
         for i in 0..size_x_max {
             for j in 0..size_y_max {
-                result.vecs[i].push(operands[0].vecs[i][j].bvsdiv(&operands[1].vecs[i][j]));
+                result.vecs[i].push(operands[0].vecs[i][j].div(&operands[1].vecs[i][j]));
             }
         }
         return result;
@@ -542,7 +544,7 @@ impl Component for TfArgMax {
             val = zero(context, bit_width);
             for j in 0..size[1] {
                 // 你说for里面用下标，循环体用下标取值？不好意思，ast提供的函数不允许同时返回两个值，所以处理下标和值得分开来
-                val = operands[0].vecs[i][j].bvsgt(&val).ite(&operands[0].vecs[i][j], &val);
+                val = operands[0].vecs[i][j].gt(&val).ite(&operands[0].vecs[i][j], &val);
             }
             // 记录最终结果的下标
             let mut res = zero(context, bit_width);
@@ -596,7 +598,7 @@ impl Component for TfArgMin {
             val = Int::from_i64(context, 9223372036854775807);
             for j in 0..size[1] {
                 // 你说for里面用下标，循环体用下标取值？不好意思，ast提供的函数不允许同时返回两个值，所以处理下标和值得分开来
-                val = operands[0].vecs[i][j].bvslt(&val).ite(&operands[0].vecs[i][j], &val);
+                val = operands[0].vecs[i][j].lt(&val).ite(&operands[0].vecs[i][j], &val);
             }
             // 记录最终结果的下标
             let mut res = zero(context, bit_width);
@@ -797,8 +799,8 @@ impl Component for TfClipByValue {
             let max_value = operands[2].vecs[i][0].clone();
             for j in 0..size[1] {
                 // 判断当前值是否小于等于最小值，当前值是否大于等于最大值，1则为成立，0则为不成立
-                let is_min = operands[0].vecs[i][j].bvsle(&min_value).ite(&one(context, bit_width), &zero(context, bit_width));
-                let is_max = operands[0].vecs[i][j].bvsge(&max_value).ite(&one(context, bit_width), &zero(context, bit_width));
+                let is_min = operands[0].vecs[i][j].le(&min_value).ite(&one(context, bit_width), &zero(context, bit_width));
+                let is_max = operands[0].vecs[i][j].ge(&max_value).ite(&one(context, bit_width), &zero(context, bit_width));
                 // 先判断是不是比最小值小，如果是则取最小值，再比较是不是比最大值大，如果是则取最大值，其余情况原值返回
                 result.vecs[i].push(one(context, bit_width)._eq(&is_min).ite(&min_value, &one(context, bit_width)._eq(&is_max).ite(&max_value, &operands[0].vecs[i][j])));
             }
@@ -1300,7 +1302,7 @@ impl Component for TfGreater {
         let mut result: Vecs<Int> = Vecs::new([size_x_max, size_y_max]);
         for i in 0..size_x_max {
             for j in 0..size_y_max {
-                result.vecs[i].push(operands[0].vecs[i][j].bvsgt(&operands[1].vecs[i][j]).ite(&one(context, bit_width), &zero(context, bit_width)));
+                result.vecs[i].push(operands[0].vecs[i][j].gt(&operands[1].vecs[i][j]).ite(&one(context, bit_width), &zero(context, bit_width)));
             }
         }
         return result;
@@ -1410,7 +1412,7 @@ impl Component for TfGreaterEqual {
         let mut result: Vecs<Int> = Vecs::new([size_x_max, size_y_max]);
         for i in 0..size_x_max {
             for j in 0..size_y_max {
-                result.vecs[i].push(operands[0].vecs[i][j].bvsge(&operands[1].vecs[i][j]).ite(&one(context, bit_width), &zero(context, bit_width)));
+                result.vecs[i].push(operands[0].vecs[i][j].ge(&operands[1].vecs[i][j]).ite(&one(context, bit_width), &zero(context, bit_width)));
             }
         }
         return result;
@@ -1557,7 +1559,7 @@ impl Component for TfNegative {
         let mut result: Vecs<Int> = Vecs::new(size);
         for i in 0..size[0] {
             for j in 0..size[1] {
-                result.vecs[i].push(const0.bvsub(&operands[0].vecs[i][j]));
+                result.vecs[i].push(const0.clone().sub(&operands[0].vecs[i][j]));
             }
         }
         return result;
@@ -1641,7 +1643,7 @@ impl Component for TfBincount {
             // 记录下每一维度的最大长度
             let mut maxlen = zero(context, bit_width);
             for j in 0..size0[1] {
-                let value_weight = operands[0].vecs[i][j].mul(&operands[1].vecs[i][j]);
+                let value_weight = operands[0].vecs[i][j].clone().mul(&operands[1].vecs[i][j]);
                 // rust的hashmap机制比较特殊，可以对于插入和更新而言可以统一起来，先看有没有，没有就直接设置，有就相加
                 let value_in_map = hashmap.get(&operands[0].vecs[i][j]);
                 let ans;
@@ -1652,15 +1654,15 @@ impl Component for TfBincount {
                 // 这里是覆盖插入，所以对于没有的值就是插入，对于有的值就是更新
                 hashmap.insert(operands[0].vecs[i][j].clone(), ans);
                 // 比已知的最大值大就替代
-                maxlen = operands[0].vecs[i][j].bvsgt(&maxlen).ite(&operands[0].vecs[i][j], &maxlen);
+                maxlen = operands[0].vecs[i][j].gt(&maxlen).ite(&operands[0].vecs[i][j], &maxlen);
             }
             // 每次行遍历完成之后更新最大长度
-            max_length = maxlen.bvsgt(&max_length).ite(&maxlen, &max_length);
+            max_length = maxlen.gt(&max_length).ite(&maxlen, &max_length);
             hashmap_arr.push(hashmap);
         }
         // 这里直接把数组长度设置为min、max、求得的长度的最大值
         // 因为初始化之后就实现了大于最小值的部分用0填充
-        let len_option = max_length.bvsgt(&min).ite(&max_length.bvsgt(&max).ite(&max_length, &max), &min).as_u64();
+        let len_option = max_length.gt(&min).ite(&max_length.gt(&max).ite(&max_length, &max), &min).as_u64();
         #[allow(unused_assignments)]
         let mut result_len = 0;
         match len_option {
@@ -1678,7 +1680,7 @@ impl Component for TfBincount {
             for (key, value) in &hashmap_arr[i] {
                 // key就是在数组中的位置，value就是对应的值，只不过bv得先转换一下
                 // 比较里面的键和最大长度，比它大的会忽略
-                let is_continue = key.bvsgt(&max).ite(&one(context, bit_width), &zero(context, bit_width));
+                let is_continue = key.gt(&max).ite(&one(context, bit_width), &zero(context, bit_width));
                 if is_continue == one(context, bit_width) {
                     continue;
                 }
@@ -1726,7 +1728,7 @@ impl Component for TfCountNonzero {
             for j in 0..size[1] {
                 // 为了方便计数，可以用z3判断是不是为0，然后用z3的方式相加
                 let is_zero = operands[0].vecs[i][j]._eq(&zero(context, bit_width)).ite(&zero(context, bit_width),&one(context, bit_width));
-                ans = ans.bvadd(&is_zero);
+                ans = ans.add(&is_zero);
             }
         }
         let mut result: Vecs<Int> = Vecs::new([1, 1]);
@@ -1772,16 +1774,16 @@ impl Component for TfCumsum {
                 // 清零操作
                 ans = zero(context, bit_width);
                 for j in 0..size[1] {
-                    result.vecs[i].push(ans.bvadd(&operands[0].vecs[i][j]));
-                    ans = ans.bvadd(&operands[0].vecs[i][j]);
+                    result.vecs[i].push(ans.clone().add(&operands[0].vecs[i][j]));
+                    ans = ans.clone().add(&operands[0].vecs[i][j]);
                 }
             }
         } else {
             for i in 0..size[0] {
                 result.vecs[i].push(zero(context, bit_width));
                 for j in 0..size[1] - 1 {
-                    result.vecs[i].push(ans.bvadd(&operands[0].vecs[i][j]));
-                    ans = ans.bvadd(&operands[0].vecs[i][j]);
+                    result.vecs[i].push(ans.clone().add(&operands[0].vecs[i][j]));
+                    ans = ans.clone().add(&operands[0].vecs[i][j]);
                 }
             }
         }
@@ -1897,7 +1899,7 @@ impl Component for TfMaximum {
         let mut result: Vecs<Int> = Vecs::new([size_x_max, size_y_max]);
         for i in 0..size_x_max {
             for j in 0..size_y_max {
-                result.vecs[i].push(operands[0].vecs[i][j].bvsgt(&operands[1].vecs[i][j]).ite(&operands[0].vecs[i][j], &operands[1].vecs[i][j]));
+                result.vecs[i].push(operands[0].vecs[i][j].gt(&operands[1].vecs[i][j]).ite(&operands[0].vecs[i][j], &operands[1].vecs[i][j]));
             }
         }
         return result;
@@ -2007,7 +2009,7 @@ impl Component for TfMinimum {
         let mut result: Vecs<Int> = Vecs::new([size_x_max, size_y_max]);
         for i in 0..size_x_max {
             for j in 0..size_y_max {
-                result.vecs[i].push(operands[0].vecs[i][j].bvslt(&operands[1].vecs[i][j]).ite(&operands[0].vecs[i][j], &operands[1].vecs[i][j]));
+                result.vecs[i].push(operands[0].vecs[i][j].lt(&operands[1].vecs[i][j]).ite(&operands[0].vecs[i][j], &operands[1].vecs[i][j]));
             }
         }
         return result;
@@ -2082,7 +2084,7 @@ impl Component for TfSign {
         for i in 0..size[0] {
             for j in 0..size[1] {
                 // 先判断是否为负，是则返回-1，否则判断是否为正，是则返回1，否则不是正数也不是负数，则为0
-                result.vecs[i].push(operands[0].vecs[i][j].bvslt(&zero).ite(&minus_one, &operands[0].vecs[i][j].bvsgt(&zero).ite(&plus_one, &zero)));
+                result.vecs[i].push(operands[0].vecs[i][j].lt(&zero).ite(&minus_one, &operands[0].vecs[i][j].gt(&zero).ite(&plus_one, &zero)));
             }
         }
         return result;
@@ -2118,7 +2120,7 @@ impl Component for TfSquare {
         for i in 0..size[0] {
             for j in 0..size[1] {
                 // 平方就是自己乘以自己
-                result.vecs[i].push(operands[0].vecs[i][j].mul(&operands[0].vecs[i][j]));
+                result.vecs[i].push(operands[0].vecs[i][j].clone().mul(&operands[0].vecs[i][j]));
             }
         }
         return result;
