@@ -1,6 +1,9 @@
 use crate::{Id, Operator, Vecs, Type};
 use std::{fmt::Debug, ops::Sub, ops::Add, ops::Mul, usize, collections::HashMap};
-use z3::ast::{Ast, Int};
+use rand::seq::index;
+use z3::ast::{Ast, Int, Array, Bool};
+
+use z3::Sort;
 
 // macro_rules! vecnd {
 //     ($([$($inner:tt)*]),+ $(,)?) => {
@@ -24,22 +27,26 @@ use z3::ast::{Ast, Int};
 // fn one(context: &z3::Context, bit_width: u32) -> BitVec {
 //     bit_vec_from_u64(context, 1, bit_width)
 // }
-fn Int_from_u64(context: &z3::Context, val: u64, bit_width: u32) -> Int {
+fn Int_from_i64(context: &z3::Context, val: i64, bit_width: u32) -> Int {
     Int::from_i64(context, val as i64)
 }
 
 fn zero(context: &z3::Context, bit_width: u32) -> Int {
-    Int_from_u64(context, 0, bit_width)
+    Int_from_i64(context, 0, bit_width)
 }
 
 fn one(context: &z3::Context, bit_width: u32) -> Int {
-    Int_from_u64(context, 1, bit_width)
+    Int_from_i64(context, 1, bit_width)
+}
+
+fn min_int(context: &z3::Context, bit_width: u32) -> Int {
+    Int_from_i64(context, -2^63, bit_width)
 }
 
 pub trait Component: Debug {
     fn operand_arity(&self) -> usize;
 
-    fn make_operator(&self, immediates: &Vec<Vecs<i64>>, operands: &[Id]) -> Operator;
+    fn make_operator(&self, immediates: &Vec<Vecs<Vec<Vec<i64>>>>, operands: &[Id]) -> Operator;
 
     fn make_expression<'a>(
         &self,
@@ -49,12 +56,12 @@ pub trait Component: Debug {
         // immediates: &[Vec<Int<'a>>],
         // operands: &[Vec<Int<'a>>],
 
-        immediates: &[Vecs<Int<'a>>],
-        operands: &[Vecs<Int<'a>>],
+        immediates: &[Vecs<Array<'a>>],
+        operands: &[Vecs<Array<'a>>],
         bit_width: u32,
     ) -> 
         //BitVec<'a> 
-        Vecs<Int<'a>>;
+        Vecs<Array<'a>>;
         
     /// How many immediates does this component require?
     fn immediate_arity(&self) -> usize {
@@ -62,8 +69,8 @@ pub trait Component: Debug {
     }
 }
 
-#[derive(Debug)]
-struct Const([usize; 2]);
+/*#[derive(Debug)]
+struct Const(Vec<Vec<i64>>);
 
 impl Component for Const {
     fn operand_arity(&self) -> usize {
@@ -71,7 +78,7 @@ impl Component for Const {
     }
 
     fn make_operator(&self, _immediates: &Vec<Vecs<i64>>, _operands: &[Id]) -> Operator {
-        Operator::Const(self.0)
+        Operator::Const(self.0.clone())
     }
 
     fn make_expression<'a>(
@@ -90,15 +97,15 @@ impl Component for Const {
         //     immediates[0][0].clone()
         // }
 
+        let const_val = &(self.0);
+        let dims = [const_val.len(), const_val[0].len()];
 
-        let mut result : Vecs<Int<'a>> = Vecs::new({
-            self.0
-        });
+        let mut result : Vecs<Int<'a>> = Vecs::new(dims);
 
-        let dims = self.0;
+        
         for i in 0 .. dims[0] {
-            for _j in 0 .. dims[1] {
-                result.vecs[i as usize].push(Int::from_i64(context, 10 as i64));
+            for j in 0 .. dims[1] {
+                result.vecs[i as usize].push(Int::from_i64(context, (self.0)[i][j]));
             }
         }
 
@@ -118,9 +125,10 @@ impl Component for Const {
 }
 
 
-pub fn const_(val: [usize; 2]) -> Box<dyn Component> {
+pub fn const_(val: Vec<Vec<i64>>) -> Box<dyn Component> {
     Box::new(Const(val)) as _
 }
+*/
 
 #[derive(Debug)]
 struct TfAbs;
@@ -130,37 +138,50 @@ impl Component for TfAbs {
         1
     }
 
-    fn make_operator(&self, _immediates: &Vec<Vecs<i64>>, operands: &[Id]) -> Operator {
+    fn make_operator(&self, _immediates: &Vec<Vecs<Vec<Vec<i64>>>>, operands: &[Id]) -> Operator {
         Operator::TfAbs(operands[0])
     }
 
     fn make_expression<'a>(
         &self,
         context: &'a z3::Context,
-        _immediates: &[Vecs<Int<'a>>],
-        operands: &[Vecs<Int<'a>>],
+        _immediates: &[Vecs<Array<'a>>],
+        operands: &[Vecs<Array<'a>>],
         bit_width: u32,
-    ) -> Vecs<Int<'a>> {
+    ) -> Vecs<Array<'a>> {
         //TODO：目前只是二维,对于一维的数组，我们用x[1][m]表示长度为m的一维数组，他的dims = [1,m]
 
         // 取相同长度并且填充为0的数组，作取相反数的结果用
         let const0 = zero(context, bit_width);
         let sz = operands[0].dims;
-        let mut result: Vecs<Int> = Vecs::new(operands[0].dims);
+        let op_arr = &operands[0].vecs;
+        
+        let domain_sort = Sort::int(&context);
+        let range_sort = Sort::int(&context);
+        let array_sort = Sort::array(context, &domain_sort, &range_sort);
+
+        let first_dim_sort = Sort::int(&context);
+        let array = Array::fresh_const(&context,  "abs_array", &first_dim_sort, &array_sort);
+    
+
         // 它（for循环）是标准库提供的类型，用来生成从一个数字开始到另一个数字之前结束的所有数字的序列。
         // 所以这里是左闭右开区间
         for i in 0..sz[0] {
+            let now_index = Int::from_i64(context, i as i64);
+            let domain_sort = Sort::int(&context);
+            let range_sort = Sort::int(&context);
+            let array_val = Array::fresh_const(context, "abs_array_second:", &domain_sort, &range_sort);
+
+            let now_arr = op_arr.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
             for j in 0..sz[1] {
-                //计算每一个元素的相反数，作为后面的判断，如果是正数就直接返回，负数返回相反数
-                let minus_num = const0.clone().sub(&operands[0].vecs[i][j]);
-                // 判断输入的数是正数还是负数
-                let plus_or_minus = operands[0].vecs[i][j].lt(&const0).ite(&one(context, bit_width), &zero(context, bit_width));
-                // 正数直接返回，负数返回相反数
-                result.vecs[i].push(plus_or_minus._eq(&one(context, bit_width)).ite(&minus_num, &operands[0].vecs[i][j]))
-                //
-                //operands[0].vecs[i][j].lt(&const0).ite(Int::<'a>::sub(context, ))
-            }   
+                let index = Int::from_i64(context, j as i64);
+                let m: Int<'_> = now_arr.select(&index).as_int().unwrap();
+
+                array_val.store(&index ,&(m.lt(&(const0.clone())).ite(&(const0.clone().sub(&m)), &&m)));
+            } 
+            array.store(&now_index, &array_val);
         }
+        let mut result: Vecs<Array> = Vecs::new(operands[0].dims, array);
         return result;
     }
 }
@@ -169,7 +190,7 @@ pub fn tf_abs() -> Box<dyn Component> {
     Box::new(TfAbs) as _
 }
 
-#[derive(Debug)]
+/*#[derive(Debug)]
 struct TfAdd;
 
 impl Component for TfAdd {
@@ -191,6 +212,9 @@ impl Component for TfAdd {
         // 获取两个输入的长度
         let size0 = operands[0].dims;
         let size1 = operands[1].dims;
+
+        
+
         // 取两个数组维度的最大值
         // 不过rust连min、max函数都不给！！！还得我自己手动去实现！！！
         // 服了，连三元表达式都没有！！！
@@ -204,6 +228,26 @@ impl Component for TfAdd {
         } else {
             size1[1]
         };
+
+        // let mut inputs : Vec<_> = operands.into_iter().clone().collect();
+        let mut inputs0 : Vecs<Int<'a>> = Vecs::new([size_x_max, size_y_max]);
+        let mut inputs1 : Vecs<Int<'a>> = Vecs::new([size_x_max, size_y_max]);
+        for i in 0 .. size0[0] {
+            for j in 0 .. size0[1] {
+                inputs0.vecs[i].push((operands[0].vecs[i][j]).clone());
+            }
+        }
+
+        for i in 0 .. size1[0] {
+            for j in 0 .. size1[1] {
+                inputs1.vecs[i].push((operands[1].vecs[i][j]).clone());
+            }
+        }
+
+
+
+        // println!("size0 : {:?}", size0);
+        // println!("size1 : {:?}", size1);
         // 广播规则：维度低的向量有1，则扩充，也就是标量会扩充到和向量一样的维度
         // 尾部尺寸一致的，按照行进行扩充，如4行3列和1行3列的数组，都是3列，所以1行3列的数组会扩充到4行3列
         // 二者结合，比如3行1列和1行3列的数组，因为有1列和3列，所以都会扩充到3行3列
@@ -216,13 +260,15 @@ impl Component for TfAdd {
                     for i in 0..size0[0] {
                         for j in size0[1]..size1[1] {
                             // 举个例子，一个长度为2的数组扩展到长度为5，那么要从下标为2开始，下标为5（不含）中止，每次要放入的数就是长度为2数组下标为0、1、0、1的数
-                            operands[0].clone().vecs[i].push(operands[0].vecs[i][j % size0[1]].clone());
+                            //operands[0].clone().vecs[i].push(operands[0].vecs[i][j % size0[1]].clone());
+                            inputs0.vecs[i].push(operands[0].vecs[i][j % size0[1]].clone());
                         }
                     }
                 } else {
                     for i in 0..size1[0] {
                         for j in size1[1]..size0[1] {
-                            operands[1].clone().vecs[i].push(operands[1].vecs[i][j % size1[1]].clone());
+                            // operands[1].clone().vecs[i].push(operands[1].vecs[i][j % size1[1]].clone());
+                            inputs1.vecs[i].push(operands[1].vecs[i][j % size1[1]].clone());
                         }
                     }
                 }
@@ -232,11 +278,13 @@ impl Component for TfAdd {
                 if size0[0] < size1[0] {
                     for i in size0[0]..size1[0] {
                         // 和上面的例子一样
-                        operands[0].clone().vecs.push(operands[0].vecs[i % size0[0]].clone());
+                        // operands[0].clone().vecs.push(operands[0].vecs[i % size0[0]].clone());
+                        inputs0.vecs.push(operands[0].vecs[i % size0[0]].clone());
                     }
                 } else {
                     for i in size1[0]..size0[0] {
-                        operands[1].clone().vecs.push(operands[1].vecs[i % size1[0]].clone());
+                        // operands[1].clone().vecs.push(operands[1].vecs[i % size1[0]].clone());
+                        inputs1.vecs.push(operands[1].vecs[i % size1[0]].clone());
                     }
                 }
             }
@@ -246,34 +294,43 @@ impl Component for TfAdd {
                 for i in 0..size0[0] {
                     // 既然一个为1，另一个就不是1，所以扩展的最终长度是另一个的长度
                     for _j in 0..size1[1] - 1 {
-                        operands[0].clone().vecs[i].push(operands[0].vecs[i][0].clone());
+                        // operands[0].clone().vecs[i].push(operands[0].vecs[i][0].clone());
+                        inputs0.vecs[i].push(operands[0].vecs[i][0].clone());
                     }
                 }
             }
             if size1[1] == 1 {
                 for i in 0..size1[0] {
                     for _j in 0..size0[1] - 1 {
-                        operands[1].clone().vecs[i].push(operands[1].vecs[i][0].clone());
+                        // operands[1].clone().vecs[i].push(operands[1].vecs[i][0].clone());
+                        inputs1.vecs[i].push(operands[1].vecs[i][0].clone());
                     }
                 }
             }
             if size0[0] == 1 {
                 for _i in 0..size1[0] - 1 {
-                    operands[0].clone().vecs.push(operands[0].vecs[0].clone());
+                    // operands[0].clone().vecs.push(operands[0].vecs[0].clone());
+                    inputs0.vecs.push(operands[0].vecs[0].clone());
+
                 }
             }
             if size1[0] == 1 {
                 for _i in 0..size0[0] - 1 {
-                    operands[1].clone().vecs.push(operands[1].vecs[0].clone());
+                    // operands[1].clone().vecs.push(operands[1].vecs[0].clone());
+                    inputs1.vecs.push(operands[1].vecs[0].clone());
                 }
             }
         }
         // 按理说其余情况应该报错，只不过需不需要显示地提出就要看需求了
+
+        //println!(" {:?}", inputs1.vecs);
+
         let mut result: Vecs<Int> = Vecs::new([size_x_max, size_y_max]);
         // 如果两个数组维度和长度相同，那么遍历然后直接相加即可，否则得先扩充然后再实现
         for i in 0..size_x_max {
             for j in 0..size_y_max {
-                result.vecs[i].push(operands[0].vecs[i][j].clone().add(&operands[1].vecs[i][j]));
+                // result.vecs[i].push(operands[0].vecs[i][j].clone().add(&operands[1].vecs[i][j]));
+                result.vecs[i].push(inputs0.vecs[i][j].clone().add(&inputs1.vecs[i][j]));
             }
         }
         return result;
@@ -282,8 +339,8 @@ impl Component for TfAdd {
 
 pub fn tf_add() -> Box<dyn Component> {
     Box::new(TfAdd) as _
-}
-
+}*/
+/* 
 #[derive(Debug)]
 struct TfMul;
 
@@ -644,8 +701,23 @@ impl Component for TfBooleanMask {
         let size0 = operands[0].dims;
         let size1 = operands[1].dims;
         let mut result: Vecs<Int> = Vecs::new(size0);
+
+        //println!("{:?}", size1);
+        
+        //-----------------
+        for i in 0 .. size0[0] {
+            for j in 0 .. size0[1] {
+                result.vecs[i].push(operands[0].vecs[i][j].clone());
+            }
+        }
+
+        //-----------------
+
+
         // 填充物，如果掩码部分不是1，那么就返回0
         let const0 = zero(context, bit_width);
+        let const1 = one(context, bit_width);
+        //let const_min = min_int(context, bit_width);
         // 保证两个长度相等，否则报错
         for i in 0..size0[0] {
             for j in 0..size0[1] {
@@ -654,18 +726,65 @@ impl Component for TfBooleanMask {
                     //如果掩码为1，则返回，如果掩码为0，则不返回
                     let ans = operands[1].vecs[i][j]._eq(&one(context, bit_width)).ite(&operands[0].vecs[i][j], &const0);
                     // 注意，为0的部分不要加入到数组里面
-                    if ans != const0 {
+                    if ans.as_i64() != const0.as_i64() {
                         result.vecs[i].push(ans);
                     }
                 // 掩码是一维数组，那就一维数组里面每个元素对应输入的第一维度
                 } else {
-                    let ans = operands[1].vecs[i][0]._eq(&one(context, bit_width)).ite(&operands[0].vecs[i][j], &const0);
-                    if ans != const0 {
+                    //println!("operands[1].vecs[0][j] : {}", operands[1].vecs[0][j]);
+                    //println!("one : {}", one(context, bit_width));
+
+                    // let mut index = 0;
+
+                    // let nextIndex = operands[1].vecs[0][j]._eq(&const1).ite(&index, &index);
+
+                    //println!("const0_as64 : {}", const0.as_i64().unwrap());
+
+                    let ans = operands[1].vecs[0][j]._eq(&one(context, bit_width)).ite(&operands[0].vecs[i][j], &const0);
+
+                    // println!("ans : {}", ans);
+                    // println!("ans_as64 : {:?}", ans.as_i64());
+                    // println!("ans_as64 : {}", ans.as_i64().unwrap());
+
+                    
+                    
+                    if ans.as_i64() != const0.as_i64() {
                         result.vecs[i].push(ans);
                     }
+
+
+                    // let x = ans._eq(&const0);
+                    // println!("{:?}", x.as_bool());
+
+                    // if ans._eq(&const0).as_bool().unwrap() {
+                    //     result.vecs[i].push(ans);
+
+                    // }
+
+                    let bool_sort = Sort::bool(&context);
+                    let int_sort = Sort::int(&context);
+                    let array = Array::fresh_const(&context, "array:", &int_sort, &bool_sort);
+                    let index = Int::fresh_const(context, "input_key");
+                    let val = Bool::fresh_const(context, "input_val");
+                    let y = array.select(&index);
+                    array.store(&index, &val);
+                    
+                    //let arr = Array::fresh_const(context, "array_input", &key.unwrap(), &val.unwrap());
+
+                    println!("{}", y);
+
+                    
+
+
+
+
+                    // println!("operands[1] : {}", operands[1].vecs[0][j]);
+                    // result.vecs[i].push(operands[1].vecs[0][j]._eq(&one(context, bit_width)).ite(&operands[0].vecs[i][j], &const_min));
                 }
             }
         }
+
+        println!("result : {:?}", result.vecs);
         return result;
     }
 }
@@ -2355,7 +2474,7 @@ impl Component for TfWhere {
 pub fn tf_where() -> Box<dyn Component> {
     Box::new(TfWhere) as _
 }
-
+*/
 macro_rules! with_operator_component {
     ( $me:expr , |$c:ident| $body:expr ) => {
         match $me {
@@ -2365,134 +2484,134 @@ macro_rules! with_operator_component {
                 let $c = Vecs;
                 $body
             }*/
-            Operator::Const(c) => {
-                let $c = Const(*c);
-                $body
-            }
+            // Operator::Const(c) => {
+            //     let $c = Const(c.to_vec());
+            //     $body
+            // }
             Operator::TfAbs(_) => {
                 let $c = TfAbs;
                 $body
             }
-            Operator::TfAdd(_, _) => {
-                let $c = TfAdd;
-                $body
-            }
-            Operator::TfMul(_, _) => {
-                let $c = TfMul;
-                $body
-            }
-            Operator::TfDiv(_, _) => {
-                let $c = TfDiv;
-                $body
-            }
-            Operator::TfArgMax(_) => {
-                let $c = TfArgMax;
-                $body
-            }
-            Operator::TfArgMin(_) => {
-                let $c = TfArgMin;
-                $body
-            }
-            Operator::TfBooleanMask(_, _) => {
-                let $c = TfBooleanMask;
-                $body
-            }
-            Operator::TfCast(_) => {
-                let $c = TfCast;
-                $body
-            }
-            Operator::TfClipByValue(_, _, _) => {
-                let $c = TfClipByValue;
-                $body
-            }
-            Operator::TfConcat(_, _, _) => {
-                let $c = TfConcat;
-                $body
-            }
-            Operator::TfEqual(_, _) => {
-                let $c = TfEqual;
-                $body
-            }
-            Operator::TfEye(_, _) => {
-                let $c = TfEye;
-                $body
-            }
-            Operator::TfOnes(_) => {
-                let $c = TfOnes;
-                $body
-            }
-            Operator::TfZeros(_) => {
-                let $c = TfZeros;
-                $body
-            }
-            Operator::TfOnesLike(_) => {
-                let $c = TfOnesLike;
-                $body
-            }
-            Operator::TfZerosLike(_) => {
-                let $c = TfZerosLike;
-                $body
-            }
-            Operator::TfFill(_, _) => {
-                let $c = TfFill;
-                $body
-            }
-            Operator::TfGreater(_, _) => {
-                let $c = TfGreater;
-                $body
-            }
-            Operator::TfGreaterEqual(_, _) => {
-                let $c = TfGreaterEqual;
-                $body
-            }
-            Operator::TfNotEqual(_, _) => {
-                let $c = TfNotEqual;
-                $body
-            }
-            Operator::TfNegative(_) => {
-                let $c = TfNegative;
-                $body
-            }
-            Operator::TfReciprocal(_) => {
-                let $c = TfReciprocal;
-                $body
-            }
-            Operator::TfBincount(_, _, _, _) => {
-                let $c = TfBincount;
-                $body
-            }
-            Operator::TfCountNonzero(_) => {
-                let $c = TfCountNonzero;
-                $body
-            }
-            Operator::TfCumsum(_, _, _) => {
-                let $c = TfCumsum;
-                $body
-            }
-            Operator::TfMaximum(_, _) => {
-                let $c = TfMaximum;
-                $body
-            }
-            Operator::TfMinimum(_, _) => {
-                let $c = TfMinimum;
-                $body
-            }
-            Operator::TfReverse(_) => {
-                let $c = TfReverse;
-                $body
-            }
-            Operator::TfSign(_) => {
-                let $c = TfSign;
-                $body
-            }
-            Operator::TfSquare(_) => {
-                let $c = TfSquare;
-                $body
-            }
-            Operator::TfWhere(_, _, _) => {
-                let $c = TfWhere;
-                $body
-            }
+            // Operator::TfAdd(_, _) => {
+            //     let $c = TfAdd;
+            //     $body
+            // }
+            // Operator::TfMul(_, _) => {
+            //     let $c = TfMul;
+            //     $body
+            // }
+            // Operator::TfDiv(_, _) => {
+            //     let $c = TfDiv;
+            //     $body
+            // }
+            // Operator::TfArgMax(_) => {
+            //     let $c = TfArgMax;
+            //     $body
+            // }
+            // Operator::TfArgMin(_) => {
+            //     let $c = TfArgMin;
+            //     $body
+            // }
+            // Operator::TfBooleanMask(_, _) => {
+            //     let $c = TfBooleanMask;
+            //     $body
+            // }
+            // Operator::TfCast(_) => {
+            //     let $c = TfCast;
+            //     $body
+            // }
+            // Operator::TfClipByValue(_, _, _) => {
+            //     let $c = TfClipByValue;
+            //     $body
+            // }
+            // Operator::TfConcat(_, _, _) => {
+            //     let $c = TfConcat;
+            //     $body
+            // }
+            // Operator::TfEqual(_, _) => {
+            //     let $c = TfEqual;
+            //     $body
+            // }
+            // Operator::TfEye(_, _) => {
+            //     let $c = TfEye;
+            //     $body
+            // }
+            // Operator::TfOnes(_) => {
+            //     let $c = TfOnes;
+            //     $body
+            // }
+            // Operator::TfZeros(_) => {
+            //     let $c = TfZeros;
+            //     $body
+            // }
+            // Operator::TfOnesLike(_) => {
+            //     let $c = TfOnesLike;
+            //     $body
+            // }
+            // Operator::TfZerosLike(_) => {
+            //     let $c = TfZerosLike;
+            //     $body
+            // }
+            // Operator::TfFill(_, _) => {
+            //     let $c = TfFill;
+            //     $body
+            // }
+            // Operator::TfGreater(_, _) => {
+            //     let $c = TfGreater;
+            //     $body
+            // }
+            // Operator::TfGreaterEqual(_, _) => {
+            //     let $c = TfGreaterEqual;
+            //     $body
+            // }
+            // Operator::TfNotEqual(_, _) => {
+            //     let $c = TfNotEqual;
+            //     $body
+            // }
+            // Operator::TfNegative(_) => {
+            //     let $c = TfNegative;
+            //     $body
+            // }
+            // Operator::TfReciprocal(_) => {
+            //     let $c = TfReciprocal;
+            //     $body
+            // }
+            // Operator::TfBincount(_, _, _, _) => {
+            //     let $c = TfBincount;
+            //     $body
+            // }
+            // Operator::TfCountNonzero(_) => {
+            //     let $c = TfCountNonzero;
+            //     $body
+            // }
+            // Operator::TfCumsum(_, _, _) => {
+            //     let $c = TfCumsum;
+            //     $body
+            // }
+            // Operator::TfMaximum(_, _) => {
+            //     let $c = TfMaximum;
+            //     $body
+            // }
+            // Operator::TfMinimum(_, _) => {
+            //     let $c = TfMinimum;
+            //     $body
+            // }
+            // Operator::TfReverse(_) => {
+            //     let $c = TfReverse;
+            //     $body
+            // }
+            // Operator::TfSign(_) => {
+            //     let $c = TfSign;
+            //     $body
+            // }
+            // Operator::TfSquare(_) => {
+            //     let $c = TfSquare;
+            //     $body
+            // }
+            // Operator::TfWhere(_, _, _) => {
+            //     let $c = TfWhere;
+            //     $body
+            // }
         }
     };
 }
@@ -2502,17 +2621,17 @@ impl Component for Operator {
         Operator::arity(self)
     }
 
-    fn make_operator(&self, immediates: &Vec<Vecs<i64>>, operands: &[Id]) -> Operator {
+    fn make_operator(&self, immediates: &Vec<Vecs<Vec<Vec<i64>>>>, operands: &[Id]) -> Operator {
         with_operator_component!(self, |c| c.make_operator(immediates, operands))
     }
 
     fn make_expression<'a>(
         &self,
         context: &'a z3::Context,
-        immediates: &[Vecs<Int<'a>>],
-        operands: &[Vecs<Int<'a>>],
+        immediates: &[Vecs<Array<'a>>],
+        operands: &[Vecs<Array<'a>>],
         bit_width: u32,
-    ) -> Vecs<Int<'a>> {
+    ) -> Vecs<Array<'a>> {
         with_operator_component!(self, |c| {
             c.make_expression(context, immediates, operands, bit_width)
         })

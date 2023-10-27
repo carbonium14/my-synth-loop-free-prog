@@ -42,10 +42,6 @@ fn main() {
         // mytest3,
         // mytest4,
         // mytest5,
-        // mytest2,
-        // mytest3,
-        // mytest4,
-        // mytest5,
     };
 
     for (name, p) in problems {
@@ -163,7 +159,7 @@ fn mytest1(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     // Modify：调用var()的时候接收一个参数，将输入的vec传入到spec中
     
     let mut input1 : Vec<Vec<i64>> = Vec::new();
-    input1.push(vec![10]);
+    input1.push(vec![10,-1]);
 
     let mut input2 : Vec<Vec<i64>> = Vec::new();
     input2.push(vec![20]);
@@ -171,7 +167,8 @@ fn mytest1(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     let in1 = builder.var(input1);
     let in2 = builder.var(input2);
 
-    let z = builder.tf_add(in1, in2);
+    // let z = builder.tf_add(in1, in2);
+    let m = builder.tf_abs(in1);
     let spec = builder.finish();
 
     return synthesize(opts, context, &spec, &library);
@@ -194,24 +191,24 @@ fn mytest1(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
   source = 'handwritten task'
 */
 
-/*fn mytest2(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
-    let mut library = Library::brahma_std();
-    let sz = 3;
-    library
-        .components
-        .push(component::const_(if opts.synthesize_constants {
-            None
-        } else {
-            Some(sz)
-        }));
-    let mut builder = ProgramBuilder::new();
-    let in1 = builder.var();
-    let const100 = builder.const_(sz);
-    let _ = builder.tf_add(in1, const100);
-    let spec = builder.finish();
+// fn mytest2(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+//     let mut library = Library::brahma_std();
+//     let mut const1 : Vec<Vec<i64>> = Vec::new();
+//     const1.push(vec![100]);
+//     library
+//         .components
+//         .push(component::const_(const1.clone()));
+//     let mut builder = ProgramBuilder::new();
+//     let mut input1 : Vec<Vec<i64>> = Vec::new();
+//     input1.push(vec![1,2,3]);
 
-    synthesize(opts, context, &spec, &library, sz as u32)
-}
+//     let in1 = builder.var(input1);
+//     let const100 = builder.const_(const1);
+//     let _ = builder.tf_add(in1, const100);
+//     let spec = builder.finish();
+
+//     synthesize(opts, context, &spec, &library)
+// }
 
 /* google_10
   examples = [
@@ -230,16 +227,23 @@ fn mytest1(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
             'simplified slightly')
 */
 
-fn mytest3(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
-    let library = Library::brahma_std();
-    let mut builder = ProgramBuilder::new();
-    let in1 = builder.var();
-    let in2 = builder.var();
-    let _ = builder.tf_boolean_mask(in1, in2);
-    let spec = builder.finish();
+// fn mytest3(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+    // let library = Library::brahma_std();
+    // let mut builder = ProgramBuilder::new();
 
-    synthesize(opts, context, &spec, &library, 6)
-}
+    // let mut input1 : Vec<Vec<i64>> = Vec::new();
+    // input1.push(vec![10, 20, 0, 40, 0, -30]);
+
+    // let mut input2 : Vec<Vec<i64>> = Vec::new();
+    // input2.push(vec![1, 1, 0, 1, 0, 1]);
+
+    // let in1 = builder.var(input1);
+    // let in2 = builder.var(input2);
+    // let _ = builder.tf_boolean_mask(in1, in2);
+    // let spec = builder.finish();
+
+    // synthesize(opts, context, &spec, &library)
+// }
 
 /* simple_cast
   examples = [
@@ -256,15 +260,15 @@ fn mytest3(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
   source = 'handwritten task' 
 */
 
-fn mytest4(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
-    let library = Library::brahma_std();
-    let mut builder = ProgramBuilder::new();
-    let in1 = builder.var();
-    let _ = builder.tf_cast(in1);
-    let spec = builder.finish();
+// fn mytest4(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+//     let library = Library::brahma_std();
+//     let mut builder = ProgramBuilder::new();
+//     let in1 = builder.var();
+//     let _ = builder.tf_cast(in1);
+//     let spec = builder.finish();
 
-    synthesize(opts, context, &spec, &library, 3)
-}
+//     synthesize(opts, context, &spec, &library, 3)
+// }
 
 /* simple_using_primitive_input
   examples = [
@@ -282,7 +286,7 @@ fn mytest4(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
   source = 'handwritten task'
  */
 
- fn mytest5(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+ /*fn mytest5(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     let mut library = Library::brahma_std();
     let sz = 1;
     library
