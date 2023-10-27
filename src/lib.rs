@@ -991,7 +991,7 @@ impl<'a> Synthesizer<'a> {
                 z3::SatResult::Sat => {
                     println!("sat");
                     let model: Option<z3::Model<'_>> = s.get_model();
-                    let mm = vec![n];
+                    let mm = vec![m];
                     let m = eval_bitvecs(&self.context ,&Option::as_ref(&model).unwrap(), &mm);
 
                     println!("model : {:?}", m);
