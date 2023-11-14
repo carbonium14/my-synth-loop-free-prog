@@ -24,7 +24,7 @@ pub enum Operator {
     // // 数组最小值的下标
     // TfArgMin(Id),
     // // 掩码，即如果为1则返回原值，为0则什么也不做
-    // TfBooleanMask(Id, Id),
+    TfBooleanMask(Id, Id),
     // // 类型转换，目前还是原样返回
     // TfCast(Id),
     // // 限制在最大值和最小值之间取值
@@ -95,6 +95,7 @@ impl Operator {
             // | Operator::TfOnesLike(_) 
             // | Operator::TfZerosLike(_) 
             => 1,
+            Operator::TfBooleanMask(_, _) => 2,
             // Operator::TfAdd(_, _)
             // | Operator::TfMul(_, _) 
             // | Operator::TfDiv(_, _) 
@@ -142,6 +143,7 @@ impl Operator {
             // | Operator::TfOnesLike(a) 
             // | Operator::TfZerosLike(a)
              => f(a),
+            Operator::TfBooleanMask(a, b) => {f(a); f(b);},
             // Operator::TfAdd(a, b)
             // | Operator::TfMul(a, b) 
             // | Operator::TfDiv(a, b) 
@@ -195,6 +197,7 @@ impl Operator {
             // | Operator::TfOnesLike(a) 
             // | Operator::TfZerosLike(a) 
             => f(a),
+            Operator::TfBooleanMask(a, b) => {f(a); f(b);},
             // Operator::TfAdd(a, b)
             // | Operator::TfMul(a, b) 
             // | Operator::TfDiv(a, b) 
@@ -240,7 +243,7 @@ impl Display for Operator {
             // Operator::TfDiv(a, b) => write!(f, "TfDiv: {}, {}", a, b),
             // Operator::TfArgMax(a) => write!(f, "TfArgMax: {}", a),
             // Operator::TfArgMin(a) => write!(f, "TfArgMin: {}", a),
-            // Operator::TfBooleanMask(a, b) => write!(f, "TfBooleanMask: {}, {}", a, b),
+            Operator::TfBooleanMask(a, b) => write!(f, "TfBooleanMask: {}, {}", a, b),
             // Operator::TfCast(a) => write!(f, "TfCast: {}", a),
             // Operator::TfClipByValue(a, b, c) => write!(f, "TfClipByValue: {}, {}, {}", a, b, c),
             // Operator::TfConcat(a, b, c) => write!(f, "TfConcat: {}, {}, {}", a, b, c),

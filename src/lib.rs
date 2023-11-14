@@ -21,12 +21,12 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::{self, Display};
 use std::iter::FromIterator;
 use std::ops::Range;
-use std::task::Context;
-use std::thread::sleep;
 use std::time;
 use z3::ast::{Ast, Bool, Float, Int, Array};
 
 const FULL_BIT_WIDTH: u32 = 32;
+
+const DIMSIZE : [usize ; 2] = [4,10];
 
 enum Type<'a> {
     intVar(Int<'a>),
@@ -83,7 +83,7 @@ fn fresh_array(context: &z3::Context, bit_width: u32, dims:[usize; 2], pre_str :
     let array_sort = Sort::array(context, &domain_sort, &range_sort);
 
     let first_dim_sort = Sort::int(&context);
-    let array = Array::fresh_const(&context,  (pre_str.clone() +  "_array") .as_str(), &first_dim_sort, &array_sort);
+    let mut array = Array::fresh_const(&context,  (pre_str.clone() +  "_array") .as_str(), &first_dim_sort, &array_sort);
     
 
     let x = dims[0];
@@ -93,20 +93,29 @@ fn fresh_array(context: &z3::Context, bit_width: u32, dims:[usize; 2], pre_str :
 
         let domain_sort = Sort::int(&context);
         let range_sort = Sort::int(&context);
-        let array_val = Array::fresh_const(context, (pre_str.clone() +  "_array_second:") .as_str(), &domain_sort, &range_sort);
+        let mut array_val = Array::fresh_const(context, (pre_str.clone() +  "_array_second:") .as_str(), &domain_sort, &range_sort);
 
         for j in 0 .. y {
             let index_second_dim = Int::from_i64(context, j as i64);
             let value = Int::fresh_const(context, (pre_str.clone() +  "_array_second_value") .as_str());
-            array_val.store(&index_second_dim, &value);
+            array_val = array_val.store(&index_second_dim, &value);
         }
 
-        array.store(&index_first_dim, &array_val);
-        let m = array.children().len();
-        println!("children : {} {} {}", m, x , y);
+
+        // println!("---------------");
+        // println!("array_val_chilren : {:?}", array_val.children());
+        // println!("---------------");
+
+        array = array.store(&index_first_dim, &array_val);
+        //let m = array.children().len();
+        //println!("children : {} {} {}", m, x , y);
+        // println!("array_chilren : {:?}", array.children());
     }
 
-    let mut result : Vecs<Array<'_>> = Vecs::new(dims, array);
+    //println!("array_chilren : {:?}", array.children());
+    //println!("select 0 {}", array.select(&Int::from_i64(context, 0)));
+
+    let result : Vecs<Array<'_>> = Vecs::new(dims, array);
     return result;
 
 }
@@ -327,7 +336,7 @@ impl Library {
                 // component::tf_add(),
                 // component::tf_mul(),
                 // component::tf_div(),
-                // component::tf_boolean_mask(),
+                component::tf_boolean_mask(),
                 // component::tf_clip_by_value(),
                 // component::tf_equal(),
                 // component::tf_fill(),
@@ -592,7 +601,7 @@ impl Assignments {
                 let imm_arity = c.immediate_arity();
                 let immediates: Vec<_> = immediates.by_ref().take(imm_arity).collect();
 
-                let op_arity = c.operand_arity();
+                let op_arity = c.operand_arity(); 
                 let operands: Vec<_> = params.by_ref().take(op_arity).collect();
                 debug_assert!(operands.iter().all(|op| op.0 < n));
 
@@ -827,13 +836,13 @@ impl<'a> Synthesizer<'a> {
         // 控制dims大于所有可能的size
 
 
-        let dims = [5, 20];
+        let dims = [DIMSIZE[0], DIMSIZE[1]];
 
         let immediates = self.fresh_immediates(bit_width, dims);
         
         //let mut works_for_inputs = Vec::with_capacity(inputs.len() * 4);
         //现在就一组输入直接就是4，用来存储bool们
-        let mut works_for_inputs = Vec::with_capacity(3);
+        let mut works_for_inputs = Vec::with_capacity(4);
 
         
         let params = self.fresh_param_vars(bit_width, dims);
@@ -850,7 +859,7 @@ impl<'a> Synthesizer<'a> {
             let array_sort = Sort::array(self.context, &domain_sort, &range_sort);
     
             let first_dim_sort = Sort::int(&self.context);
-            let array = Array::new_const(&self.context,  "input_array", &first_dim_sort, &array_sort);
+            let mut array = Array::new_const(&self.context,  "input_array", &first_dim_sort, &array_sort);
         
     
             let x = v.dims[0];
@@ -860,19 +869,17 @@ impl<'a> Synthesizer<'a> {
     
                 let domain_sort = Sort::int(&self.context);
                 let range_sort = Sort::int(&self.context);
-                let array_val = Array::new_const(self.context, "input_array_second:", &domain_sort, &range_sort);
+                let mut array_val = Array::new_const(self.context, "input_array_second:", &domain_sort, &range_sort);
     
                 for j in 0 .. y {
                     let index_second_dim = Int::from_i64(self.context, j as i64);
                     let value = Int::from_i64(&self.context, v.vecs[i][j] as i64);
-                    array_val.store(&index_second_dim, &value);
+                    array_val = array_val.store(&index_second_dim, &value);
                 }
     
-                array.store(&index_first_dim, &array_val);
+                array = array.store(&index_first_dim, &array_val);
             }  
-
-
-            let mut temp : Vecs<Array<'_>> = Vecs::new(v.dims, array);
+            let temp : Vecs<Array<'_>> = Vecs::new(v.dims, array);
             //println!("{:?}", temp);
             inputs.push(temp);
         }
@@ -919,92 +926,6 @@ impl<'a> Synthesizer<'a> {
             ]);
 
         trace!("finite synthesis query =\n{:?}", query);
-
-        // ------------------------
-            let m = fresh_immediate(self.context, bit_width, [2,3]);
-
-            let mut in1 : Vec<Vec<i64>> = Vec::new();
-            in1.push(vec![-1,-2,-3]);
-            in1.push(vec![-4,-5,-6]);
-            let mut dims : [usize; 2] = [0, 0];
-            if input.len() != 0 {
-                dims[0] = in1.len();
-                dims[1] = in1[0].len();
-            } 
-
-            let mut v : Vecs<Vec<Vec<i64>>> = Vecs::new(dims, in1);
-
-            let domain_sort = Sort::int(&self.context);
-            let range_sort = Sort::int(&self.context);
-            let array_sort = Sort::array(self.context, &domain_sort, &range_sort);
-    
-            let first_dim_sort = Sort::int(&self.context);
-            let array = Array::new_const(&self.context,  "input_array", &first_dim_sort, &array_sort);
-        
-    
-            let x = v.dims[0];
-            let y = v.dims[1];
-            for i in 0 .. x {
-                let index_first_dim = Int::from_i64(self.context, i as i64);
-    
-                let domain_sort = Sort::int(&self.context);
-                let range_sort = Sort::int(&self.context);
-                let array_val = Array::new_const(self.context, "input_array_second:", &domain_sort, &range_sort);
-    
-                for j in 0 .. y {
-                    let index_second_dim = Int::from_i64(self.context, j as i64);
-                    let value = Int::from_i64(&self.context, v.vecs[i][j] as i64);
-                    array_val.store(&index_second_dim, &value);
-                }
-    
-                array.store(&index_first_dim, &array_val);
-            }
-
-            let n = Vecs::new([2,3], array);
-
-            //let enq = m.vecs._eq(&n.vecs);
-
-            let mut temp = Bool::from_bool(&self.context, true);
-
-                for i in 0..m.dims[0] {
-                    //这里很可能会有问题
-                    //可能可以直接比较array?
-                    let now_x = m.vecs.select(&Int::from_i64(self.context, i as i64)).as_array().unwrap();
-                    let now_y = n.vecs.select(&Int::from_i64(self.context, i as i64)).as_array().unwrap();
-                    for j in 0..m.dims[1] {
-                        let x_value = now_x.select(&Int::from_i64(self.context, j as i64)).as_int();
-                        let y_value = now_y.select(&Int::from_i64(self.context, j as i64)).as_int();
-                        //let temp2 = x_value.unwrap()._eq(&y_value.unwrap());
-                        let temp2 = Bool::from_bool(&self.context, x_value.unwrap().eq(&y_value.unwrap()));
-                        temp = z3::ast::Bool::<'_>::and(self.context, &[&temp, &temp2]);
-                        //temp = temp.and(&[&temp2]);
-
-                    }
-                }
-
-
-            let s = self.solver();
-            s.assert(&temp);
-            match s.check() {
-                z3::SatResult::Unknown => println!("unknown"),
-                z3::SatResult::Unsat => println!("unsat"),
-                z3::SatResult::Sat => {
-                    println!("sat");
-                    let model: Option<z3::Model<'_>> = s.get_model();
-                    let mm = vec![m];
-                    let m = eval_bitvecs(&self.context ,&Option::as_ref(&model).unwrap(), &mm);
-
-                    println!("model : {:?}", m);
-                }
-            }
-
-
-
-
-
-        // ------------------------
-
-
 
 
         let solver = self.solver();
@@ -1136,10 +1057,10 @@ impl<'a> Synthesizer<'a> {
                     let now_x = x.vecs.select(&Int::from_i64(self.context, i as i64)).as_array().unwrap();
                     let now_y = y.vecs.select(&Int::from_i64(self.context, i as i64)).as_array().unwrap();
                     for j in 0..x.dims[1] {
-                        let x_value = now_x.select(&Int::from_i64(self.context, j as i64)).as_int();
-                        let y_value = now_y.select(&Int::from_i64(self.context, j as i64)).as_int();
+                        let x_value = now_x.select(&Int::from_i64(self.context, j as i64)).as_int().unwrap();
+                        let y_value = now_y.select(&Int::from_i64(self.context, j as i64)).as_int().unwrap();
                         //let temp2 = x_value.unwrap()._eq(&y_value.unwrap());
-                        let temp2 = Bool::from_bool(&self.context, x_value == y_value);
+                        let temp2 = x_value._eq(&y_value);
                         temp = z3::ast::Bool::<'_>::and(self.context, &[&temp, &temp2]);
                         //temp = temp.and(&[&temp2]);
 
@@ -1221,10 +1142,10 @@ impl<'a> Synthesizer<'a> {
                 let now_x = expression.vecs.select(&Int::from_i64(self.context, i as i64)).as_array().unwrap();
                 let now_y = result.vecs.select(&Int::from_i64(self.context, i as i64)).as_array().unwrap();
                 for j in 0 .. sz2 {
-                    let x_value = now_x.select(&Int::from_i64(self.context, j as i64)).as_int();
-                    let y_value = now_y.select(&Int::from_i64(self.context, j as i64)).as_int();
+                    let x_value = now_x.select(&Int::from_i64(self.context, j as i64)).as_int().unwrap();
+                    let y_value = now_y.select(&Int::from_i64(self.context, j as i64)).as_int().unwrap();
 
-                    exprs.push(Bool::from_bool(&self.context, x_value == y_value));
+                    exprs.push(x_value._eq(&y_value));
                 }
             }
             // exprs.push(
@@ -1388,7 +1309,7 @@ impl<'a> Synthesizer<'a> {
     ) -> Result<Program> {
         debug!("synthesizing a program of length = {}", program_length);
 
-        let mut bit_width = 64;
+        let bit_width = 64;
 
         //只有一组输入，所以也没有cegis的循环了
         let assignments = self.finite_synthesis(input, program_length - 1, bit_width)?;
@@ -1538,7 +1459,26 @@ impl Specification for Program {
         // println!("output : {:?}", output);
 
         //利用vars和output中的元素相等构成逻辑表达式
-        let temp = vars.vecs._eq(&output.vecs);
+
+        
+        let mut temp = Bool::from_bool(context, true);
+
+        for i in 0..vars.dims[0] {
+            //这里很可能会有问题
+            //可能可以直接比较array?
+            let now_x = vars.vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            let now_y = output.vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            for j in 0..vars.dims[1] {
+                let x_value = now_x.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
+                let y_value = now_y.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
+                //let temp2 = x_value.unwrap()._eq(&y_value.unwrap());
+                let temp2 = x_value._eq(&y_value);
+                temp = z3::ast::Bool::<'_>::and(context, &[&temp, &temp2]);
+                //temp = temp.and(&[&temp2]);
+            }
+        }
+
+
         /*let mut temp: Bool<'_> = vars.vecs[0][0]._eq(&output.vecs[0][0]);
 
         // println!("temp0 : {}", temp);
@@ -1665,3 +1605,108 @@ mod tests {
         println!("{}", p.to_string());
     }
 }*/
+
+/* 
+        // ------------------------
+            // let m = fresh_immediate(self.context, bit_width, [2,3]);
+
+            // let mut in1 : Vec<Vec<i64>> = Vec::new();
+            // in1.push(vec![-1,-2,-3]);
+            // in1.push(vec![-4,-5,-6]);
+            // let mut dims : [usize; 2] = [0, 0];
+            // if input.len() != 0 {
+            //     dims[0] = in1.len();
+            //     dims[1] = in1[0].len();
+            // } 
+
+            // let mut v : Vecs<Vec<Vec<i64>>> = Vecs::new(dims, in1);
+
+            // let domain_sort = Sort::int(&self.context);
+            // let range_sort = Sort::int(&self.context);
+            // let array_sort = Sort::array(self.context, &domain_sort, &range_sort);
+    
+            // let first_dim_sort = Sort::int(&self.context);
+            // let mut array = Array::new_const(&self.context,  "input_array", &first_dim_sort, &array_sort);
+        
+            // //println!("v : {:?}", v);
+
+            // let x = v.dims[0];
+            // let y = v.dims[1];
+            // for i in 0 .. x {
+            //     let index_first_dim = Int::from_i64(self.context, i as i64);
+    
+            //     let domain_sort = Sort::int(&self.context);
+            //     let range_sort = Sort::int(&self.context);
+            //     let mut array_val = Array::new_const(self.context, "input_array_second:", &domain_sort, &range_sort);
+    
+            //     for j in 0 .. y {
+            //         let index_second_dim = Int::from_i64(self.context, j as i64);
+            //         let value = Int::from_i64(&self.context, v.vecs[i][j] as i64);
+            //         array_val = array_val.store(&index_second_dim, &value);
+            //     }
+    
+            //     array = array.store(&index_first_dim, &array_val);
+            // }
+
+            // //println!("array : {:?}", array);
+
+            // let n = Vecs::new([2,3], array);
+
+            // //let enq = m.vecs._eq(&n.vecs);
+
+            // let mut temp = Bool::from_bool(&self.context, true);
+
+            // for i in 0..m.dims[0] {
+            //     //这里很可能会有问题
+            //     //可能可以直接比较array?
+            //     let now_x = m.vecs.select(&Int::from_i64(self.context, i as i64)).as_array().unwrap();
+            //     // println!("nowx : {:?}", now_x);
+            //     let now_y = n.vecs.select(&Int::from_i64(self.context, i as i64)).as_array().unwrap();
+            //     //println!("nowy : {:?}", now_y);
+            //     for j in 0..m.dims[1] {
+            //         let x_value = now_x.select(&Int::from_i64(self.context, j as i64)).as_int();
+            //         let y_value = now_y.select(&Int::from_i64(self.context, j as i64)).as_int();
+            //         //let temp2 = x_value.unwrap()._eq(&y_value.unwrap());
+
+            //         // println!("x {}", x_value.clone().unwrap());
+            //         // println!("y {}", y_value.clone().unwrap());
+            //         // println!("x == y {}", x_value.clone().unwrap()._eq(&y_value.clone().unwrap()));
+
+            //         // let p = Int::from_i64(self.context, 0);
+            //         // let q = Int::from_i64(self.context, 1);
+            //         // println!("p = q {}", p._eq(&q));
+
+            //         // let mm = x_value.clone().eq(&y_value);
+            //         // println!("mm : {}", mm);
+
+            //         let temp2 = x_value.unwrap()._eq(&y_value.unwrap());
+                    
+            //         temp = z3::ast::Bool::<'_>::and(self.context, &[&temp, &temp2]);
+            //         //temp = temp.and(&[&temp2]);
+
+            //         }
+            // }
+
+
+            // let s = self.solver();
+            // s.assert(&temp);
+            // //println!("temp : {}", temp);
+            // match s.check() {
+            //     z3::SatResult::Unknown => println!("unknown"),
+            //     z3::SatResult::Unsat => println!("unsat"),
+            //     z3::SatResult::Sat => {
+            //         println!("sat");
+            //         let model: Option<z3::Model<'_>> = s.get_model();
+            //         let mm = vec![m];
+            //         let m = eval_bitvecs(&self.context ,&Option::as_ref(&model).unwrap(), &mm);
+
+            //         println!("model : {:?}", m);
+            //     }
+            // }
+
+
+
+
+
+        // ------------------------
+*/

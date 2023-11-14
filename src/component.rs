@@ -149,6 +149,7 @@ impl Component for TfAbs {
         operands: &[Vecs<Array<'a>>],
         bit_width: u32,
     ) -> Vecs<Array<'a>> {
+
         //TODO：目前只是二维,对于一维的数组，我们用x[1][m]表示长度为m的一维数组，他的dims = [1,m]
 
         // 取相同长度并且填充为0的数组，作取相反数的结果用
@@ -161,33 +162,146 @@ impl Component for TfAbs {
         let array_sort = Sort::array(context, &domain_sort, &range_sort);
 
         let first_dim_sort = Sort::int(&context);
-        let array = Array::fresh_const(&context,  "abs_array", &first_dim_sort, &array_sort);
+        let mut array = Array::fresh_const(&context,  "abs_array", &first_dim_sort, &array_sort);
     
 
         // 它（for循环）是标准库提供的类型，用来生成从一个数字开始到另一个数字之前结束的所有数字的序列。
         // 所以这里是左闭右开区间
         for i in 0..sz[0] {
             let now_index = Int::from_i64(context, i as i64);
+
             let domain_sort = Sort::int(&context);
             let range_sort = Sort::int(&context);
-            let array_val = Array::fresh_const(context, "abs_array_second:", &domain_sort, &range_sort);
+            let mut array_val = Array::fresh_const(context, "abs_array_second:", &domain_sort, &range_sort);
 
             let now_arr = op_arr.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
             for j in 0..sz[1] {
                 let index = Int::from_i64(context, j as i64);
                 let m: Int<'_> = now_arr.select(&index).as_int().unwrap();
 
-                array_val.store(&index ,&(m.lt(&(const0.clone())).ite(&(const0.clone().sub(&m)), &&m)));
+                array_val = array_val.store(&index ,&(m.lt(&const0).ite(&(const0.clone().sub(&m)), &m)));
             } 
-            array.store(&now_index, &array_val);
+            array = array.store(&now_index, &array_val);
         }
-        let mut result: Vecs<Array> = Vecs::new(operands[0].dims, array);
+        let result: Vecs<Array> = Vecs::new(operands[0].dims, array);
         return result;
     }
 }
 
 pub fn tf_abs() -> Box<dyn Component> {
     Box::new(TfAbs) as _
+}
+
+#[derive(Debug)]
+struct TfBooleanMask;
+
+impl Component for TfBooleanMask {
+    fn operand_arity(&self) -> usize {
+        2
+    }
+
+    fn make_operator(&self, _immediates: &Vec<Vecs<Vec<Vec<i64>>>>, operands: &[Id]) -> Operator {
+        Operator::TfBooleanMask(operands[0], operands[1])
+    }
+
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vecs<Array<'a>>],
+        operands: &[Vecs<Array<'a>>],
+        bit_width: u32,
+    ) -> Vecs<Array<'a>> {
+        // 获取两个输入的长度，等长后进行后续操作
+        // mask（也就是第二个参数）的维度可以是和数入数组等维度，也可以是维度少一维
+        let size0 = operands[0].dims;
+        let size1 = operands[1].dims;
+
+        // 填充物，如果掩码部分不是1，那么就返回0
+        let const0 = zero(context, bit_width);
+        let const1 = one(context, bit_width);
+        let const_mins_1 = Int::from_i64(context, -1);
+        //let const_min = min_int(context, bit_width);
+        // 保证两个长度相等，否则报错
+
+        let domain_sort = Sort::int(&context);
+        let range_sort = Sort::int(&context);
+        let array_sort = Sort::array(context, &domain_sort, &range_sort);
+
+        let first_dim_sort = Sort::int(&context);
+        let mut array = Array::fresh_const(&context,  "boolean_mask_array", &first_dim_sort, &array_sort);
+
+        //println!("{}", size1[0]);
+
+        if(size1[0] != 1){
+            //这里是，mask和参数1的维度要完全一样
+            //因为目前是采用的扩展数组的方法，因此size1[0]一定不为1，
+            for i in 0 .. size0[0] {
+                let mut index_result = Int::from_i64(context, 0);
+
+                let operand_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+                let mask_value = operands[1].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+
+                let domain_sort = Sort::int(&context);
+                let range_sort = Sort::int(&context);
+                let mut array_val = Array::fresh_const(context, "boolean_mask_array_second:", &domain_sort, &range_sort);
+
+                for j in 0 .. size0[1] {
+                    let mask_value_i_j = mask_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
+                    let operand_i_j = operand_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
+                
+                    //temp_index是指需要将元素存入的位置，如果mask是1，那么存入到index_result处，如果mask是0，存入到-1处
+                    let temp_index = mask_value_i_j._eq(&const0).ite(&const_mins_1, &index_result);
+                    // let temp_index = mask_value_i_j._eq(&const1).ite(&index_result, &const_mins_1);
+                    array_val = array_val.store(&temp_index, &operand_i_j);
+
+                    //更新index_result的值
+                    index_result = temp_index._eq(&const_mins_1).ite(&index_result, &(Int::add(context, &[&index_result, &const1])))
+                }
+                array = array.store(&Int::from_i64(context, i as i64), &array_val);
+            }
+        } else { 
+            //代表result中的index
+            let mut index_result = Int::from_i64(context, 0); 
+
+            let mask_value = operands[1].vecs.select(&Int::from_i64(context, 0)).as_array().unwrap();
+
+            for i in 0 .. size1[1] {
+                //如果mask[0][i]的值为1，那么operands0[i][0]...operands[i][last]都存在，整个维度是需要被写入到result_array中的
+                let domain_sort = Sort::int(&context);
+                let range_sort = Sort::int(&context);
+                let mut array_val = Array::fresh_const(context, "boolean_mask_array_second:", &domain_sort, &range_sort);
+
+                let operand0_i_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+
+                //存储operands[0]中i维度的所有值到array_val中
+                for j in 0 .. size0[1] {
+                    let index = Int::from_i64(context, j as i64);
+                    let value = operand0_i_value.select(&index).as_int().unwrap();
+                    array_val = array_val.store(&index, &value);
+                }
+
+                let mask_index = Int::from_i64(context, i as i64);
+                let now_mask_value = mask_value.select(&mask_index).as_int().unwrap();
+
+                //temp_index是指需要将元素存入的位置，如果mask是1，那么存入到index_result处，如果mask是0，存入到-1处
+                let temp_index = now_mask_value._eq(&const1).ite(&index_result, &const_mins_1);
+                array = array.store(&temp_index, &array_val);
+
+                //更新index_result
+                index_result = temp_index._eq(&const_mins_1).ite(&index_result, &(Int::add(context, &[&index_result, &const1])))
+            }
+
+        }
+
+        let result = Vecs::new(size0, array);
+        //println!("result : {:?}", result.vecs);
+
+        return result;
+    }
+}
+
+pub fn tf_boolean_mask() -> Box<dyn Component> {
+    Box::new(TfBooleanMask) as _
 }
 
 /*#[derive(Debug)]
@@ -209,6 +323,15 @@ impl Component for TfAdd {
         operands: &[Vecs<Int<'a>>],
         _bit_width: u32,
     ) -> Vecs<Int<'a>> {
+
+        1 ast
+        2 
+        3
+        4
+
+    vec<Int>
+    
+
         // 获取两个输入的长度
         let size0 = operands[0].dims;
         let size1 = operands[1].dims;
@@ -677,121 +800,8 @@ pub fn tf_argmin() -> Box<dyn Component> {
     Box::new(TfArgMin) as _
 }
 
-#[derive(Debug)]
-struct TfBooleanMask;
-
-impl Component for TfBooleanMask {
-    fn operand_arity(&self) -> usize {
-        2
-    }
-
-    fn make_operator(&self, _immediates: &Vec<Vecs<i64>>, operands: &[Id]) -> Operator {
-        Operator::TfBooleanMask(operands[0], operands[1])
-    }
-
-    fn make_expression<'a>(
-        &self,
-        context: &'a z3::Context,
-        _immediates: &[Vecs<Int<'a>>],
-        operands: &[Vecs<Int<'a>>],
-        bit_width: u32,
-    ) -> Vecs<Int<'a>> {
-        // 获取两个输入的长度，等长后进行后续操作
-        // mask（也就是第二个参数）的维度可以是和数入数组等维度，也可以是维度少一维
-        let size0 = operands[0].dims;
-        let size1 = operands[1].dims;
-        let mut result: Vecs<Int> = Vecs::new(size0);
-
-        //println!("{:?}", size1);
-        
-        //-----------------
-        for i in 0 .. size0[0] {
-            for j in 0 .. size0[1] {
-                result.vecs[i].push(operands[0].vecs[i][j].clone());
-            }
-        }
-
-        //-----------------
 
 
-        // 填充物，如果掩码部分不是1，那么就返回0
-        let const0 = zero(context, bit_width);
-        let const1 = one(context, bit_width);
-        //let const_min = min_int(context, bit_width);
-        // 保证两个长度相等，否则报错
-        for i in 0..size0[0] {
-            for j in 0..size0[1] {
-                // 掩码是二维数组，那就依次遍历
-                if size1[0] != 1 {
-                    //如果掩码为1，则返回，如果掩码为0，则不返回
-                    let ans = operands[1].vecs[i][j]._eq(&one(context, bit_width)).ite(&operands[0].vecs[i][j], &const0);
-                    // 注意，为0的部分不要加入到数组里面
-                    if ans.as_i64() != const0.as_i64() {
-                        result.vecs[i].push(ans);
-                    }
-                // 掩码是一维数组，那就一维数组里面每个元素对应输入的第一维度
-                } else {
-                    //println!("operands[1].vecs[0][j] : {}", operands[1].vecs[0][j]);
-                    //println!("one : {}", one(context, bit_width));
-
-                    // let mut index = 0;
-
-                    // let nextIndex = operands[1].vecs[0][j]._eq(&const1).ite(&index, &index);
-
-                    //println!("const0_as64 : {}", const0.as_i64().unwrap());
-
-                    let ans = operands[1].vecs[0][j]._eq(&one(context, bit_width)).ite(&operands[0].vecs[i][j], &const0);
-
-                    // println!("ans : {}", ans);
-                    // println!("ans_as64 : {:?}", ans.as_i64());
-                    // println!("ans_as64 : {}", ans.as_i64().unwrap());
-
-                    
-                    
-                    if ans.as_i64() != const0.as_i64() {
-                        result.vecs[i].push(ans);
-                    }
-
-
-                    // let x = ans._eq(&const0);
-                    // println!("{:?}", x.as_bool());
-
-                    // if ans._eq(&const0).as_bool().unwrap() {
-                    //     result.vecs[i].push(ans);
-
-                    // }
-
-                    let bool_sort = Sort::bool(&context);
-                    let int_sort = Sort::int(&context);
-                    let array = Array::fresh_const(&context, "array:", &int_sort, &bool_sort);
-                    let index = Int::fresh_const(context, "input_key");
-                    let val = Bool::fresh_const(context, "input_val");
-                    let y = array.select(&index);
-                    array.store(&index, &val);
-                    
-                    //let arr = Array::fresh_const(context, "array_input", &key.unwrap(), &val.unwrap());
-
-                    println!("{}", y);
-
-                    
-
-
-
-
-                    // println!("operands[1] : {}", operands[1].vecs[0][j]);
-                    // result.vecs[i].push(operands[1].vecs[0][j]._eq(&one(context, bit_width)).ite(&operands[0].vecs[i][j], &const_min));
-                }
-            }
-        }
-
-        println!("result : {:?}", result.vecs);
-        return result;
-    }
-}
-
-pub fn tf_boolean_mask() -> Box<dyn Component> {
-    Box::new(TfBooleanMask) as _
-}
 
 #[derive(Debug)]
 struct TfCast;
@@ -2512,10 +2522,10 @@ macro_rules! with_operator_component {
             //     let $c = TfArgMin;
             //     $body
             // }
-            // Operator::TfBooleanMask(_, _) => {
-            //     let $c = TfBooleanMask;
-            //     $body
-            // }
+            Operator::TfBooleanMask(_, _) => {
+                let $c = TfBooleanMask;
+                $body
+            }
             // Operator::TfCast(_) => {
             //     let $c = TfCast;
             //     $body
