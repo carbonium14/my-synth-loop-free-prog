@@ -1,5 +1,7 @@
 use crate::{Id, Instruction, Operator, Program, Vecs};
 
+const DIMSIZE : [usize ; 2] = [4,10];
+
 #[derive(Debug)]
 pub struct ProgramBuilder {
     program: Program,
@@ -41,14 +43,45 @@ impl ProgramBuilder {
         //println!("{:?}", input);
         //将输入存入program中
         let mut dims : [usize; 2] = [0, 0];
-        if input.len() != 0 {
-           dims[0] = input.len();
-           dims[1] = input[0].len();
+        if input.len() == 0 {
+            //to_asignment()函数调用
+            let input_vecs : Vecs<Vec<Vec<i64>>> = Vecs::new(dims, input);
+            self.program.inputs.push(input_vecs);
+            
+        } else {
+            // dims[0] = input.len();
+            // dims[1] = input[0].len();
+            // let input_vecs : Vecs<Vec<Vec<i64>>> = Vecs::new(dims, input);
+            // self.program.inputs.push(input_vecs);
+
+            // 对输入数组进行填充，多余的部分直接使用0填充成[DIMSSIZE0][DIMSSIZE1]的数组
+            // [初始值 ； 出现次数]
+            dims[0] = input.len();
+            dims[1] = input[0].len();
+
+            let mut arr : Vec<Vec<i64>> = Vec::new();
+            for _i in 0 .. DIMSIZE[0] {
+                let mut temp : Vec<i64>= Vec::new();
+                for _j in 0 .. DIMSIZE[1] {
+                    temp.push(0);
+                }
+                arr.push(temp);
+            }
+            for i in 0 .. input.len() {
+                for j in 0 .. input[0].len() {
+                    arr[i][j] = input[i][j];
+                }
+            }
+            let input_vecs : Vecs<Vec<Vec<i64>>> = Vecs::new(dims, arr);
+
+            //println!("{:?}", input_vecs);
+            self.program.inputs.push(input_vecs);
+
         }
-        let mut input_vecs : Vecs<i64> = Vecs::new(dims);
-        input_vecs.vecs = input;
-        self.program.inputs.push(input_vecs);
+
         result
+        
+        
     }
 
     /*pub fn vecs(&mut self, c: u64) -> Id {
@@ -68,14 +101,14 @@ impl ProgramBuilder {
         result
     }*/
 
-    pub fn const_(&mut self, c: [usize; 2]) -> Id {
-        let result = self.next_id();
-        self.program.instructions.push(Instruction {
-            result,
-            operator: Operator::Const(c),
-        });
-        result
-    }
+    // pub fn const_(&mut self, c: Vec<Vec<i64>>) -> Id {
+    //     let result = self.next_id();
+    //     self.program.instructions.push(Instruction {
+    //         result,
+    //         operator: Operator::Const(c),
+    //     });
+    //     result
+    // }
 
     pub fn tf_abs(&mut self, a: Id) -> Id {
         let result = self.next_id();
@@ -86,14 +119,14 @@ impl ProgramBuilder {
         result
     }
 
-    pub fn tf_add(&mut self, a: Id, b: Id) -> Id {
-        let result = self.next_id();
-        self.program.instructions.push(Instruction {
-            result,
-            operator: Operator::TfAdd(a, b),
-        });
-        result
-    }
+    // pub fn tf_add(&mut self, a: Id, b: Id) -> Id {
+    //     let result = self.next_id();
+    //     self.program.instructions.push(Instruction {
+    //         result,
+    //         operator: Operator::TfAdd(a, b),
+    //     });
+    //     result
+    // }
 
     // pub fn tf_mul(&mut self, a: Id, b: Id) -> Id {
     //     let result = self.next_id();
@@ -131,14 +164,14 @@ impl ProgramBuilder {
     //     result
     // }
 
-    // pub fn tf_boolean_mask(&mut self, a: Id, b: Id) -> Id {
-    //     let result = self.next_id();
-    //     self.program.instructions.push(Instruction {
-    //         result,
-    //         operator: Operator::TfBooleanMask(a, b),
-    //     });
-    //     result
-    // }
+    pub fn tf_boolean_mask(&mut self, a: Id, b: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfBooleanMask(a, b),
+        });
+        result
+    }
 
     // pub fn tf_cast(&mut self, a: Id) -> Id {
     //     let result = self.next_id();
@@ -167,14 +200,14 @@ impl ProgramBuilder {
     //     result
     // }
 
-    pub fn tf_eye(&mut self, a: Id, b: Id) -> Id {
-        let result = self.next_id();
-        self.program.instructions.push(Instruction {
-            result,
-            operator: Operator::TfEye(a, b),
-        });
-        result
-    }
+    // pub fn tf_eye(&mut self, a: Id, b: Id) -> Id {
+    //     let result = self.next_id();
+    //     self.program.instructions.push(Instruction {
+    //         result,
+    //         operator: Operator::TfEye(a, b),
+    //     });
+    //     result
+    // }
 
     // pub fn tf_fill(&mut self, a: Id, b: Id) -> Id {
     //     let result = self.next_id();
@@ -230,14 +263,14 @@ impl ProgramBuilder {
     //     result
     // }
 
-    pub fn tf_bincount(&mut self, a: Id, b: Id, c: Id, d: Id) -> Id {
-        let result = self.next_id();
-        self.program.instructions.push(Instruction {
-            result,
-            operator: Operator::TfBincount(a, b, c, d),
-        });
-        result
-    }
+    // pub fn tf_bincount(&mut self, a: Id, b: Id, c: Id, d: Id) -> Id {
+    //     let result = self.next_id();
+    //     self.program.instructions.push(Instruction {
+    //         result,
+    //         operator: Operator::TfBincount(a, b, c, d),
+    //     });
+    //     result
+    // }
 
 
 
