@@ -5,6 +5,11 @@ use z3::ast::{Ast, Int, Array, Bool};
 
 use z3::Sort;
 
+const DIMSIZE : [usize ; 2] = [4,10];
+const SIZE_STORE_INDEX : i64 = -2;
+const SIZE_X : i64 = 0;
+const SIZE_Y : i64 = 1;
+
 // macro_rules! vecnd {
 //     ($([$($inner:tt)*]),+ $(,)?) => {
 //         vec![$(
@@ -154,7 +159,6 @@ impl Component for TfAbs {
 
         // 取相同长度并且填充为0的数组，作取相反数的结果用
         let const0 = zero(context, bit_width);
-        let sz = operands[0].dims;
         let op_arr = &operands[0].vecs;
         
         let domain_sort = Sort::int(&context);
@@ -167,7 +171,7 @@ impl Component for TfAbs {
 
         // 它（for循环）是标准库提供的类型，用来生成从一个数字开始到另一个数字之前结束的所有数字的序列。
         // 所以这里是左闭右开区间
-        for i in 0..sz[0] {
+        for i in 0..DIMSIZE[0] {
             let now_index = Int::from_i64(context, i as i64);
 
             let domain_sort = Sort::int(&context);
@@ -175,7 +179,7 @@ impl Component for TfAbs {
             let mut array_val = Array::fresh_const(context, "abs_array_second:", &domain_sort, &range_sort);
 
             let now_arr = op_arr.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
-            for j in 0..sz[1] {
+            for j in 0..DIMSIZE[1] {
                 let index = Int::from_i64(context, j as i64);
                 let m: Int<'_> = now_arr.select(&index).as_int().unwrap();
 
@@ -183,6 +187,11 @@ impl Component for TfAbs {
             } 
             array = array.store(&now_index, &array_val);
         }
+
+        //abs对于数组的维度不会产生变化，直接获取即可
+        let size_info = operands[0].vecs.select(&Int::from_i64(&context, SIZE_STORE_INDEX)).as_array().unwrap();
+        array = array.store(&Int::from_i64(&context, SIZE_STORE_INDEX), &size_info);
+
         let result: Vecs<Array> = Vecs::new(operands[0].dims, array);
         return result;
     }
@@ -213,9 +222,6 @@ impl Component for TfBooleanMask {
     ) -> Vecs<Array<'a>> {
         // 获取两个输入的长度，等长后进行后续操作
         // mask（也就是第二个参数）的维度可以是和数入数组等维度，也可以是维度少一维
-        let size0 = operands[0].dims;
-        let size1 = operands[1].dims;
-
         // 填充物，如果掩码部分不是1，那么就返回0
         let const0 = zero(context, bit_width);
         let const1 = one(context, bit_width);
@@ -232,70 +238,65 @@ impl Component for TfBooleanMask {
 
         //println!("{}", size1[0]);
 
-        if(size1[0] != 1){
-            //这里是，mask和参数1的维度要完全一样
-            //因为目前是采用的扩展数组的方法，因此size1[0]一定不为1，
-            for i in 0 .. size0[0] {
-                let mut index_result = Int::from_i64(context, 0);
+        //先把mask的size取出来
+        let size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let value_size =  operands[0].vecs.select(&size_index).as_array().unwrap();
+        let value_size_x = value_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
+        let mask_size = operands[1].vecs.select(&size_index).as_array().unwrap();
+        let mask_size_x = mask_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
+        let mask_size_y = mask_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
 
-                let operand_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
-                let mask_value = operands[1].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+        //result的size
+        let mut result_size_x = value_size_x.clone();
+        let mut result_size_y = const0.clone();
 
-                let domain_sort = Sort::int(&context);
-                let range_sort = Sort::int(&context);
-                let mut array_val = Array::fresh_const(context, "boolean_mask_array_second:", &domain_sort, &range_sort);
+        //to value是1*多少的数组，mask也是1*多少的数组
 
-                for j in 0 .. size0[1] {
-                    let mask_value_i_j = mask_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                    let operand_i_j = operand_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
+        let mask_value_0 = operands[1].vecs.select(&Int::from_i64(context, 0 as i64)).as_array().unwrap();
+
+        for i in 0 .. DIMSIZE[0]{
+            let mut index_result = Int::from_i64(context, 0);
+
+            let operand_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            let mask_value = operands[1].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+
+            let domain_sort = Sort::int(&context);
+            let range_sort = Sort::int(&context);
+            let mut array_val = Array::fresh_const(context, "boolean_mask_array_second:", &domain_sort, &range_sort);
+
+            let mask_value_0_i = mask_value_0.select(&Int::from_i64(context, i as i64)).as_int().unwrap();
+
+            for j in 0 .. DIMSIZE[1] {
+                //对于操作数的[i][j]
+                let mask_value_i_j = mask_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
+                let operand_i_j = operand_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();                
+
+                //采用mask_value_0_i的情况：mask_size_x == 1 and value_size_x > 1
                 
-                    //temp_index是指需要将元素存入的位置，如果mask是1，那么存入到index_result处，如果mask是0，存入到-1处
-                    let temp_index = mask_value_i_j._eq(&const0).ite(&const_mins_1, &index_result);
-                    // let temp_index = mask_value_i_j._eq(&const1).ite(&index_result, &const_mins_1);
-                    array_val = array_val.store(&temp_index, &operand_i_j);
-
-                    //更新index_result的值
-                    index_result = temp_index._eq(&const_mins_1).ite(&index_result, &(Int::add(context, &[&index_result, &const1])))
-                }
-                array = array.store(&Int::from_i64(context, i as i64), &array_val);
+                let mask_judge = Bool::and(&context, &[&mask_size_x._eq(&const1), &value_size_x.gt(&const1)]).ite(&mask_value_0_i, &mask_value_i_j);
+                let temp_index = mask_judge._eq(&const0).ite(&const_mins_1, &index_result);
+               
+                array_val = array_val.store(&temp_index, &operand_i_j); 
+                
+                index_result = temp_index._eq(&const_mins_1).ite(&index_result, &(Int::add(context, &[&index_result, &const1])));
             }
-        } else { 
-            //代表result中的index
-            let mut index_result = Int::from_i64(context, 0); 
+            result_size_y = index_result.clone();
+            result_size_x = index_result._eq(&const0).ite(&(Int::sub(context, &[&result_size_x, &const1])), &result_size_x);
 
-            let mask_value = operands[1].vecs.select(&Int::from_i64(context, 0)).as_array().unwrap();
-
-            for i in 0 .. size1[1] {
-                //如果mask[0][i]的值为1，那么operands0[i][0]...operands[i][last]都存在，整个维度是需要被写入到result_array中的
-                let domain_sort = Sort::int(&context);
-                let range_sort = Sort::int(&context);
-                let mut array_val = Array::fresh_const(context, "boolean_mask_array_second:", &domain_sort, &range_sort);
-
-                let operand0_i_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
-
-                //存储operands[0]中i维度的所有值到array_val中
-                for j in 0 .. size0[1] {
-                    let index = Int::from_i64(context, j as i64);
-                    let value = operand0_i_value.select(&index).as_int().unwrap();
-                    array_val = array_val.store(&index, &value);
-                }
-
-                let mask_index = Int::from_i64(context, i as i64);
-                let now_mask_value = mask_value.select(&mask_index).as_int().unwrap();
-
-                //temp_index是指需要将元素存入的位置，如果mask是1，那么存入到index_result处，如果mask是0，存入到-1处
-                let temp_index = now_mask_value._eq(&const1).ite(&index_result, &const_mins_1);
-                array = array.store(&temp_index, &array_val);
-
-                //更新index_result
-                index_result = temp_index._eq(&const_mins_1).ite(&index_result, &(Int::add(context, &[&index_result, &const1])))
-            }
-
+            array = array.store(&Int::from_i64(context, i as i64), &array_val);
         }
 
-        let result = Vecs::new(size0, array);
-        //println!("result : {:?}", result.vecs);
+        //将真实size存入
+        let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let domain_sort = Sort::int(&context);
+        let range_sort = Sort::int(&context);
+        let mut array_val = Array::fresh_const(&context, "array_size:", &domain_sort, &range_sort);
+        array_val = array_val.store(&Int::from_i64(&context, SIZE_X), &result_size_x);
+        array_val = array_val.store(&Int::from_i64(&context, SIZE_Y), &result_size_y);
+        array = array.store(&array_size_index, &array_val);
 
+        let result = Vecs::new(operands[0].dims, array);
+        //println!("result : {:?}", result.vecs);
         return result;
     }
 }

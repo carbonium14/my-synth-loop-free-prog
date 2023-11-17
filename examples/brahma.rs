@@ -171,7 +171,7 @@ fn mytest1(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     let m = builder.tf_abs(in2);
     let spec = builder.finish();
 
-    return synthesize(opts, context, &spec, &library);
+    return synthesize(opts, context, &spec, &library); 
 }
 
 // TODO：严格来说应该是const的长度和值都要定义，但是这里默认长度就是值，看看后续能不能改
@@ -232,8 +232,9 @@ fn mytest3(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     let mut builder = ProgramBuilder::new();
 
     let mut input1 : Vec<Vec<i64>> = Vec::new();
-    input1.push(vec![10, 20, 1, 40, 3, -30]);
+    input1.push(vec![10, 20, 0, 40, 0, 30]);
 
+ 
     let mut input2 : Vec<Vec<i64>> = Vec::new();
     input2.push(vec![1, 1, 0, 1, 0, 1]);
 

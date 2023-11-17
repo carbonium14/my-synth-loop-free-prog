@@ -27,6 +27,9 @@ use z3::ast::{Ast, Bool, Float, Int, Array};
 const FULL_BIT_WIDTH: u32 = 32;
 
 const DIMSIZE : [usize ; 2] = [4,10];
+const SIZE_STORE_INDEX : i64 = -2;
+const SIZE_X : i64 = 0;
+const SIZE_Y : i64 = 1;
 
 enum Type<'a> {
     intVar(Int<'a>),
@@ -112,6 +115,16 @@ fn fresh_array(context: &z3::Context, bit_width: u32, dims:[usize; 2], pre_str :
         // println!("array_chilren : {:?}", array.children());
     }
 
+    //将真实size存入
+    let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+    let domain_sort = Sort::int(&context);
+    let range_sort = Sort::int(&context);
+    let mut array_val = Array::fresh_const(&context, "array_size:", &domain_sort, &range_sort);
+    array_val = array_val.store(&Int::from_i64(&context, SIZE_X), &Int::from_i64(&context, dims[0] as i64));
+    array_val = array_val.store(&Int::from_i64(&context, SIZE_Y), &Int::from_i64(&context, dims[1] as i64));
+    array = array.store(&array_size_index, &array_val);
+
+
     //println!("array_chilren : {:?}", array.children());
     //println!("select 0 {}", array.select(&Int::from_i64(context, 0)));
 
@@ -164,18 +177,18 @@ where
     for v in arrs.into_iter() {
         let mut vs : Vec<Vec<i64>>  = Vec::new();
        
-        for i in 0 .. v.dims[0] {
+        for i in 0 .. DIMSIZE[0] {
             let mut v_in : Vec<i64> = Vec::new();
 
             let index_first = Int::from_i64(&context, i as i64);
-            let mut array_val = v.vecs.select(&index_first).as_array().unwrap();
+            let array_val = v.vecs.select(&index_first).as_array().unwrap();
 
-            for j in 0 .. v.dims[1] {
+            for j in 0 .. DIMSIZE[1] {
                 v_in.push(eval_int(model, &array_val.select(&Int::from_i64(&context, j as i64)).as_int().unwrap()));
             }
             vs.push(v_in);
         }
-        let mut temp : Vecs<Vec<Vec<i64>>> = Vecs::new(v.dims, vs);
+        let temp : Vecs<Vec<Vec<i64>>> = Vecs::new(v.dims, vs);
         result.push(temp);
     }
     return result;
@@ -862,8 +875,8 @@ impl<'a> Synthesizer<'a> {
             let mut array = Array::new_const(&self.context,  "input_array", &first_dim_sort, &array_sort);
         
     
-            let x = v.dims[0];
-            let y = v.dims[1];
+            let x = DIMSIZE[0];
+            let y = DIMSIZE[1];
             for i in 0 .. x {
                 let index_first_dim = Int::from_i64(self.context, i as i64);
     
@@ -878,7 +891,17 @@ impl<'a> Synthesizer<'a> {
                 }
     
                 array = array.store(&index_first_dim, &array_val);
-            }  
+            }
+
+            //将真实size存入
+            let array_size_index = Int::from_i64(&self.context, SIZE_STORE_INDEX);
+            let domain_sort = Sort::int(&self.context);
+            let range_sort = Sort::int(&self.context);
+            let mut array_val = Array::fresh_const(&self.context, "array_size:", &domain_sort, &range_sort);
+            array_val = array_val.store(&Int::from_i64(&self.context, SIZE_X), &Int::from_i64(&self.context, dims[0] as i64));
+            array_val = array_val.store(&Int::from_i64(&self.context, SIZE_Y), &Int::from_i64(&self.context, dims[1] as i64));
+            array = array.store(&array_size_index, &array_val);
+
             let temp : Vecs<Array<'_>> = Vecs::new(v.dims, array);
             //println!("{:?}", temp);
             inputs.push(temp);
@@ -1040,10 +1063,10 @@ impl<'a> Synthesizer<'a> {
                     continue;
                 }
 
-                if x.dims[1] == 0 || y.dims[1] == 0  {
-                    //特别为const设立，因为它没有输入参数
-                    continue;
-                }
+                // if x.dims[1] == 0 || y.dims[1] == 0  {
+                //     //特别为const设立，因为它没有输入参数
+                //     continue;
+                // }
                 
                 // let m = x.vecs.children().len();
                 // println!("children : {}", m);
@@ -1051,12 +1074,12 @@ impl<'a> Synthesizer<'a> {
                 //这边默认x和y的len相等
                 //判断类型为Vecs<Array<'_>>的x和y中的元素相等关系
                 let mut temp = Bool::from_bool(&self.context, true);
-                for i in 0..x.dims[0] {
+                for i in 0..DIMSIZE[0] {
                     //这里很可能会有问题
                     //可能可以直接比较array?
                     let now_x = x.vecs.select(&Int::from_i64(self.context, i as i64)).as_array().unwrap();
                     let now_y = y.vecs.select(&Int::from_i64(self.context, i as i64)).as_array().unwrap();
-                    for j in 0..x.dims[1] {
+                    for j in 0..DIMSIZE[1] {
                         let x_value = now_x.select(&Int::from_i64(self.context, j as i64)).as_int().unwrap();
                         let y_value = now_y.select(&Int::from_i64(self.context, j as i64)).as_int().unwrap();
                         //let temp2 = x_value.unwrap()._eq(&y_value.unwrap());
@@ -1135,8 +1158,8 @@ impl<'a> Synthesizer<'a> {
 
             let expression = c.make_expression(self.context, imms, inputs, bit_width);
 
-            let sz1 = expression.dims[0];
-            let sz2 = expression.dims[1];
+            let sz1 = DIMSIZE[0];
+            let sz2 = DIMSIZE[1];
 
             for i in 0..sz1 {
                 let now_x = expression.vecs.select(&Int::from_i64(self.context, i as i64)).as_array().unwrap();
@@ -1463,12 +1486,12 @@ impl Specification for Program {
         
         let mut temp = Bool::from_bool(context, true);
 
-        for i in 0..vars.dims[0] {
+        for i in 0..DIMSIZE[0] {
             //这里很可能会有问题
             //可能可以直接比较array?
             let now_x = vars.vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
             let now_y = output.vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
-            for j in 0..vars.dims[1] {
+            for j in 0..DIMSIZE[1] {
                 let x_value = now_x.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
                 let y_value = now_y.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
                 //let temp2 = x_value.unwrap()._eq(&y_value.unwrap());

@@ -56,13 +56,13 @@ impl ProgramBuilder {
 
             // 对输入数组进行填充，多余的部分直接使用0填充成[DIMSSIZE0][DIMSSIZE1]的数组
             // [初始值 ； 出现次数]
-            dims[0] = DIMSIZE[0];
-            dims[1] = DIMSIZE[1];
+            dims[0] = input.len();
+            dims[1] = input[0].len();
 
             let mut arr : Vec<Vec<i64>> = Vec::new();
-            for _i in 0 .. dims[0] {
+            for _i in 0 .. DIMSIZE[0] {
                 let mut temp : Vec<i64>= Vec::new();
-                for _j in 0 .. dims[1] {
+                for _j in 0 .. DIMSIZE[1] {
                     temp.push(0);
                 }
                 arr.push(temp);
