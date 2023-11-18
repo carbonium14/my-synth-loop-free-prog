@@ -87,8 +87,8 @@ struct Options {
     /// Should constants be given or synthesized? It isn't always clear which
     /// they did in the paper, and sort seems like they did a mix depending on
     /// the benchmark problem.
-    #[structopt(short = "c", long = "synthesize-constants")]
-    synthesize_constants: bool,
+    // #[structopt(short = "c", long = "synthesize-constants")]
+    // synthesize_constants: bool,
 
     /// When supplied, run only these problems instead of all problems.
     #[structopt(last = true)]
@@ -165,10 +165,10 @@ fn mytest1(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     input2.push(vec![20]);    
 
     let in1 = builder.var(input1);
-    let in2 = builder.var(input2);
+    let _in2 = builder.var(input2);
 
     // let z = builder.tf_add(in1, in2);
-    let m = builder.tf_abs(in2);
+    let _ = builder.tf_abs(in1);
     let spec = builder.finish();
 
     return synthesize(opts, context, &spec, &library); 

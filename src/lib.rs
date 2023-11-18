@@ -22,19 +22,19 @@ use std::fmt::{self, Display};
 use std::iter::FromIterator;
 use std::ops::Range;
 use std::time;
-use z3::ast::{Ast, Bool, Float, Int, Array};
+use z3::ast::{Ast, Bool, Int, Array};
 
-const FULL_BIT_WIDTH: u32 = 32;
+// const FULL_BIT_WIDTH: u32 = 32;
 
 const DIMSIZE : [usize ; 2] = [4,10];
 const SIZE_STORE_INDEX : i64 = -2;
 const SIZE_X : i64 = 0;
 const SIZE_Y : i64 = 1;
 
-enum Type<'a> {
-    intVar(Int<'a>),
-    floatVar(Float<'a>)
-}
+// enum Type<'a> {
+//     intVar(Int<'a>),
+//     floatVar(Float<'a>)
+// }
 //可以用match判断是哪一种type
 
 
@@ -49,7 +49,7 @@ where
     &(z3::ast::Bool::<'a>::and(&context, &exprs))]);
 }
 
-fn or<'a, 'b>(context: &'a z3::Context, exprs: impl IntoIterator<Item = &'b Bool<'a>>) -> Bool<'a>
+fn _or<'a, 'b>(context: &'a z3::Context, exprs: impl IntoIterator<Item = &'b Bool<'a>>) -> Bool<'a>
 where
     'a: 'b,
 {
@@ -70,14 +70,14 @@ pub struct Vecs<T>{
 
 impl<T> Vecs<T>{
     pub fn new(_dims: [usize ; 2], _vecs : T) -> Self {
-        let sz = _dims.len();
-        let mut vecs : T = _vecs;
-        let mut dims = _dims;
+        // let sz = _dims.len();
+        let vecs : T = _vecs;
+        let dims = _dims;
         return Vecs{dims, vecs};
     }   
 }
 
-fn fresh_array(context: &z3::Context, bit_width: u32, dims:[usize; 2], pre_str : String) -> Vecs<Array<'_>> {
+fn fresh_array(context: &z3::Context, _bit_width: u32, dims:[usize; 2], pre_str : String) -> Vecs<Array<'_>> {
     //因为z3的array更像是一个map,An array in Z3 is a mapping from indices to values,所以我们手动实现indices从0开始往后，模拟一个数组
 
     //设立了一个index为int，val为array的array，模拟了一个二维数组
@@ -150,7 +150,7 @@ fn fresh_result(context: &z3::Context, bit_width: u32, dims: [usize ; 2]) ->  Ve
 }
 
 //TODO: 动态维度，不过目前只能实现二维
-fn fresh_input(context: &z3::Context, bit_width: u32, dims: [usize ; 2]) ->  Vecs<Array<'_>> {
+fn _fresh_input(context: &z3::Context, bit_width: u32, dims: [usize ; 2]) ->  Vecs<Array<'_>> {
     fresh_array(context, bit_width, dims, "input".to_string())
 }
 
@@ -346,28 +346,33 @@ impl Library {
                 // // 12.
                 // component::xor(),
                 component::tf_abs(),
-                // component::tf_add(),
-                // component::tf_mul(),
-                // component::tf_div(),
+                component::tf_add(),
+                component::tf_mul(),
+                component::tf_div(),
                 component::tf_boolean_mask(),
-                // component::tf_clip_by_value(),
-                // component::tf_equal(),
+                component::tf_clip_by_value(),
+                component::tf_equal(),
+                component::tf_eye(),
+                // component::tf_ones(),
+                // component::tf_zeros(),
+                component::tf_ones_like(),
+                component::tf_zeros_like(),
                 // component::tf_fill(),
-                // component::tf_greater(),
-                // component::tf_greater_equal(),
-                // component::tf_not_equal(),
-                // component::tf_negative(),
-                // component::tf_reciprocal(),
+                component::tf_greater(),
+                component::tf_greater_equal(),
+                component::tf_not_equal(),
+                component::tf_negative(),
+                component::tf_reciprocal(),
                 // component::tf_cast(),
                 // component::tf_argmax(),
                 // component::tf_argmin(),
                 // component::tf_count_nonzero(),
                 // component::tf_cumsum(),
-                // component::tf_maximum(),
-                // component::tf_minimum(),
+                component::tf_maximum(),
+                component::tf_minimum(),
                 // component::tf_reverse(),
-                // component::tf_sign(),
-                // component::tf_square(),
+                component::tf_sign(),
+                component::tf_square(),
             ],
         }
     }
@@ -435,7 +440,7 @@ impl<'a> LocationVars<'a> {
         }
     }
 
-    fn fresh_line(context: &'a z3::Context, name: &str, line_bit_width: u32) -> Line<'a> {
+    fn fresh_line(context: &'a z3::Context, name: &str, _line_bit_width: u32) -> Line<'a> {
         Int::fresh_const(context, name)
     }
 
@@ -644,10 +649,10 @@ impl Display for Program {
     }
 }
 
-enum Verification {
-    WorksForAllInputs,
-    Counterexample(Vec<Vecs<u64>>),
-}
+// enum Verification {
+//     WorksForAllInputs,
+//     Counterexample(Vec<Vecs<u64>>),
+// }
 
 #[derive(Debug, Clone)]
 enum Timeout {
@@ -788,7 +793,7 @@ impl<'a> Synthesizer<'a> {
             .collect()
     }
 
-    fn add_invalid_assignment(&mut self, assignments: &Assignments) {
+    fn _add_invalid_assignment(&mut self, assignments: &Assignments) {
         // TODO: like souper, we should have multiple cases here for if we're
         // trying to synthesize any constants or not. When we're synthesizing
         // constants, allow reusing the same location assignments N times with
@@ -1378,7 +1383,7 @@ impl Program {
         context: &'a z3::Context,
         spec: &impl Specification,
         library: &Library,
-        arr_dims : Vec<usize>
+        _arr_dims : Vec<usize>
     ) -> Result<Program> {
         let mut synthesizer = Synthesizer::new(context, library, spec)?;
         synthesizer.synthesize()
@@ -1448,7 +1453,7 @@ impl Specification for Program {
         let mut vars: Vec<_> = inputs.iter().cloned().collect();
 
         //测试输入有没有被正确传达到
-        let x : Vec<_> = vars.iter().clone().collect();
+        let _x : Vec<_> = vars.iter().clone().collect();
         //println!("inputs : {:?}", x);
 
         let mut operands = vec![];
