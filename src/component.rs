@@ -618,100 +618,149 @@ pub fn tf_boolean_mask() -> Box<dyn Component> {
     Box::new(TfBooleanMask) as _
 }
 
-// #[derive(Debug)]
-// struct TfCast;
+#[derive(Debug)]
+struct TfCast;
 
-// impl Component for TfCast {
-//     fn operand_arity(&self) -> usize {
-//         1
-//     }
+impl Component for TfCast {
+    fn operand_arity(&self) -> usize {
+        1
+    }
 
-//     fn make_operator(&self, _immediates: &Vec<Vecs<i64>>, operands: &[Id]) -> Operator {
-//         Operator::TfCast(operands[0])
-//     }
+    fn make_operator(&self, _immediates: &Vec<Vecs<Vec<Vec<i64>>>>, operands: &[Id]) -> Operator {
+        Operator::TfCast(operands[0])
+    }
 
-//     fn make_expression<'a>(
-//         &self,
-//         _context: &'a z3::Context,
-//         _immediates: &[Vecs<Int<'a>>],
-//         operands: &[Vecs<Int<'a>>],
-//         _bit_width: u32,
-//     ) -> Vecs<Int<'a>> {
-//         // 类型转换之后返回
-//         // 只不过目前还没有类型，所以直接返回就行
-//         return operands[0].clone();
-//     }
-// }
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vecs<Array<'a>>],
+        operands: &[Vecs<Array<'a>>],
+        _bit_width: u32,
+    ) -> Vecs<Array<'a>> {
+        let domain_sort = Sort::int(&context);
+        let range_sort = Sort::int(&context);
+        let array_sort = Sort::array(context, &domain_sort, &range_sort);
 
-// pub fn tf_cast() -> Box<dyn Component> {
-//     Box::new(TfCast) as _
-// }
+        let first_dim_sort = Sort::int(&context);
+        let mut array = Array::fresh_const(&context,  "cast_array", &first_dim_sort, &array_sort);
 
-// #[derive(Debug)]
-// struct TfConcat;
+        let size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let in1_size =  operands[0].vecs.select(&size_index).as_array().unwrap();
+        let result_size_x = in1_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
+        let result_size_y = in1_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
 
-// impl Component for TfConcat {
-//     fn operand_arity(&self) -> usize {
-//         3
-//     }
+        for i in 0 .. DIMSIZE[0] {
 
-//     fn make_operator(&self, _immediates: &Vec<Vecs<i64>>, operands: &[Id]) -> Operator {
-//         Operator::TfConcat(operands[0], operands[1], operands[2])
-//     }
+            let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
 
-//     fn make_expression<'a>(
-//         &self,
-//         context: &'a z3::Context,
-//         _immediates: &[Vecs<Int<'a>>],
-//         operands: &[Vecs<Int<'a>>],
-//         bit_width: u32,
-//     ) -> Vecs<Int<'a>> {
-//         // 这个表达式本来要做的是把所有要拼接的数组放在一个数组里面，但是这样的话就会导致数组维度不对
-//         // 所以在这里我们把数组展开，由于大部分样例只需要两个数组，所以前两个就是数组，第三个是轴
-//         // 虽然轴的取值多样，但是在这里由于维度限制在了二维，所以轴取0、1、-1即可，而-1和1在二维下是一样的
-//         // 轴为0就是按行遍历把每一行放进去，轴为1就是按列遍历把每一列放进去
-//         let size0 = operands[0].dims;
-//         let size1 = operands[1].dims;
-//         let axis = operands[2].vecs[0][0].clone();
-//         // 保证输入的维度和长度相等，所以轴为0的时候最终的行数为行数之和，列数不变，轴为1的时候行数不变，最终的列数为列数之和
-//         let row = if axis == zero(context, bit_width) {
-//             size0[0] + size1[0]
-//         } else {
-//             size0[0]
-//         };
-//         let col = if axis == zero(context, bit_width) {
-//             size0[1]
-//         } else {
-//             size0[1] + size1[1]
-//         };
-//         let mut result: Vecs<Int> = Vecs::new([row, col]);
-//         // 轴为0的时候遍历行，把每一行的东西放进去，轴为1的时候遍历行和列，同样行的内容里面放入列的数据
-//         if axis == zero(context, bit_width) {
-//             for i in 0..size0[0] {
-//                 result.vecs.push(operands[0].vecs[i].clone());
-//             }
-//             for i in 0..size1[0] {
-//                 result.vecs.push(operands[1].vecs[i].clone());
-//             }
-//         } else {
-//             for i in 0..size0[0] {
-//                 for j in 0..size0[1] {
-//                     result.vecs[i].push(operands[0].vecs[i][j].clone());
-//                 }
-//             }
-//             for i in 0..size1[0] {
-//                 for j in 0..size1[1] {
-//                     result.vecs[i].push(operands[1].vecs[i][j].clone());
-//                 }
-//             }
-//         }
-//         return result;
-//     }
-// }
+            let domain_sort = Sort::int(&context);
+            let range_sort = Sort::int(&context);
+            let mut array_val = Array::fresh_const(context, "cast_array_second:", &domain_sort, &range_sort);
 
-// pub fn tf_concat() -> Box<dyn Component> {
-//     Box::new(TfConcat) as _
-// }
+            for j in 0 .. DIMSIZE[1] {
+                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
+                let value = Int::from_i64(context, in1_value_i_j.as_i64().unwrap());
+                array_val = array_val.store(&Int::from_i64(context, j as i64), &value);
+            }
+
+            array = array.store(&Int::from_i64(context, i as i64), &array_val);
+        }
+
+        let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let domain_sort = Sort::int(&context);
+        let range_sort = Sort::int(&context);
+        let mut array_val = Array::fresh_const(&context, "array_size:", &domain_sort, &range_sort);
+        array_val = array_val.store(&Int::from_i64(&context, SIZE_X), &result_size_x);
+        array_val = array_val.store(&Int::from_i64(&context, SIZE_Y), &result_size_y);
+        array = array.store(&array_size_index, &array_val);
+
+        let result = Vecs::new(operands[0].dims, array);
+        return result;
+    }
+}
+
+pub fn tf_cast() -> Box<dyn Component> {
+    Box::new(TfCast) as _
+}
+
+#[derive(Debug)]
+struct TfConcat;
+
+impl Component for TfConcat {
+    fn operand_arity(&self) -> usize {
+        2
+    }
+
+    fn make_operator(&self, _immediates: &Vec<Vecs<Vec<Vec<i64>>>>, operands: &[Id]) -> Operator {
+        Operator::TfConcat(operands[0], operands[1])
+    }
+
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vecs<Array<'a>>],
+        operands: &[Vecs<Array<'a>>],
+        bit_width: u32,
+    ) -> Vecs<Array<'a>> {
+        let const0 = zero(context, bit_width);
+
+        let domain_sort = Sort::int(&context);
+        let range_sort = Sort::int(&context);
+        let array_sort = Sort::array(context, &domain_sort, &range_sort);
+
+        let first_dim_sort = Sort::int(&context);
+        let mut array = Array::fresh_const(&context,  "concat_array", &first_dim_sort, &array_sort);
+
+        let size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let in1_size =  operands[0].vecs.select(&size_index).as_array().unwrap();
+        let in2_size =  operands[1].vecs.select(&size_index).as_array().unwrap();
+        let result_size_x = in1_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
+        let result_size_y_1 = in1_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
+        let result_size_y_2 = in2_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
+        let result_size_y = Int::add(context, &[&result_size_y_1, &result_size_y_2]);
+
+        for i in 0 .. DIMSIZE[0] {
+
+            let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            let in2_value = operands[1].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+
+            let domain_sort = Sort::int(&context);
+            let range_sort = Sort::int(&context);
+            let mut array_val = Array::fresh_const(context, "concat_array_second:", &domain_sort, &range_sort);
+
+            for j in 0 .. DIMSIZE[1] {
+                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
+                let in2_value_i_j = in2_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
+                let row_index = Int::from_i64(context, i as i64);
+                let col_index = Int::from_i64(context, j as i64);
+                let is_in_row = Int::lt(&row_index, &result_size_x);
+                let in1_is_in_col = Int::lt(&col_index, &result_size_y_1);
+                let in2_is_in_col = Int::lt(&col_index, &result_size_y);
+                // result_size_y_1是第一个输入的纵坐标，result_size_y_1到result_size_y是第二个输入的纵坐标
+                // 如果在第一个输入纵坐标内就用第一个数，如果不在第一个输入纵坐标内但是在第二个输入纵坐标内就用第二个数，否则就不动
+                let value = is_in_row.ite(&in1_is_in_col.ite(&in1_value_i_j, &in2_is_in_col.ite(&in2_value_i_j, &const0)), &const0);
+                array_val = array_val.store(&Int::from_i64(context, j as i64), &value);
+            }
+
+            array = array.store(&Int::from_i64(context, i as i64), &array_val);
+        }
+
+        let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let domain_sort = Sort::int(&context);
+        let range_sort = Sort::int(&context);
+        let mut array_val = Array::fresh_const(&context, "array_size:", &domain_sort, &range_sort);
+        array_val = array_val.store(&Int::from_i64(&context, SIZE_X), &result_size_x);
+        array_val = array_val.store(&Int::from_i64(&context, SIZE_Y), &result_size_y);
+        array = array.store(&array_size_index, &array_val);
+
+        let result = Vecs::new(operands[0].dims, array);
+        return result;
+    }
+}
+
+pub fn tf_concat() -> Box<dyn Component> {
+    Box::new(TfConcat) as _
+}
 
 #[derive(Debug)]
 struct TfClipByValue;
@@ -746,6 +795,7 @@ impl Component for TfClipByValue {
         let result_size_x = in1_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
         let result_size_y = in1_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
 
+        // 假定最大值最小值就在数组的第一个位置上
         let min_array = operands[1].vecs.select(&Int::from_i64(context, 0 as i64)).as_array().unwrap();
         let min = min_array.select(&Int::from_i64(context, 0 as i64)).as_int().unwrap();
         let max_array = operands[2].vecs.select(&Int::from_i64(context, 0 as i64)).as_array().unwrap();
@@ -761,7 +811,9 @@ impl Component for TfClipByValue {
 
             for j in 0 .. DIMSIZE[1] {
                 let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                let value = Int::gt(&in1_value_i_j, &max).ite(&max, &Int::lt(&in1_value_i_j, &min).ite(&min, &in1_value_i_j));
+                let is_max = Int::gt(&in1_value_i_j, &max);
+                let is_min = Int::lt(&in1_value_i_j, &min);
+                let value = is_max.ite(&max, &is_min.ite(&min, &in1_value_i_j));
                 array_val = array_val.store(&Int::from_i64(context, j as i64), &value);
             }
 
@@ -885,16 +937,10 @@ impl Component for TfEye {
         let first_dim_sort = Sort::int(&context);
         let mut array = Array::fresh_const(&context,  "eye_array", &first_dim_sort, &array_sort);
 
-        let size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
-        let in1_size =  operands[0].vecs.select(&size_index).as_array().unwrap();
-        let _in2_size =  operands[1].vecs.select(&size_index).as_array().unwrap();
-        let result_size_x = in1_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
-        let result_size_y = in1_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
-
-        let row_array = operands[0].vecs.select(&Int::from_i64(context, 0 as i64)).as_array().unwrap();
-        let row = row_array.select(&Int::from_i64(context, 0 as i64)).as_int().unwrap();
-        let col_array = operands[1].vecs.select(&Int::from_i64(context, 0 as i64)).as_array().unwrap();
-        let col = col_array.select(&Int::from_i64(context, 0 as i64)).as_int().unwrap();
+        let row_array = operands[0].vecs.select(&Int::from_i64(context, 0)).as_array().unwrap();
+        let result_size_x = row_array.select(&Int::from_i64(context, 0)).as_int().unwrap();
+        let col_array = operands[1].vecs.select(&Int::from_i64(context, 0)).as_array().unwrap();
+        let result_size_y = col_array.select(&Int::from_i64(context, 0)).as_int().unwrap();
 
 
         for i in 0 .. DIMSIZE[0] {
@@ -905,7 +951,10 @@ impl Component for TfEye {
             for j in 0 .. DIMSIZE[1] {
                 let row_index = Int::from_i64(context, i as i64);
                 let col_index = Int::from_i64(context, j as i64);
-                let value = Int::lt(&row_index, &row).ite(&Int::lt(&col_index, &col).ite(&Int::_eq(&row_index, &col_index).ite(&const1, &const0), &const0), &const0);
+                let is_in_row = Int::lt(&row_index, &result_size_x);
+                let is_in_col = Int::lt(&col_index, &result_size_y);
+                let is_row_equal_col = Int::_eq(&row_index, &col_index);
+                let value = is_in_row.ite(&is_in_col.ite(&is_row_equal_col.ite(&const1, &const0), &const0), &const0);
                 array_val = array_val.store(&Int::from_i64(context, j as i64), &value);
             }
 
@@ -929,105 +978,143 @@ pub fn tf_eye() -> Box<dyn Component> {
     Box::new(TfEye) as _
 }
 
-// #[derive(Debug)]
-// struct TfOnes;
+#[derive(Debug)]
+struct TfOnes;
 
-// impl Component for TfOnes {
-//     fn operand_arity(&self) -> usize {
-//         1
-//     }
+impl Component for TfOnes {
+    fn operand_arity(&self) -> usize {
+        1
+    }
 
-//     fn make_operator(&self, _immediates: &Vec<Vecs<i64>>, operands: &[Id]) -> Operator {
-//         Operator::TfOnes(operands[0])
-//     }
+    fn make_operator(&self, _immediates: &Vec<Vecs<Vec<Vec<i64>>>>, operands: &[Id]) -> Operator {
+        Operator::TfOnes(operands[0])
+    }
 
-//     fn make_expression<'a>(
-//         &self,
-//         context: &'a z3::Context,
-//         _immediates: &[Vecs<Int<'a>>],
-//         operands: &[Vecs<Int<'a>>],
-//         bit_width: u32,
-//     ) -> Vecs<Int<'a>> {
-//         // 根据输入的行数和列数来生成全为1的二维数组
-//         // 要注意接受的参数是常数，所以得根据输入的数组里面提取出常数
-//         // 要注意有个as方法，可以把bitvec里面的东西变成编程语言里面的数，它是一个option，所以要用match进行转换
-//         let row_option = operands[0].vecs[0][0].as_u64();
-//         #[allow(unused_assignments)]
-//         let mut row = 0;
-//         match row_option {
-//             Some(u) => row = u,
-//             None => row = 0,
-//         }
-//         let col_option = operands[0].vecs[0][1].as_u64();
-//         #[allow(unused_assignments)]
-//         let mut col = 0;
-//         match col_option {
-//             Some(u) => col = u,
-//             None => col = 0,
-//         }
-//         let mut result: Vecs<Int> = Vecs::new([row as usize, col as usize]);
-//         for i in 0..row as usize {
-//             for j in 0..col as usize {
-//                 result.vecs[i][j] = one(context, bit_width);
-//             }
-//         }
-//         return result;
-//     }
-// }
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vecs<Array<'a>>],
+        operands: &[Vecs<Array<'a>>],
+        bit_width: u32,
+    ) -> Vecs<Array<'a>> {
+        let const0 = zero(context, bit_width);
+        let const1 = one(context, bit_width);
 
-// pub fn tf_ones() -> Box<dyn Component> {
-//     Box::new(TfOnes) as _
-// }
+        let domain_sort = Sort::int(&context);
+        let range_sort = Sort::int(&context);
+        let array_sort = Sort::array(context, &domain_sort, &range_sort);
 
-// #[derive(Debug)]
-// struct TfZeros;
+        let first_dim_sort = Sort::int(&context);
+        let mut array = Array::fresh_const(&context,  "one_array", &first_dim_sort, &array_sort);
 
-// impl Component for TfZeros {
-//     fn operand_arity(&self) -> usize {
-//         1
-//     }
+        // 这里输入的参数就是数组的维度，如【2， 3】就是两行三列的数组
+        let row_array = operands[0].vecs.select(&Int::from_i64(context, 0)).as_array().unwrap();
+        let result_size_x = row_array.select(&Int::from_i64(context, 0)).as_int().unwrap();
+        let col_array = operands[0].vecs.select(&Int::from_i64(context, 0)).as_array().unwrap();
+        let result_size_y = col_array.select(&Int::from_i64(context, 1)).as_int().unwrap();
 
-//     fn make_operator(&self, _immediates: &Vec<Vecs<i64>>, operands: &[Id]) -> Operator {
-//         Operator::TfZeros(operands[0])
-//     }
+        for i in 0 .. DIMSIZE[0] {
+            let domain_sort = Sort::int(&context);
+            let range_sort = Sort::int(&context);
+            let mut array_val = Array::fresh_const(context, "one_array_second:", &domain_sort, &range_sort);
 
-//     fn make_expression<'a>(
-//         &self,
-//         context: &'a z3::Context,
-//         _immediates: &[Vecs<Int<'a>>],
-//         operands: &[Vecs<Int<'a>>],
-//         bit_width: u32,
-//     ) -> Vecs<Int<'a>> {
-//         // 根据输入的行数和列数来生成全为0的二维数组
-//         // 要注意接受的参数是常数，所以得根据输入的数组里面提取出常数
-//         // 要注意有个as方法，可以把bitvec里面的东西变成编程语言里面的数，它是一个option，所以要用match进行转换
-//         let row_option = operands[0].vecs[0][0].as_u64();
-//         #[allow(unused_assignments)]
-//         let mut row = 0;
-//         match row_option {
-//             Some(u) => row = u,
-//             None => row = 0,
-//         }
-//         let col_option = operands[0].vecs[0][1].as_u64();
-//         #[allow(unused_assignments)]
-//         let mut col = 0;
-//         match col_option {
-//             Some(u) => col = u,
-//             None => col = 0,
-//         }
-//         let mut result: Vecs<Int> = Vecs::new([row as usize, col as usize]);
-//         for i in 0..row as usize {
-//             for j in 0..col as usize {
-//                 result.vecs[i][j] = zero(context, bit_width);
-//             }
-//         }
-//         return result;
-//     }
-// }
+            for j in 0 .. DIMSIZE[1] {
+                let row_index = Int::from_i64(context, i as i64);
+                let col_index = Int::from_i64(context, j as i64);
+                let is_in_row = Int::lt(&row_index, &result_size_x);
+                let is_in_col = Int::lt(&col_index, &result_size_y);
+                let value = is_in_row.ite(&is_in_col.ite(&const1, &const0), &const0);
+                array_val = array_val.store(&Int::from_i64(context, j as i64), &value);
+            }
 
-// pub fn tf_zeros() -> Box<dyn Component> {
-//     Box::new(TfZeros) as _
-// }
+            array = array.store(&Int::from_i64(context, i as i64), &array_val);
+        }
+
+        let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let domain_sort = Sort::int(&context);
+        let range_sort = Sort::int(&context);
+        let mut array_val = Array::fresh_const(&context, "array_size:", &domain_sort, &range_sort);
+        array_val = array_val.store(&Int::from_i64(&context, SIZE_X), &result_size_x);
+        array_val = array_val.store(&Int::from_i64(&context, SIZE_Y), &result_size_y);
+        array = array.store(&array_size_index, &array_val);
+
+        let result = Vecs::new(operands[0].dims, array);
+        return result;
+    }
+}
+
+pub fn tf_ones() -> Box<dyn Component> {
+    Box::new(TfOnes) as _
+}
+
+#[derive(Debug)]
+struct TfZeros;
+
+impl Component for TfZeros {
+    fn operand_arity(&self) -> usize {
+        1
+    }
+
+    fn make_operator(&self, _immediates: &Vec<Vecs<Vec<Vec<i64>>>>, operands: &[Id]) -> Operator {
+        Operator::TfZeros(operands[0])
+    }
+
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vecs<Array<'a>>],
+        operands: &[Vecs<Array<'a>>],
+        bit_width: u32,
+    ) -> Vecs<Array<'a>> {
+        let const0 = zero(context, bit_width);
+
+        let domain_sort = Sort::int(&context);
+        let range_sort = Sort::int(&context);
+        let array_sort = Sort::array(context, &domain_sort, &range_sort);
+
+        let first_dim_sort = Sort::int(&context);
+        let mut array = Array::fresh_const(&context,  "one_array", &first_dim_sort, &array_sort);
+
+        // 这里输入的参数就是数组的维度，如【2， 3】就是两行三列的数组
+        let row_array = operands[0].vecs.select(&Int::from_i64(context, 0)).as_array().unwrap();
+        let result_size_x = row_array.select(&Int::from_i64(context, 0)).as_int().unwrap();
+        let col_array = operands[0].vecs.select(&Int::from_i64(context, 0)).as_array().unwrap();
+        let result_size_y = col_array.select(&Int::from_i64(context, 1)).as_int().unwrap();
+
+        for i in 0 .. DIMSIZE[0] {
+            let domain_sort = Sort::int(&context);
+            let range_sort = Sort::int(&context);
+            let mut array_val = Array::fresh_const(context, "one_array_second:", &domain_sort, &range_sort);
+
+            for j in 0 .. DIMSIZE[1] {
+                let row_index = Int::from_i64(context, i as i64);
+                let col_index = Int::from_i64(context, j as i64);
+                // 好吧，谁也不知道这里的判断有啥用。。。反正都是0，但也不敢乱该，怕以后改掉了咋办
+                let is_in_row = Int::lt(&row_index, &result_size_x);
+                let is_in_col = Int::lt(&col_index, &result_size_y);
+                let value = is_in_row.ite(&is_in_col.ite(&const0, &const0), &const0);
+                array_val = array_val.store(&Int::from_i64(context, j as i64), &value);
+            }
+
+            array = array.store(&Int::from_i64(context, i as i64), &array_val);
+        }
+
+        let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let domain_sort = Sort::int(&context);
+        let range_sort = Sort::int(&context);
+        let mut array_val = Array::fresh_const(&context, "array_size:", &domain_sort, &range_sort);
+        array_val = array_val.store(&Int::from_i64(&context, SIZE_X), &result_size_x);
+        array_val = array_val.store(&Int::from_i64(&context, SIZE_Y), &result_size_y);
+        array = array.store(&array_size_index, &array_val);
+
+        let result = Vecs::new(operands[0].dims, array);
+        return result;
+    }
+}
+
+pub fn tf_zeros() -> Box<dyn Component> {
+    Box::new(TfZeros) as _
+}
 
 #[derive(Debug)]
 struct TfOnesLike;
@@ -1071,7 +1158,9 @@ impl Component for TfOnesLike {
             for j in 0 .. DIMSIZE[1] {
                 let row_index = Int::from_i64(context, i as i64);
                 let col_index = Int::from_i64(context, j as i64);
-                let value = Int::lt(&row_index, &result_size_x).ite(&Int::lt(&col_index, &result_size_y).ite(&const1, &const0), &const0);
+                let is_in_row = Int::lt(&row_index, &result_size_x);
+                let is_in_col = Int::lt(&col_index, &result_size_y);
+                let value = is_in_row.ite(&is_in_col.ite(&const1, &const0), &const0);
                 array_val = array_val.store(&Int::from_i64(context, j as i64), &value);
             }
 
@@ -1121,7 +1210,7 @@ impl Component for TfZerosLike {
         let array_sort = Sort::array(context, &domain_sort, &range_sort);
 
         let first_dim_sort = Sort::int(&context);
-        let mut array = Array::fresh_const(&context,  "ones_like_array", &first_dim_sort, &array_sort);
+        let mut array = Array::fresh_const(&context,  "zeros_like_array", &first_dim_sort, &array_sort);
 
         let size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
         let in1_size =  operands[0].vecs.select(&size_index).as_array().unwrap();
@@ -1131,12 +1220,14 @@ impl Component for TfZerosLike {
         for i in 0 .. DIMSIZE[0] {
             let domain_sort = Sort::int(&context);
             let range_sort = Sort::int(&context);
-            let mut array_val = Array::fresh_const(context, "ones_like_array_second:", &domain_sort, &range_sort);
+            let mut array_val = Array::fresh_const(context, "zeros_like_array_second:", &domain_sort, &range_sort);
 
             for j in 0 .. DIMSIZE[1] {
                 let row_index = Int::from_i64(context, i as i64);
                 let col_index = Int::from_i64(context, j as i64);
-                let value = Int::lt(&row_index, &result_size_x).ite(&Int::lt(&col_index, &result_size_y).ite(&const0, &const0), &const0);
+                let is_in_row = Int::lt(&row_index, &result_size_x);
+                let is_in_col = Int::lt(&col_index, &result_size_y);
+                let value = is_in_row.ite(&is_in_col.ite(&const0, &const0), &const0);
                 array_val = array_val.store(&Int::from_i64(context, j as i64), &value);
             }
 
@@ -1160,54 +1251,75 @@ pub fn tf_zeros_like() -> Box<dyn Component> {
     Box::new(TfZerosLike) as _
 }
 
-// #[derive(Debug)]
-// struct TfFill;
+#[derive(Debug)]
+struct TfFill;
 
-// impl Component for TfFill {
-//     fn operand_arity(&self) -> usize {
-//         2
-//     }
+impl Component for TfFill {
+    fn operand_arity(&self) -> usize {
+        2
+    }
 
-//     fn make_operator(&self, _immediates: &Vec<Vecs<i64>>, operands: &[Id]) -> Operator {
-//         Operator::TfFill(operands[0], operands[1])
-//     }
+    fn make_operator(&self, _immediates: &Vec<Vecs<Vec<Vec<i64>>>>, operands: &[Id]) -> Operator {
+        Operator::TfFill(operands[0], operands[1])
+    }
 
-//     fn make_expression<'a>(
-//         &self,
-//         _context: &'a z3::Context,
-//         _immediates: &[Vecs<Int<'a>>],
-//         operands: &[Vecs<Int<'a>>],
-//         _bit_width: u32,
-//     ) -> Vecs<Int<'a>> {
-//         // 根据第一个输入的长度数组填充第二个数
-//         let length_x_option = operands[0].vecs[0][0].as_u64();
-//         let length_y_option = operands[0].vecs[0][1].as_u64();
-//         #[allow(unused_assignments)]
-//         let mut length_x = 0;
-//         match length_x_option {
-//             Some(l) => length_x = l,
-//             None => length_x = 0,
-//         }
-//         #[allow(unused_assignments)]
-//         let mut length_y = 0;
-//         match length_y_option {
-//             Some(l) => length_y = l,
-//             None => length_y = 0,
-//         }
-//         let mut result: Vecs<Int> = Vecs::new([length_x as usize, length_y as usize]);
-//         for i in 0..length_x as usize {
-//             for _j in 0..length_y {
-//                 result.vecs[i].push(operands[1].vecs[0][0].clone());
-//             }
-//         }
-//         return result;
-        
-//     }
-// }
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vecs<Array<'a>>],
+        operands: &[Vecs<Array<'a>>],
+        bit_width: u32,
+    ) -> Vecs<Array<'a>> {
+        let const0 = zero(context, bit_width);
 
-// pub fn tf_fill() -> Box<dyn Component> {
-//     Box::new(TfFill) as _
-// }
+        let domain_sort = Sort::int(&context);
+        let range_sort = Sort::int(&context);
+        let array_sort = Sort::array(context, &domain_sort, &range_sort);
+
+        let first_dim_sort = Sort::int(&context);
+        let mut array = Array::fresh_const(&context,  "fill_array", &first_dim_sort, &array_sort);
+
+        // 这里输入的参数就是数组的维度，如【2， 3】就是两行三列的数组
+        let row_array = operands[0].vecs.select(&Int::from_i64(context, 0)).as_array().unwrap();
+        let result_size_x = row_array.select(&Int::from_i64(context, 0)).as_int().unwrap();
+        let col_array = operands[0].vecs.select(&Int::from_i64(context, 0)).as_array().unwrap();
+        let result_size_y = col_array.select(&Int::from_i64(context, 1)).as_int().unwrap();
+        let fill_value_array = operands[1].vecs.select(&Int::from_i64(context, 0)).as_array().unwrap();
+        let fill_value = fill_value_array.select(&Int::from_i64(context, 0)).as_int().unwrap();
+
+        for i in 0 .. DIMSIZE[0] {
+            let domain_sort = Sort::int(&context);
+            let range_sort = Sort::int(&context);
+            let mut array_val = Array::fresh_const(context, "fill_array_second:", &domain_sort, &range_sort);
+
+            for j in 0 .. DIMSIZE[1] {
+                let row_index = Int::from_i64(context, i as i64);
+                let col_index = Int::from_i64(context, j as i64);
+                let is_in_row = Int::lt(&row_index, &result_size_x);
+                let is_in_col = Int::lt(&col_index, &result_size_y);
+                let value = is_in_row.ite(&is_in_col.ite(&fill_value, &const0), &const0);
+                array_val = array_val.store(&Int::from_i64(context, j as i64), &value);
+            }
+
+            array = array.store(&Int::from_i64(context, i as i64), &array_val);
+        }
+
+        let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let domain_sort = Sort::int(&context);
+        let range_sort = Sort::int(&context);
+        let mut array_val = Array::fresh_const(&context, "array_size:", &domain_sort, &range_sort);
+        array_val = array_val.store(&Int::from_i64(&context, SIZE_X), &result_size_x);
+        array_val = array_val.store(&Int::from_i64(&context, SIZE_Y), &result_size_y);
+        array = array.store(&array_size_index, &array_val);
+
+        let result = Vecs::new(operands[0].dims, array);
+        return result;
+    }
+}
+
+pub fn tf_fill() -> Box<dyn Component> {
+    Box::new(TfFill) as _
+}
 
 #[derive(Debug)]
 struct TfGreater;
@@ -1776,7 +1888,7 @@ impl Component for TfMaximum {
         let array_sort = Sort::array(context, &domain_sort, &range_sort);
 
         let first_dim_sort = Sort::int(&context);
-        let mut array = Array::fresh_const(&context,  "add_array", &first_dim_sort, &array_sort);
+        let mut array = Array::fresh_const(&context,  "maximum_array", &first_dim_sort, &array_sort);
 
         let size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
         let in1_size =  operands[0].vecs.select(&size_index).as_array().unwrap();
@@ -1791,7 +1903,7 @@ impl Component for TfMaximum {
 
             let domain_sort = Sort::int(&context);
             let range_sort = Sort::int(&context);
-            let mut array_val = Array::fresh_const(context, "add_array_second:", &domain_sort, &range_sort);
+            let mut array_val = Array::fresh_const(context, "maximum_array_second:", &domain_sort, &range_sort);
 
             for j in 0 .. DIMSIZE[1] {
                 let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
@@ -1844,7 +1956,7 @@ impl Component for TfMinimum {
         let array_sort = Sort::array(context, &domain_sort, &range_sort);
 
         let first_dim_sort = Sort::int(&context);
-        let mut array = Array::fresh_const(&context,  "add_array", &first_dim_sort, &array_sort);
+        let mut array = Array::fresh_const(&context,  "minimum_array", &first_dim_sort, &array_sort);
 
         let size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
         let in1_size =  operands[0].vecs.select(&size_index).as_array().unwrap();
@@ -1859,7 +1971,7 @@ impl Component for TfMinimum {
 
             let domain_sort = Sort::int(&context);
             let range_sort = Sort::int(&context);
-            let mut array_val = Array::fresh_const(context, "add_array_second:", &domain_sort, &range_sort);
+            let mut array_val = Array::fresh_const(context, "minimum_array_second:", &domain_sort, &range_sort);
 
             for j in 0 .. DIMSIZE[1] {
                 let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
@@ -1888,40 +2000,77 @@ pub fn tf_minimum() -> Box<dyn Component> {
     Box::new(TfMinimum) as _
 }
 
-// #[derive(Debug)]
-// struct TfReverse;
+#[derive(Debug)]
+struct TfReverse;
 
-// impl Component for TfReverse {
-//     fn operand_arity(&self) -> usize {
-//         1
-//     }
+impl Component for TfReverse {
+    fn operand_arity(&self) -> usize {
+        1
+    }
 
-//     fn make_operator(&self, _immediates: &Vec<Vecs<i64>>, operands: &[Id]) -> Operator {
-//         Operator::TfReverse(operands[0])
-//     }
+    fn make_operator(&self, _immediates: &Vec<Vecs<Vec<Vec<i64>>>>, operands: &[Id]) -> Operator {
+        Operator::TfReverse(operands[0])
+    }
 
-//     fn make_expression<'a>(
-//         &self,
-//         _context: &'a z3::Context,
-//         _immediates: &[Vecs<Int<'a>>],
-//         operands: &[Vecs<Int<'a>>],
-//         _bit_width: u32,
-//     ) -> Vecs<Int<'a>> {
-//         // 倒序，就是把第size - index个放到index下标里
-//         let size = operands[0].dims;
-//         let mut result: Vecs<Int> = Vecs::new(size);
-//         for i in 0..size[0] {
-//             for j in 0..size[1] {
-//                 result.vecs[i].push(operands[0].vecs[i][size[1] - j - 1].clone());
-//             }
-//         }
-//         return result;
-//     }
-// }
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vecs<Array<'a>>],
+        operands: &[Vecs<Array<'a>>],
+        _bit_width: u32,
+    ) -> Vecs<Array<'a>> {
+        let domain_sort = Sort::int(&context);
+        let range_sort = Sort::int(&context);
+        let array_sort = Sort::array(context, &domain_sort, &range_sort);
 
-// pub fn tf_reverse() -> Box<dyn Component> {
-//     Box::new(TfReverse) as _
-// }
+        let first_dim_sort = Sort::int(&context);
+        let mut array = Array::fresh_const(&context,  "reverse_array", &first_dim_sort, &array_sort);
+
+        let size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let in1_size =  operands[0].vecs.select(&size_index).as_array().unwrap();
+        let result_size_x = in1_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
+        let result_size_y = in1_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
+
+        for i in 0 .. DIMSIZE[0] {
+
+            let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+
+            let domain_sort = Sort::int(&context);
+            let range_sort = Sort::int(&context);
+            let mut array_val = Array::fresh_const(context, "reverse_array_second:", &domain_sort, &range_sort);
+
+            for j in 0 .. DIMSIZE[1] {
+                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
+                let row_index = Int::from_i64(context, i as i64);
+                let col_index = Int::from_i64(context, j as i64);
+                let is_in_row = Int::lt(&row_index, &result_size_x);
+                let is_in_col = Int::lt(&col_index, &result_size_y);
+                // 相反就是纵坐标总长度减去当前纵坐标，然后放到数组中
+                // 要注意有一些是0，所以把这些排除掉
+                let reverse_index = Int::sub(context, &[&result_size_y, &col_index]);
+                let value_index = is_in_row.ite(&is_in_col.ite(&reverse_index, &col_index), &col_index);
+                array_val = array_val.store(&value_index, &in1_value_i_j);
+            }
+
+            array = array.store(&Int::from_i64(context, i as i64), &array_val);
+        }
+
+        let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let domain_sort = Sort::int(&context);
+        let range_sort = Sort::int(&context);
+        let mut array_val = Array::fresh_const(&context, "array_size:", &domain_sort, &range_sort);
+        array_val = array_val.store(&Int::from_i64(&context, SIZE_X), &result_size_x);
+        array_val = array_val.store(&Int::from_i64(&context, SIZE_Y), &result_size_y);
+        array = array.store(&array_size_index, &array_val);
+
+        let result = Vecs::new(operands[0].dims, array);
+        return result;
+    }
+}
+
+pub fn tf_reverse() -> Box<dyn Component> {
+    Box::new(TfReverse) as _
+}
 
 #[derive(Debug)]
 struct TfSign;
@@ -1969,7 +2118,9 @@ impl Component for TfSign {
             for j in 0 .. DIMSIZE[1] {
                 let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
                 // 和0比小的返回-1，和0比大的返回1，和0相等返回0
-                let value = Int::lt(&in1_value_i_j, &const0).ite(&const_mins_1, &Int::gt(&in1_value_i_j, &const0).ite(&const1, &const0));
+                let is_plus = Int::gt(&in1_value_i_j, &const0);
+                let is_minus = Int::lt(&in1_value_i_j, &const0);
+                let value = is_minus.ite(&const_mins_1, &is_plus.ite(&const1, &const0));
                 array_val = array_val.store(&Int::from_i64(context, j as i64), &value);
             }
 
@@ -2324,18 +2475,18 @@ macro_rules! with_operator_component {
                 let $c = TfBooleanMask;
                 $body
             }
-            // Operator::TfCast(_) => {
-            //     let $c = TfCast;
-            //     $body
-            // }
+            Operator::TfCast(_) => {
+                let $c = TfCast;
+                $body
+            }
             Operator::TfClipByValue(_, _, _) => {
                 let $c = TfClipByValue;
                 $body
             }
-            // Operator::TfConcat(_, _, _) => {
-            //     let $c = TfConcat;
-            //     $body
-            // }
+            Operator::TfConcat(_, _) => {
+                let $c = TfConcat;
+                $body
+            }
             Operator::TfEqual(_, _) => {
                 let $c = TfEqual;
                 $body
@@ -2344,14 +2495,14 @@ macro_rules! with_operator_component {
                 let $c = TfEye;
                 $body
             }
-            // Operator::TfOnes(_) => {
-            //     let $c = TfOnes;
-            //     $body
-            // }
-            // Operator::TfZeros(_) => {
-            //     let $c = TfZeros;
-            //     $body
-            // }
+            Operator::TfOnes(_) => {
+                let $c = TfOnes;
+                $body
+            }
+            Operator::TfZeros(_) => {
+                let $c = TfZeros;
+                $body
+            }
             Operator::TfOnesLike(_) => {
                 let $c = TfOnesLike;
                 $body
@@ -2360,10 +2511,10 @@ macro_rules! with_operator_component {
                 let $c = TfZerosLike;
                 $body
             }
-            // Operator::TfFill(_, _) => {
-            //     let $c = TfFill;
-            //     $body
-            // }
+            Operator::TfFill(_, _) => {
+                let $c = TfFill;
+                $body
+            }
             Operator::TfGreater(_, _) => {
                 let $c = TfGreater;
                 $body
@@ -2404,10 +2555,10 @@ macro_rules! with_operator_component {
                 let $c = TfMinimum;
                 $body
             }
-            // Operator::TfReverse(_) => {
-            //     let $c = TfReverse;
-            //     $body
-            // }
+            Operator::TfReverse(_) => {
+                let $c = TfReverse;
+                $body
+            }
             Operator::TfSign(_) => {
                 let $c = TfSign;
                 $body

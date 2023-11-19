@@ -25,7 +25,7 @@ impl ProgramBuilder {
         Id(self.program.instructions.len() as u32)
     }
 
-    pub fn var(&mut self, input : Vec<Vec<i64>>) -> Id {
+    pub fn var(&mut self, input: Vec<Vec<i64>>) -> Id {
         /*assert!(
             self.program
                 .instructions
@@ -173,23 +173,32 @@ impl ProgramBuilder {
         result
     }
 
-    // pub fn tf_cast(&mut self, a: Id) -> Id {
-    //     let result = self.next_id();
-    //     self.program.instructions.push(Instruction {
-    //         result,
-    //         operator: Operator::TfCast(a),
-    //     });
-    //     result
-    // }
+    pub fn tf_concat(&mut self, a: Id, b: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfConcat(a, b),
+        });
+        result
+    }
 
-    // pub fn tf_clip_by_value(&mut self, a: Id, b: Id, c: Id) -> Id {
-    //     let result = self.next_id();
-    //     self.program.instructions.push(Instruction {
-    //         result,
-    //         operator: Operator::TfClipByValue(a, b, c),
-    //     });
-    //     result
-    // }
+    pub fn tf_cast(&mut self, a: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfCast(a),
+        });
+        result
+    }
+
+    pub fn tf_clip_by_value(&mut self, a: Id, b: Id, c: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfClipByValue(a, b, c),
+        });
+        result
+    }
 
     pub fn tf_equal(&mut self, a: Id, b: Id) -> Id {
         let result = self.next_id();
@@ -200,23 +209,59 @@ impl ProgramBuilder {
         result
     }
 
-    // pub fn tf_eye(&mut self, a: Id, b: Id) -> Id {
-    //     let result = self.next_id();
-    //     self.program.instructions.push(Instruction {
-    //         result,
-    //         operator: Operator::TfEye(a, b),
-    //     });
-    //     result
-    // }
+    pub fn tf_eye(&mut self, a: Id, b: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfEye(a, b),
+        });
+        result
+    }
 
-    // pub fn tf_fill(&mut self, a: Id, b: Id) -> Id {
-    //     let result = self.next_id();
-    //     self.program.instructions.push(Instruction {
-    //         result,
-    //         operator: Operator::TfFill(a, b),
-    //     });
-    //     result
-    // }
+    pub fn tf_ones(&mut self, a: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfOnes(a),
+        });
+        result
+    }
+
+    pub fn tf_zeros(&mut self, a: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfZeros(a),
+        });
+        result
+    }
+
+    pub fn tf_ones_like(&mut self, a: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfOnesLike(a),
+        });
+        result
+    }
+
+    pub fn tf_zeross_like(&mut self, a: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfZerosLike(a),
+        });
+        result
+    }
+
+    pub fn tf_fill(&mut self, a: Id, b: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfFill(a, b),
+        });
+        result
+    }
 
     pub fn tf_greater(&mut self, a: Id, b: Id) -> Id {
         let result = self.next_id();
@@ -272,8 +317,6 @@ impl ProgramBuilder {
     //     result
     // }
 
-
-
     // pub fn tf_count_nonzero(&mut self, a: Id) -> Id {
     //     let result = self.next_id();
     //     self.program.instructions.push(Instruction {
@@ -292,32 +335,32 @@ impl ProgramBuilder {
     //     result
     // }
 
-    // pub fn tf_maximum(&mut self, a: Id, b: Id) -> Id {
-    //     let result = self.next_id();
-    //     self.program.instructions.push(Instruction {
-    //         result,
-    //         operator: Operator::TfMaximum(a, b),
-    //     });
-    //     result
-    // }
+    pub fn tf_maximum(&mut self, a: Id, b: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfMaximum(a, b),
+        });
+        result
+    }
 
-    // pub fn tf_minimum(&mut self, a: Id, b: Id) -> Id {
-    //     let result = self.next_id();
-    //     self.program.instructions.push(Instruction {
-    //         result,
-    //         operator: Operator::TfMinimum(a, b),
-    //     });
-    //     result
-    // }
+    pub fn tf_minimum(&mut self, a: Id, b: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfMinimum(a, b),
+        });
+        result
+    }
 
-    // pub fn tf_reverse(&mut self, a: Id) -> Id {
-    //     let result = self.next_id();
-    //     self.program.instructions.push(Instruction {
-    //         result,
-    //         operator: Operator::TfReverse(a),
-    //     });
-    //     result
-    // }
+    pub fn tf_reverse(&mut self, a: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfReverse(a),
+        });
+        result
+    }
 
     pub fn tf_sign(&mut self, a: Id) -> Id {
         let result = self.next_id();
@@ -336,5 +379,14 @@ impl ProgramBuilder {
         });
         result
     }
+
+    // pub fn tf_where(&mut self, a: Id, b: Id, c: Id) -> Id {
+    //     let result = self.next_id();
+    //     self.program.instructions.push(Instruction {
+    //         result,
+    //         operator: Operator::TfWhere(a, b, c),
+    //     });
+    //     result
+    // }
 
 }
