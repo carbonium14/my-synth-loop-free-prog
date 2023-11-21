@@ -1,7 +1,7 @@
 use std::vec;
 
 use structopt::*;
-use synth_loop_free_prog::{Result as SynthResult, *};
+use synth_loop_free_prog::{Result as SynthResult, *, component::tf_eye};
 
 macro_rules! benchmarks {
     ( $($name:ident,)* ) => {
@@ -19,7 +19,7 @@ fn main() {
     let mut opts = Options::from_args();
     if opts.mytest {
         opts.problems = vec![
-            "mytest1".to_string(),
+            "test_benchmarks_test_add".to_string(),
             "mytest2".to_string(),
             "mytest3".to_string(),
             "mytest4".to_string(),
@@ -37,9 +37,9 @@ fn main() {
         &'static str,
         fn(&z3::Context, &Options) -> SynthResult<Program>,
     )> = benchmarks! { 
-        mytest1,
+        test_add,
         // mytest2,
-        mytest3,
+        google_10,
         // mytest4,
         // mytest5,
     };
@@ -116,41 +116,10 @@ fn synthesize(
         .should_synthesize_minimal_programs(opts.minimal)
         .synthesize()
 }
+// test_benchmarks
 
-/*
-下一步的重点：所有的样例是按照单个输入处理的，比如abs里面只接受一个数（Id），而不允许接受一个数组（vec！【Id】）
-例如，abs（a）是可以的，但是abs（【a， b， c】）就没办法
-之前做的工作，也只是在外部包装了一下数组，即定义三个var，然后push到数组里面，然后遍历数组，传入单个参数进行处理
-这种工作对于需要数组操作的方法来说无能为力，因为它没有办法体现在最终结果里面
-所以能够看到，在operator方法里面只有几个tf方法，因为这些太多的tf表达式和数组有关了，然而目前还没有办法实现数组的操作
-之前想到的一种方法是，可以考虑把这个过程的输出插入到最终输出的过程中，来达到目的
-比如mytest2里面的样例，可以把expanddim这个方法的输出插入到add的输出之前，但是目前做不到显示expanddim这个步骤
-而且，根据结果可知，如果不把他们放到数组里面的话，最后的结果会被“合并”
-比如【a， b， c】和【d， e， f】相加应该是a+d， b+e， c+f，但是输出只显示一个，这是不对的
-所以当务之急还是如何将代码由处理单个变量扩充到处理数组
-当然目前也不是一无进展，处理表达式第一步先要在operator里面定义，然后加入到lib里面的component，在component.rs里面编写，再在builder里面添加函数，这样就可以了
-其余的都简单，直接改成数组即可，唯独component.rs里面的make_operator和make_expression需要大改，估计lib也得改，所以是个大工程o(╥﹏╥)o
-*/
-
-// 注释中写入每个样例的名字，方便查找，所以函数命名就随意了
-
-/* test_add
-  examples = [
-      benchmark.Example(
-          inputs=[
-              [10],
-              [20],
-          ],
-          output=[30],
-      ),
-  ]
-  constants = [0]
-  description = 'Add elementwise'
-  target_program = 'tf.add(in1, in2)'
-  source = 'test'
-*/
-
-fn mytest1(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+// test_add
+fn test_add(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
 
     let library = Library::brahma_std();
     let mut builder = ProgramBuilder::new();
@@ -159,39 +128,91 @@ fn mytest1(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     // Modify：调用var()的时候接收一个参数，将输入的vec传入到spec中
      
     let mut input1 : Vec<Vec<i64>> = Vec::new();   
-    input1.push(vec![10, -20]);
+    input1.push(vec![10]);
 
     let mut input2 : Vec<Vec<i64>> = Vec::new();
     input2.push(vec![20]);    
 
     let in1 = builder.var(input1);
-    let _in2 = builder.var(input2);
+    let in2 = builder.var(input2);
 
     // let z = builder.tf_add(in1, in2);
-    let _ = builder.tf_abs(in1);
+    let _ = builder.tf_add(in1, in2);
     let spec = builder.finish();
 
     return synthesize(opts, context, &spec, &library); 
 }
 
-// TODO：严格来说应该是const的长度和值都要定义，但是这里默认长度就是值，看看后续能不能改
+// todo: test_cast
 
-/* simple_using_constant
-  examples = [
-      benchmark.Example(
-          inputs=[
-              [1, 2, 3],
-          ],
-          output=[101, 102, 103]
-      ),
-  ]
-  constants = [100]
-  description = 'Add 100 to every element'
-  target_program = 'tf.add(in1, tf.constant(100))'
-  source = 'handwritten task'
-*/
+// test_inconsistent_target_program 
+// fn test_benchmarks_test_inconsistent_target_program(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
 
-// fn mytest2(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+//     let library = Library::brahma_std();
+//     let mut builder = ProgramBuilder::new();
+    
+//     // Modify：调用var()的时候接收一个参数，将输入的vec传入到spec中
+//     // Modify：调用var()的时候接收一个参数，将输入的vec传入到spec中
+     
+//     let mut input1 : Vec<Vec<i64>> = Vec::new();   
+//     input1.push(vec![10]);
+
+//     let mut input2 : Vec<Vec<i64>> = Vec::new();
+//     input2.push(vec![20]);    
+
+//     let in1 = builder.var(input1);
+//     let in2 = builder.var(input2);
+
+//     // let z = builder.tf_add(in1, in2);
+//     let _ = builder.tf_add(in1, in2);
+//     let spec = builder.finish();
+
+//     return synthesize(opts, context, &spec, &library); 
+// }
+
+//duplicate_test_add
+fn duplicate_test_add(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+    
+    // Modify：调用var()的时候接收一个参数，将输入的vec传入到spec中
+    // Modify：调用var()的时候接收一个参数，将输入的vec传入到spec中
+     
+    let mut input1 : Vec<Vec<i64>> = Vec::new();   
+    input1.push(vec![10]);
+
+    let mut input2 : Vec<Vec<i64>> = Vec::new();
+    input2.push(vec![20]);    
+
+    let in1 = builder.var(input1);
+    let in2 = builder.var(input2);
+
+    // let z = builder.tf_add(in1, in2);
+    let _ = builder.tf_add(in1, in2);
+    let spec = builder.finish();
+
+    return synthesize(opts, context, &spec, &library); 
+}
+  
+//------simple——benchmarks------------
+
+//todo simple_broadcasted_add tf.expand_dims
+
+//todo simple_with_input_names tf.expand_dims
+
+//todo simple_cast tf.cast
+
+//todo simple_index 直接数组下标操作 in1[in2]
+
+//todo simple_slice 也是数组下标切片问题
+
+//todo simple_sparse_add tf.sparse.from_dense， tf.spare.add
+
+//todo simple_add_big_tensors tf.expand_dims
+
+//simple_using_constant
+// fn simple_benchmarks_simple_using_constant(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
 //     let mut library = Library::brahma_std();
 //     let mut const1 : Vec<Vec<i64>> = Vec::new();
 //     const1.push(vec![100]);
@@ -210,24 +231,107 @@ fn mytest1(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
 //     synthesize(opts, context, &spec, &library)
 // }
 
-/* google_10
-  examples = [
-      benchmark.Example(
-          inputs=[
-              [10, 20, 0, 40, 0, 30],
-              [1, 1, 0, 1, 0, 1],
-          ],
-          output=[10, 20, 40, 30]
-      ),
-  ]
-  constants = []
-  description = 'gather the marked elements'
-  target_program = 'tf.boolean_mask(in1, tf.cast(in2, tf.bool))'
-  source = ('Proposed by Googler at an internal demo on 8/13/2019, '
-            'simplified slightly')
-*/
+// simple_using_output_shape
+fn simple_using_output_shape(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
 
-fn mytest3(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+    let mut input1 : Vec<Vec<i64>> = Vec::new();   
+    input1.push(vec![7]);
+
+    let mut input2 : Vec<Vec<i64>> = Vec::new();   
+    input2.push(vec![5]);
+
+    let in1 = builder.var(input1);
+    let in2 = builder.var(input2);
+
+    let a = builder.tf_eye(in2, in2);
+    let _ = builder.tf_mul(in1, a);
+
+    let spec = builder.finish();
+
+    return synthesize(opts, context, &spec, &library); 
+}
+
+//todo simple_using_output_shape_tuple 
+fn simple_using_output_shape_tuple(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+    
+    // Modify：调用var()的时候接收一个参数，将输入的vec传入到spec中
+    // Modify：调用var()的时候接收一个参数，将输入的vec传入到spec中
+     
+    let mut input1 : Vec<Vec<i64>> = Vec::new();   
+    input1.push(vec![2,3,4,5]);
+
+    let in1 = builder.var(input1);
+
+    let _ = builder.tf_zeros(in1);
+    let spec = builder.finish();
+
+    return synthesize(opts, context, &spec, &library); 
+}
+
+//todo simple_using_boolean_constant tf.SparseTensor
+
+//todo simple_using_constant_kwarg tf.argsort
+
+// simple_using_primitive_input
+fn simple_using_primitive_input(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+    
+    // Modify：调用var()的时候接收一个参数，将输入的vec传入到spec中
+    // Modify：调用var()的时候接收一个参数，将输入的vec传入到spec中
+     
+    let mut input1 : Vec<Vec<i64>> = Vec::new();   
+    input1.push(vec![123]);
+
+    let mut input2 : Vec<Vec<i64>> = Vec::new();
+    input2.push(vec![45]);    
+
+    let in1 = builder.var(input1);
+    let in2 = builder.var(input2);
+
+    // let z = builder.tf_add(in1, in2);
+    let _ = builder.tf_add(in1, in2);
+    let spec = builder.finish();
+
+    return synthesize(opts, context, &spec, &library); 
+}
+
+//todo simple_with_many_inputs tf.gather
+
+//todo simple_output_equals_input_single 输入=输出，这个测试用例意义不明
+
+//todo simple_output_equals_input_multiple 从几组中挑一个，依旧意义不明
+
+//todo simple_output_equals_constant 意义不明
+
+//-----------google_benchmarks---------
+
+//todo google_01 tf.cast tf.where tf.sequence_mask tf.math.bincount
+
+//todo google_02 tf.expand_dims tf.reduce_sum
+
+//todo google_03 tf.sparse.slice
+
+//todo google_04 tf.reshape
+
+//todo google_05 tf.tile tf.expand_dims
+
+//todo google_06 tf.math.segment_max
+
+//todo google_07 tf.sequence_mask
+
+//todo google_08 tf.expand_dims tf.range
+
+//todo google_09 tf.gather tf.argsort
+
+//google_10
+fn google_10(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     let library = Library::brahma_std();
     let mut builder = ProgramBuilder::new();
 
@@ -246,63 +350,36 @@ fn mytest3(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     synthesize(opts, context, &spec, &library)
 }
 
-/* simple_cast
-  examples = [
-      benchmark.Example(
-          inputs=[
-              [12, 34, 56]
-          ],
-          output=[12.0, 34.0, 56.0],
-      ),
-  ]
-  constants = []
-  description = 'Cast an int tensor into a float tensor'
-  target_program = 'tf.cast(in1, tf.float32)'
-  source = 'handwritten task' 
-*/
+//todo google_11 tf.reduce_sum tf.cast
 
-// fn mytest4(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+//todo google_12 tf.logical_and tf.cast 用到了浮点数
+
+//todo google_13 tf.concat的轴
+// fn google_13(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
 //     let library = Library::brahma_std();
 //     let mut builder = ProgramBuilder::new();
-//     let in1 = builder.var();
-//     let _ = builder.tf_cast(in1);
+
+//     let mut input1 : Vec<Vec<i64>> = Vec::new();
+//     input1.push(vec![1, 2]);
+//     input1.push(vec![10, 20]);
+
+//     let mut input2 : Vec<Vec<i64>> = Vec::new();
+//     input2.push(vec![3, 4, 5]);
+//     input2.push(vec![30, 40, 50]);
+
+
+ 
+//     let mut input2 : Vec<Vec<i64>> = Vec::new();
+//     input2.push(vec![1, 1, 0, 1, 0, 1]);
+
+//     let in1 = builder.var(input1);
+//     let in2 = builder.var(input2);
+//     let _ = builder.tf_boolean_mask(in1, in2);
 //     let spec = builder.finish();
 
-//     synthesize(opts, context, &spec, &library, 3)
+//     synthesize(opts, context, &spec, &library)
 // }
 
-/* simple_using_primitive_input
-  examples = [
-      benchmark.Example(
-          inputs=[
-              123,
-              tf.constant(45),
-          ],
-          output=tf.constant(168),
-      ),
-  ]
-  constants = []
-  description = 'Add primitive int and scalar int tensor'
-  target_program = 'tf.add(in2, tf.constant(in1))'
-  source = 'handwritten task'
- */
 
- /*fn mytest5(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
-    let mut library = Library::brahma_std();
-    let sz = 1;
-    library
-        .components
-        .push(component::const_(if opts.synthesize_constants {
-            None
-        } else {
-            Some(sz)
-        }));
-    let mut builder = ProgramBuilder::new();
-    let in1 = builder.var();
-    let in2 = builder.const_(sz);
-    let _ = builder.tf_add(in1, in2);
-    let spec = builder.finish();
 
-    synthesize(opts, context, &spec, &library, 1)
-}*/
 
