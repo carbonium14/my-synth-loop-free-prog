@@ -146,23 +146,23 @@ impl ProgramBuilder {
         result
     }
 
-    // pub fn tf_argmax(&mut self, a: Id) -> Id {
-    //     let result = self.next_id();
-    //     self.program.instructions.push(Instruction {
-    //         result,
-    //         operator: Operator::TfArgMax(a),
-    //     });
-    //     result
-    // }
+    pub fn tf_argmax(&mut self, a: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfArgMax(a),
+        });
+        result
+    }
 
-    // pub fn tf_argmin(&mut self, a: Id) -> Id {
-    //     let result = self.next_id();
-    //     self.program.instructions.push(Instruction {
-    //         result,
-    //         operator: Operator::TfArgMin(a),
-    //     });
-    //     result
-    // }
+    pub fn tf_argmin(&mut self, a: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfArgMin(a),
+        });
+        result
+    }
 
     pub fn tf_boolean_mask(&mut self, a: Id, b: Id) -> Id {
         let result = self.next_id();
@@ -308,23 +308,23 @@ impl ProgramBuilder {
         result
     }
 
-    // pub fn tf_bincount(&mut self, a: Id, b: Id, c: Id, d: Id) -> Id {
-    //     let result = self.next_id();
-    //     self.program.instructions.push(Instruction {
-    //         result,
-    //         operator: Operator::TfBincount(a, b, c, d),
-    //     });
-    //     result
-    // }
+    pub fn tf_bincount(&mut self, a: Id, b: Id, c: Id, d: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfBincount(a, b, c, d),
+        });
+        result
+    }
 
-    // pub fn tf_count_nonzero(&mut self, a: Id) -> Id {
-    //     let result = self.next_id();
-    //     self.program.instructions.push(Instruction {
-    //         result,
-    //         operator: Operator::TfCountNonzero(a),
-    //     });
-    //     result
-    // }
+    pub fn tf_count_nonzero(&mut self, a: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfCountNonzero(a),
+        });
+        result
+    }
 
     // pub fn tf_cumsum(&mut self, a: Id, b: Id, c: Id) -> Id {
     //     let result = self.next_id();
