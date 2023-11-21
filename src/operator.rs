@@ -20,9 +20,9 @@ pub enum Operator {
     // 相除
     TfDiv(Id, Id),
     // 数组最大值的下标
-    // TfArgMax(Id),
+    TfArgMax(Id),
     // 数组最小值的下标
-    // TfArgMin(Id),
+    TfArgMin(Id),
     // 掩码，即如果为1则返回原值，为0则什么也不做
     TfBooleanMask(Id, Id),
     // 类型转换，目前还是原样返回
@@ -56,9 +56,9 @@ pub enum Operator {
     // 倒数
     TfReciprocal(Id),
     // 记录数组里每个元素出现的次数
-    // TfBincount(Id, Id, Id, Id),
+    TfBincount(Id, Id, Id, Id),
     // 统计非0个数出现的次数
-    // TfCountNonzero(Id),
+    TfCountNonzero(Id),
     // 遍历依次累加求和，每次的结果放在每一项里
     // TfCumsum(Id, Id, Id),
     // 两个数组每一项的最大值
@@ -84,9 +84,9 @@ impl Operator {
             | Operator::TfNegative(_) 
             | Operator::TfReciprocal(_)
             | Operator::TfCast(_) 
-            // | Operator::TfArgMax(_)
-            // | Operator::TfArgMin(_) 
-            // | Operator::TfCountNonzero(_) 
+            | Operator::TfArgMax(_)
+            | Operator::TfArgMin(_) 
+            | Operator::TfCountNonzero(_) 
             | Operator::TfReverse(_) 
             | Operator::TfSign(_) 
             | Operator::TfSquare(_) 
@@ -113,7 +113,7 @@ impl Operator {
             // | Operator::TfCumsum(_, _, _)
             // | Operator::TfWhere(_, _, _) 
             => 3,
-            // Operator::TfBincount(_, _, _, _) => 4,
+            Operator::TfBincount(_, _, _, _) => 4,
         }
     }
 
@@ -132,9 +132,9 @@ impl Operator {
             | Operator::TfNegative(a) 
             | Operator::TfReciprocal(a)
             | Operator::TfCast(a)
-            // | Operator::TfArgMax(a)
-            // | Operator::TfArgMin(a) 
-            // | Operator::TfCountNonzero(a) 
+            | Operator::TfArgMax(a)
+            | Operator::TfArgMin(a) 
+            | Operator::TfCountNonzero(a) 
             | Operator::TfReverse(a) 
             | Operator::TfSign(a) 
             | Operator::TfSquare(a) 
@@ -168,12 +168,12 @@ impl Operator {
                 f(b);
                 f(c);
             },
-            // Operator::TfBincount(a, b, c, d) => {
-            //     f(a);
-            //     f(b);
-            //     f(c);
-            //     f(d);
-            // },
+            Operator::TfBincount(a, b, c, d) => {
+                f(a);
+                f(b);
+                f(c);
+                f(d);
+            },
         }
     }
 
@@ -186,9 +186,9 @@ impl Operator {
             | Operator::TfNegative(a) 
             | Operator::TfReciprocal(a)
             | Operator::TfCast(a)
-            // | Operator::TfArgMax(a)
-            // | Operator::TfArgMin(a) 
-            // | Operator::TfCountNonzero(a) 
+            | Operator::TfArgMax(a)
+            | Operator::TfArgMin(a) 
+            | Operator::TfCountNonzero(a) 
             | Operator::TfReverse(a) 
             | Operator::TfSign(a) 
             | Operator::TfSquare(a) 
@@ -222,12 +222,12 @@ impl Operator {
                 f(b);
                 f(c);
             },
-            // Operator::TfBincount(a, b, c, d) => {
-            //     f(a);
-            //     f(b);
-            //     f(c);
-            //     f(d);
-            // },
+            Operator::TfBincount(a, b, c, d) => {
+                f(a);
+                f(b);
+                f(c);
+                f(d);
+            },
         }
     }
 }
@@ -241,8 +241,8 @@ impl Display for Operator {
             Operator::TfAdd(a, b) => write!(f, "TfAdd: {}, {}", a, b),
             Operator::TfMul(a, b) => write!(f, "TfMul: {}, {}", a, b),
             Operator::TfDiv(a, b) => write!(f, "TfDiv: {}, {}", a, b),
-            // Operator::TfArgMax(a) => write!(f, "TfArgMax: {}", a),
-            // Operator::TfArgMin(a) => write!(f, "TfArgMin: {}", a),
+            Operator::TfArgMax(a) => write!(f, "TfArgMax: {}", a),
+            Operator::TfArgMin(a) => write!(f, "TfArgMin: {}", a),
             Operator::TfBooleanMask(a, b) => write!(f, "TfBooleanMask: {}, {}", a, b),
             Operator::TfCast(a) => write!(f, "TfCast: {}", a),
             Operator::TfClipByValue(a, b, c) => write!(f, "TfClipByValue: {}, {}, {}", a, b, c),
@@ -259,8 +259,8 @@ impl Display for Operator {
             Operator::TfNotEqual(a, b) => write!(f, "TfNotEqual: {}, {}", a, b),
             Operator::TfNegative(id) => write!(f, "TfNegative: {}", id),
             Operator::TfReciprocal(id) => write!(f, "TfReciprocal: {}", id),
-            // Operator::TfBincount(a, b, c, d) => write!(f, "TfBincount: {}, {}, {}, {}", a, b, c, d),
-            // Operator::TfCountNonzero(id) => write!(f, "TfCountNonzero: {}", id),
+            Operator::TfBincount(a, b, c, d) => write!(f, "TfBincount: {}, {}, {}, {}", a, b, c, d),
+            Operator::TfCountNonzero(id) => write!(f, "TfCountNonzero: {}", id),
             // Operator::TfCumsum(a, b, c) => write!(f, "TfCumsum: {}, {}, {}", a, b, c),
             Operator::TfMaximum(a, b) => write!(f, "TfMaximum, {}, {}", a, b),
             Operator::TfMinimum(a, b) => write!(f, "TfMinimum, {}, {}", a, b),

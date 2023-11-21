@@ -409,113 +409,171 @@ pub fn tf_div() -> Box<dyn Component> {
     Box::new(TfDiv) as _
 }
 
-// #[derive(Debug)]
-// struct TfArgMax;
+#[derive(Debug)]
+struct TfArgMax;
 
-// impl Component for TfArgMax {
-//     fn operand_arity(&self) -> usize {
-//         1
-//     }
+impl Component for TfArgMax {
+    fn operand_arity(&self) -> usize {
+        1
+    }
 
-//     fn make_operator(&self, _immediates: &Vec<Vecs<i64>>, operands: &[Id]) -> Operator {
-//         Operator::TfArgMax(operands[0])
-//     }
+    fn make_operator(&self, _immediates: &Vec<Vecs<Vec<Vec<i64>>>>, operands: &[Id]) -> Operator {
+        Operator::TfArgMax(operands[0])
+    }
 
-//     fn make_expression<'a>(
-//         &self,
-//         context: &'a z3::Context,
-//         _immediates: &[Vecs<Int<'a>>],
-//         operands: &[Vecs<Int<'a>>],
-//         bit_width: u32,
-//     ) -> Vecs<Int<'a>> {
-//         // 寻找最大值的下标，就是遍历数组，然后依次比较出最大值，再找到对应的下标即可
-//         let size = operands[0].dims;
-//         // 最终返回的是个数组，元素的个数和第一个维度相同
-//         let mut ans: Vec<Int> = Vec::new();
-//         // 记录目标值，为了能和“最大”比较，初始值应该设为最小值，当然也得是bitvec版本的值
-//         #[allow(unused_assignments)]
-//         let mut val = zero(context, bit_width);
-//         // 淦！rust不能像其他语言那样for循环的时候同时取到下标和值，所以得遍历两遍
-//         for i in 0..size[0] {
-//             // 重置操作
-//             val = zero(context, bit_width);
-//             for j in 0..size[1] {
-//                 // 你说for里面用下标，循环体用下标取值？不好意思，ast提供的函数不允许同时返回两个值，所以处理下标和值得分开来
-//                 val = operands[0].vecs[i][j].gt(&val).ite(&operands[0].vecs[i][j], &val);
-//             }
-//             // 记录最终结果的下标
-//             let mut res = zero(context, bit_width);
-//             for j in 0..size[1] {
-//                 // 先遍历值，然后根据值确定下标就遍历看哪个相等就可以了，注意值是bitvec版本的值
-//                 res = operands[0].vecs[i][j]._eq(&val).ite(&Int::from_i64(context, i as i64), &zero(context, bit_width));
-//             }
-//             ans.push(res);
-//         }
-//         let mut result: Vecs<Int> = Vecs::new([1, size[0]]);
-//         for i in 0..size[0] {
-//             result.vecs[0].push(ans[i].clone());
-//         }
-//         return result;
-//     }
-// }
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vecs<Array<'a>>],
+        operands: &[Vecs<Array<'a>>],
+        bit_width: u32,
+    ) -> Vecs<Array<'a>> {
+        let domain_sort = Sort::int(&context);
+        let range_sort = Sort::int(&context);
+        let array_sort = Sort::array(context, &domain_sort, &range_sort);
 
-// pub fn tf_argmax() -> Box<dyn Component> {
-//     Box::new(TfArgMax) as _
-// }
+        let first_dim_sort = Sort::int(&context);
+        let mut array = Array::fresh_const(&context,  "argmax_array", &first_dim_sort, &array_sort);
 
-// #[derive(Debug)]
-// struct TfArgMin;
+        let size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let in1_size =  operands[0].vecs.select(&size_index).as_array().unwrap();
+        // 注意维度是一个一维数组，长度是数入数组的第一维度
+        let result_size_x = Int::from_i64(&context, 1);
+        let result_size_y = in1_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
 
-// impl Component for TfArgMin {
-//     fn operand_arity(&self) -> usize {
-//         1
-//     }
+        let domain_sort_1 = Sort::int(&context);
+        let range_sort_1 = Sort::int(&context);
+        let mut array_val = Array::fresh_const(context, "argmax_array_second:", &domain_sort_1, &range_sort_1);
 
-//     fn make_operator(&self, _immediates: &Vec<Vecs<i64>>, operands: &[Id]) -> Operator {
-//         Operator::TfArgMin(operands[0])
-//     }
+        for i in 0 .. DIMSIZE[0] {
+            let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            // 记录最大值
+            let mut value = zero(context, bit_width);
 
-//     fn make_expression<'a>(
-//         &self,
-//         context: &'a z3::Context,
-//         _immediates: &[Vecs<Int<'a>>],
-//         operands: &[Vecs<Int<'a>>],
-//         bit_width: u32,
-//     ) -> Vecs<Int<'a>> {
-//         // 寻找最小值的下标，就是遍历数组，然后依次比较出最小值，再找到对应的下标即可
-//         let size = operands[0].dims;
-//         // 最终返回的是个数组，元素的个数和第一个维度相同
-//         let mut ans: Vec<Int> = Vec::new();
-//         // 记录目标值，为了能和“最小”比较，初始值应该设为最大值，当然也得是bitvec版本的值
-//         #[allow(unused_assignments)]
-//         let mut val = Int::from_i64(context, 9223372036854775807);
-//         // 淦！rust不能像其他语言那样for循环的时候同时取到下标和值，所以得遍历两遍
-//         for i in 0..size[0] {
-//             // 重置操作
-//             val = Int::from_i64(context, 9223372036854775807);
-//             for j in 0..size[1] {
-//                 // 你说for里面用下标，循环体用下标取值？不好意思，ast提供的函数不允许同时返回两个值，所以处理下标和值得分开来
-//                 val = operands[0].vecs[i][j].lt(&val).ite(&operands[0].vecs[i][j], &val);
-//             }
-//             // 记录最终结果的下标
-//             let mut res = zero(context, bit_width);
-//             for j in 0..size[1] {
-//                 // 先遍历值，然后根据值确定下标就遍历看哪个相等就可以了，注意值是bitvec版本的值
-//                 res = operands[0].vecs[i][j]._eq(&val).ite(&Int::from_i64(context, i as i64), &zero(context, bit_width));
-//             }
-//             ans.push(res);
-//         }
-//         let mut result: Vecs<Int> = Vecs::new([1, size[0]]);
-//         for i in 0..size[0] {
-//             result.vecs[0].push(ans[i].clone());
-//         }
-//         return result;
-//     }
-// }
+            for j in 0 .. DIMSIZE[1] {
+                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
+                let row_index = Int::from_i64(context, i as i64);
+                let col_index = Int::from_i64(context, j as i64);
+                let is_in_row = Int::lt(&row_index, &result_size_x);
+                let is_in_col = Int::lt(&col_index, &result_size_y);
+                // 在范围内则依次比较，找到最大值
+                value = is_in_row.ite(&is_in_col.ite(&Int::gt(&in1_value_i_j, &value).ite(&in1_value_i_j, &value), &value), &value);
+            }
+            // 记录最大值对应的下标
+            let mut res = zero(context, bit_width);
+            for j in 0 .. DIMSIZE[1] {
+                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
+                let row_index = Int::from_i64(context, i as i64);
+                let col_index = Int::from_i64(context, j as i64);
+                let is_in_row = Int::lt(&row_index, &result_size_x);
+                let is_in_col = Int::lt(&col_index, &result_size_y);
+                // 在范围内则找到最大值对应的下标
+                res = is_in_row.ite(&is_in_col.ite(&Int::_eq(&value, &in1_value_i_j).ite(&col_index, &res), &res), &res);
+            }
+            // 找到最终结果之后再放入
+            array_val = array_val.store(&Int::from_i64(context, i as i64), &res);
+        }
+        array = array.store(&Int::from_i64(context, 0), &array_val);
 
-// pub fn tf_argmin() -> Box<dyn Component> {
-//     Box::new(TfArgMin) as _
-// }
+        let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let domain_sort = Sort::int(&context);
+        let range_sort = Sort::int(&context);
+        let mut array_val = Array::fresh_const(&context, "array_size:", &domain_sort, &range_sort);
+        array_val = array_val.store(&Int::from_i64(&context, SIZE_X), &result_size_x);
+        array_val = array_val.store(&Int::from_i64(&context, SIZE_Y), &result_size_y);
+        array = array.store(&array_size_index, &array_val);
+
+        let result = Vecs::new(operands[0].dims, array);
+        return result;
+    }
+}
+
+pub fn tf_argmax() -> Box<dyn Component> {
+    Box::new(TfArgMax) as _
+}
+
+#[derive(Debug)]
+struct TfArgMin;
+
+impl Component for TfArgMin {
+    fn operand_arity(&self) -> usize {
+        1
+    }
+
+    fn make_operator(&self, _immediates: &Vec<Vecs<Vec<Vec<i64>>>>, operands: &[Id]) -> Operator {
+        Operator::TfArgMin(operands[0])
+    }
+
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vecs<Array<'a>>],
+        operands: &[Vecs<Array<'a>>],
+        bit_width: u32,
+    ) -> Vecs<Array<'a>> {
+        let domain_sort = Sort::int(&context);
+        let range_sort = Sort::int(&context);
+        let array_sort = Sort::array(context, &domain_sort, &range_sort);
+
+        let first_dim_sort = Sort::int(&context);
+        let mut array = Array::fresh_const(&context,  "argmin_array", &first_dim_sort, &array_sort);
+
+        let size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let in1_size =  operands[0].vecs.select(&size_index).as_array().unwrap();
+        // 注意维度是一个一维数组，长度是数入数组的第一维度
+        let result_size_x = Int::from_i64(&context, 1);
+        let result_size_y = in1_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
+
+        let domain_sort_1 = Sort::int(&context);
+        let range_sort_1 = Sort::int(&context);
+        let mut array_val = Array::fresh_const(context, "argmin_array_second:", &domain_sort_1, &range_sort_1);
+
+        for i in 0 .. DIMSIZE[0] {
+            let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            // 记录最小值
+            let mut value = Int::from_i64(&context, 9223372036854775807);
+
+            for j in 0 .. DIMSIZE[1] {
+                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
+                let row_index = Int::from_i64(context, i as i64);
+                let col_index = Int::from_i64(context, j as i64);
+                let is_in_row = Int::lt(&row_index, &result_size_x);
+                let is_in_col = Int::lt(&col_index, &result_size_y);
+                // 在范围内则依次比较，找到最小值
+                value = is_in_row.ite(&is_in_col.ite(&Int::lt(&in1_value_i_j, &value).ite(&in1_value_i_j, &value), &value), &value);
+            }
+            // 记录最大值对应的下标
+            let mut res = zero(context, bit_width);
+            for j in 0 .. DIMSIZE[1] {
+                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
+                let row_index = Int::from_i64(context, i as i64);
+                let col_index = Int::from_i64(context, j as i64);
+                let is_in_row = Int::lt(&row_index, &result_size_x);
+                let is_in_col = Int::lt(&col_index, &result_size_y);
+                // 在范围内则找到最大值对应的下标
+                res = is_in_row.ite(&is_in_col.ite(&Int::_eq(&value, &in1_value_i_j).ite(&col_index, &res), &res), &res);
+            }
+            // 找到最终结果之后再放入
+            array_val = array_val.store(&Int::from_i64(context, i as i64), &res);
+        }
+        array = array.store(&Int::from_i64(context, 0), &array_val);
+
+        let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let domain_sort = Sort::int(&context);
+        let range_sort = Sort::int(&context);
+        let mut array_val = Array::fresh_const(&context, "array_size:", &domain_sort, &range_sort);
+        array_val = array_val.store(&Int::from_i64(&context, SIZE_X), &result_size_x);
+        array_val = array_val.store(&Int::from_i64(&context, SIZE_Y), &result_size_y);
+        array = array.store(&array_size_index, &array_val);
+
+        let result = Vecs::new(operands[0].dims, array);
+        return result;
+    }
+}
+
+pub fn tf_argmin() -> Box<dyn Component> {
+    Box::new(TfArgMin) as _
+}
 
 #[derive(Debug)]
 struct TfBooleanMask;
@@ -1671,139 +1729,154 @@ pub fn tf_reciprocal() -> Box<dyn Component> {
     Box::new(TfReciprocal) as _
 }
 
-// #[derive(Debug)]
-// struct TfBincount;
+#[derive(Debug)]
+struct TfBincount;
 
-// impl Component for TfBincount {
-//     fn operand_arity(&self) -> usize {
-//         4
-//     }
+impl Component for TfBincount {
+    fn operand_arity(&self) -> usize {
+        4
+    }
 
-//     fn make_operator(&self, _immediates: &Vec<Vecs<i64>>, operands: &[Id]) -> Operator {
-//         Operator::TfBincount(operands[0], operands[1], operands[2], operands[3])
-//     }
+    fn make_operator(&self, _immediates: &Vec<Vecs<Vec<Vec<i64>>>>, operands: &[Id]) -> Operator {
+        Operator::TfBincount(operands[0], operands[1], operands[2], operands[3])
+    }
 
-//     fn make_expression<'a>(
-//         &self,
-//         context: &'a z3::Context,
-//         _immediates: &[Vecs<Int<'a>>],
-//         operands: &[Vecs<Int<'a>>],
-//         bit_width: u32,
-//     ) -> Vecs<Int<'a>> {
-//         // 第一个输入是value数组，第二个输入是权重weight数组，第三个输入是最小长度，第四个输入是最大长度
-//         // 遍历每行，每行内部按照位置乘以权重然后相加，放入到对应的位置上
-//         let size0 = operands[0].dims;
-//         // 比最小长度小的会用0填充，比最大长度大的会忽略
-//         let min = operands[2].vecs[0][0].clone();
-//         let max = operands[3].vecs[0][0].clone();
-//         // 记录最大长度的值，所有维度都要设置为最大长度
-//         let mut max_length = zero(context, bit_width);
-//         // 记录每行的权重求和
-//         let mut hashmap_arr: Vec<HashMap<Int, Int>> = Vec::new();
-//         for i in 0..size0[0] {
-//             // 记录下每一个value对应的权重累加和
-//             let mut hashmap: HashMap<Int, Int> = HashMap::new();
-//             hashmap.clear();
-//             // 记录下每一维度的最大长度
-//             let mut maxlen = zero(context, bit_width);
-//             for j in 0..size0[1] {
-//                 let value_weight = operands[0].vecs[i][j].clone().mul(&operands[1].vecs[i][j]);
-//                 // rust的hashmap机制比较特殊，可以对于插入和更新而言可以统一起来，先看有没有，没有就直接设置，有就相加
-//                 let value_in_map = hashmap.get(&operands[0].vecs[i][j]);
-//                 let ans;
-//                 match value_in_map {
-//                     Some(v) => ans = v.add(&value_weight),
-//                     None => ans = value_weight,
-//                 }
-//                 // 这里是覆盖插入，所以对于没有的值就是插入，对于有的值就是更新
-//                 hashmap.insert(operands[0].vecs[i][j].clone(), ans);
-//                 // 比已知的最大值大就替代
-//                 maxlen = operands[0].vecs[i][j].gt(&maxlen).ite(&operands[0].vecs[i][j], &maxlen);
-//             }
-//             // 每次行遍历完成之后更新最大长度
-//             max_length = maxlen.gt(&max_length).ite(&maxlen, &max_length);
-//             hashmap_arr.push(hashmap);
-//         }
-//         // 这里直接把数组长度设置为min、max、求得的长度的最大值
-//         // 因为初始化之后就实现了大于最小值的部分用0填充
-//         let len_option = max_length.gt(&min).ite(&max_length.gt(&max).ite(&max_length, &max), &min).as_u64();
-//         #[allow(unused_assignments)]
-//         let mut result_len = 0;
-//         match len_option {
-//             Some(l) => result_len = l,
-//             None => result_len = 0,
-//         }
-//         let mut result: Vecs<Int> = Vecs::new([size0[0], (result_len + 1) as usize]);
-//         // 结果数组初始化
-//         for i in 0..size0[0] {
-//             for j in 0..((result_len + 1) as usize) {
-//                 result.vecs[i][j] = zero(context, bit_width);
-//             }
-//         }
-//         for i in 0..size0[0] {
-//             for (key, value) in &hashmap_arr[i] {
-//                 // key就是在数组中的位置，value就是对应的值，只不过bv得先转换一下
-//                 // 比较里面的键和最大长度，比它大的会忽略
-//                 let is_continue = key.gt(&max).ite(&one(context, bit_width), &zero(context, bit_width));
-//                 if is_continue == one(context, bit_width) {
-//                     continue;
-//                 }
-//                 let key_option = key.as_u64();
-//                 #[allow(unused_assignments)]
-//                 let mut index = 0;
-//                 match key_option {
-//                     Some(i) => index = i,
-//                     None => index= 0,
-//                 }
-//                 result.vecs[i][index as usize] = (*value).clone();
-//             }
-//         }
-//         return result
-//     }
-// }
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vecs<Array<'a>>],
+        operands: &[Vecs<Array<'a>>],
+        bit_width: u32,
+    ) -> Vecs<Array<'a>> {
+        let domain_sort = Sort::int(&context);
+        let range_sort = Sort::int(&context);
+        let array_sort = Sort::array(context, &domain_sort, &range_sort);
 
-// pub fn tf_bincount() -> Box<dyn Component> {
-//     Box::new(TfBincount) as _
-// }
+        let first_dim_sort = Sort::int(&context);
+        let mut array = Array::fresh_const(&context,  "bincount_array", &first_dim_sort, &array_sort);
 
-// #[derive(Debug)]
-// struct TfCountNonzero;
+        let size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let in1_size =  operands[0].vecs.select(&size_index).as_array().unwrap();
+        let result_size_x = in1_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
+        // 确保第二维度在min和max之间
+        let min_length_array = operands[2].vecs.select(&Int::from_i64(context, 0)).as_array().unwrap();
+        let min_length = min_length_array.select(&Int::from_i64(context, 0)).as_int().unwrap();
+        let max_length_array = operands[3].vecs.select(&Int::from_i64(context, 0)).as_array().unwrap();
+        let max_length = max_length_array.select(&Int::from_i64(context, 0)).as_int().unwrap();
+        // 记录数组长度的最大值
+        let mut max_value = zero(context, bit_width);
+        let zhanweifu = Int::from_i64(context, 114514);
 
-// impl Component for TfCountNonzero {
-//     fn operand_arity(&self) -> usize {
-//         1
-//     }
+        for i in 0 .. DIMSIZE[0] {
+            let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            let in2_value = operands[1].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
 
-//     fn make_operator(&self, _immediates: &Vec<Vecs<i64>>, operands: &[Id]) -> Operator {
-//         Operator::TfCountNonzero(operands[0])
-//     }
+            let domain_sort = Sort::int(&context);
+            let range_sort = Sort::int(&context);
+            let mut array_val = Array::fresh_const(context, "bincount_array_second:", &domain_sort, &range_sort);
 
-//     fn make_expression<'a>(
-//         &self,
-//         context: &'a z3::Context,
-//         _immediates: &[Vecs<Int<'a>>],
-//         operands: &[Vecs<Int<'a>>],
-//         bit_width: u32,
-//     ) -> Vecs<Int<'a>> {
-//         // 遍历输入，找出非0的数并统计个数即可
-//         let size = operands[0].dims;
-//         let mut ans = zero(context, bit_width);
-//         for i in 0..size[0] {
-//             for j in 0..size[1] {
-//                 // 为了方便计数，可以用z3判断是不是为0，然后用z3的方式相加
-//                 let is_zero = operands[0].vecs[i][j]._eq(&zero(context, bit_width)).ite(&zero(context, bit_width),&one(context, bit_width));
-//                 ans = ans.add(&is_zero);
-//             }
-//         }
-//         let mut result: Vecs<Int> = Vecs::new([1, 1]);
-//         result.vecs[0][0] = ans;
-//         return result;
-//     }
-// }
+            for j in 0 .. DIMSIZE[1] {
+                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
+                let in2_value_i_j = in2_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
+                max_value = Int::gt(&in1_value_i_j, &max_value).ite(&in1_value_i_j, &max_value);
+                let value = Int::mul(&context, &[&in1_value_i_j, &in2_value_i_j]);
+                // 确保第二维度在min和max之间
+                let is_min = Int::lt(&in1_value_i_j, &min_length);
+                let is_max = Int::gt(&in1_value_i_j, &max_length);
+                let is_in_range = Int::lt(&in1_value_i_j, &max_value);
+                // 由于之前填充了0，所以不能直接让index为0，这个时候就要判断如果不在范围之内那么就得让他在占位符里面呆着
+                let index = is_min.ite(&min_length, &is_max.ite(&max_length, &is_in_range.ite(&in1_value_i_j, &zhanweifu)));
+                array_val = array_val.store(&index, &value);
+            }
 
-// pub fn tf_count_nonzero() -> Box<dyn Component> {
-//     Box::new(TfCountNonzero) as _
-// }
+            array = array.store(&Int::from_i64(context, i as i64), &array_val);
+        }
+        let is_min = Int::lt(&max_value, &min_length);
+        let is_max = Int::gt(&max_value, &max_length);
+        let result_size_y = is_min.ite(&min_length, &is_max.ite(&max_length, &max_value));
+
+        let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let domain_sort = Sort::int(&context);
+        let range_sort = Sort::int(&context);
+        let mut array_val = Array::fresh_const(&context, "array_size:", &domain_sort, &range_sort);
+        array_val = array_val.store(&Int::from_i64(&context, SIZE_X), &result_size_x);
+        array_val = array_val.store(&Int::from_i64(&context, SIZE_Y), &result_size_y);
+        array = array.store(&array_size_index, &array_val);
+
+        let result = Vecs::new(operands[0].dims, array);
+        return result;
+    }
+}
+
+pub fn tf_bincount() -> Box<dyn Component> {
+    Box::new(TfBincount) as _
+}
+
+#[derive(Debug)]
+struct TfCountNonzero;
+
+impl Component for TfCountNonzero {
+    fn operand_arity(&self) -> usize {
+        1
+    }
+
+    fn make_operator(&self, _immediates: &Vec<Vecs<Vec<Vec<i64>>>>, operands: &[Id]) -> Operator {
+        Operator::TfCountNonzero(operands[0])
+    }
+
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vecs<Array<'a>>],
+        operands: &[Vecs<Array<'a>>],
+        bit_width: u32,
+    ) -> Vecs<Array<'a>> {
+        let const1 = one(context, bit_width);
+        let const0 = zero(context, bit_width);
+
+        let domain_sort = Sort::int(&context);
+        let range_sort = Sort::int(&context);
+        let array_sort = Sort::array(context, &domain_sort, &range_sort);
+
+        let first_dim_sort = Sort::int(&context);
+        let mut array = Array::fresh_const(&context,  "count_nonzero_array", &first_dim_sort, &array_sort);
+        let result_size_x = Int::from_i64(&context, 1);
+        let result_size_y = Int::from_i64(&context, 1);
+        let mut count = zero(context, bit_width);
+
+        let domain_sort_1 = Sort::int(&context);
+        let range_sort_1 = Sort::int(&context);
+        let mut array_val = Array::fresh_const(context, "count_nonzero_array_second:", &domain_sort_1, &range_sort_1);
+
+        for i in 0 .. DIMSIZE[0] {
+
+            let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+
+            for j in 0 .. DIMSIZE[1] {
+                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
+                let is_zero = Int::_eq(&in1_value_i_j, &const0);
+                count = is_zero.ite(&count, &Int::add(&context, &[&count, &const1]));
+            }
+        }
+        array_val = array_val.store(&Int::from_i64(context, 0), &count);
+        array = array.store(&Int::from_i64(context, 0), &array_val);
+
+        let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let domain_sort = Sort::int(&context);
+        let range_sort = Sort::int(&context);
+        let mut array_val = Array::fresh_const(&context, "array_size:", &domain_sort, &range_sort);
+        array_val = array_val.store(&Int::from_i64(&context, SIZE_X), &result_size_x);
+        array_val = array_val.store(&Int::from_i64(&context, SIZE_Y), &result_size_y);
+        array = array.store(&array_size_index, &array_val);
+
+        let result = Vecs::new(operands[0].dims, array);
+        return result;
+    }
+}
+
+pub fn tf_count_nonzero() -> Box<dyn Component> {
+    Box::new(TfCountNonzero) as _
+}
 
 // #[derive(Debug)]
 // struct TfCumsum;
@@ -2463,14 +2536,14 @@ macro_rules! with_operator_component {
                 let $c = TfDiv;
                 $body
             }
-            // Operator::TfArgMax(_) => {
-            //     let $c = TfArgMax;
-            //     $body
-            // }
-            // Operator::TfArgMin(_) => {
-            //     let $c = TfArgMin;
-            //     $body
-            // }
+            Operator::TfArgMax(_) => {
+                let $c = TfArgMax;
+                $body
+            }
+            Operator::TfArgMin(_) => {
+                let $c = TfArgMin;
+                $body
+            }
             Operator::TfBooleanMask(_, _) => {
                 let $c = TfBooleanMask;
                 $body
@@ -2535,14 +2608,14 @@ macro_rules! with_operator_component {
                 let $c = TfReciprocal;
                 $body
             }
-            // Operator::TfBincount(_, _, _, _) => {
-            //     let $c = TfBincount;
-            //     $body
-            // }
-            // Operator::TfCountNonzero(_) => {
-            //     let $c = TfCountNonzero;
-            //     $body
-            // }
+            Operator::TfBincount(_, _, _, _) => {
+                let $c = TfBincount;
+                $body
+            }
+            Operator::TfCountNonzero(_) => {
+                let $c = TfCountNonzero;
+                $body
+            }
             // Operator::TfCumsum(_, _, _) => {
             //     let $c = TfCumsum;
             //     $body
