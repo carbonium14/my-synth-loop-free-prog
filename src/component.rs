@@ -4,7 +4,7 @@ use z3::ast::{Ast, Int, Array, Bool};
 
 use z3::Sort;
 
-const DIMSIZE : [usize ; 2] = [4,10];
+const DIMSIZE : [usize ; 2] = [4, 10];
 const SIZE_STORE_INDEX : i64 = -2;
 const SIZE_X : i64 = 0;
 const SIZE_Y : i64 = 1;
@@ -443,7 +443,7 @@ impl Component for TfArgMax {
 
         let domain_sort_1 = Sort::int(&context);
         let range_sort_1 = Sort::int(&context);
-        let mut array_val = Array::fresh_const(context, "argmax_array_second:", &domain_sort_1, &range_sort_1);
+        let mut array_val_1 = Array::fresh_const(context, "argmax_array_second:", &domain_sort_1, &range_sort_1);
 
         for i in 0 .. DIMSIZE[0] {
             let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
@@ -471,9 +471,9 @@ impl Component for TfArgMax {
                 res = is_in_row.ite(&is_in_col.ite(&Int::_eq(&value, &in1_value_i_j).ite(&col_index, &res), &res), &res);
             }
             // 找到最终结果之后再放入
-            array_val = array_val.store(&Int::from_i64(context, i as i64), &res);
+            array_val_1 = array_val_1.store(&Int::from_i64(context, i as i64), &res);
         }
-        array = array.store(&Int::from_i64(context, 0), &array_val);
+        array = array.store(&Int::from_i64(context, 0), &array_val_1);
 
         let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
         let domain_sort = Sort::int(&context);
@@ -526,7 +526,7 @@ impl Component for TfArgMin {
 
         let domain_sort_1 = Sort::int(&context);
         let range_sort_1 = Sort::int(&context);
-        let mut array_val = Array::fresh_const(context, "argmin_array_second:", &domain_sort_1, &range_sort_1);
+        let mut array_val_1 = Array::fresh_const(context, "argmin_array_second:", &domain_sort_1, &range_sort_1);
 
         for i in 0 .. DIMSIZE[0] {
             let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
@@ -554,9 +554,9 @@ impl Component for TfArgMin {
                 res = is_in_row.ite(&is_in_col.ite(&Int::_eq(&value, &in1_value_i_j).ite(&col_index, &res), &res), &res);
             }
             // 找到最终结果之后再放入
-            array_val = array_val.store(&Int::from_i64(context, i as i64), &res);
+            array_val_1 = array_val_1.store(&Int::from_i64(context, i as i64), &res);
         }
-        array = array.store(&Int::from_i64(context, 0), &array_val);
+        array = array.store(&Int::from_i64(context, 0), &array_val_1);
 
         let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
         let domain_sort = Sort::int(&context);
@@ -964,6 +964,105 @@ impl Component for TfEqual {
 
 pub fn tf_equal() -> Box<dyn Component> {
     Box::new(TfEqual) as _
+}
+
+#[derive(Debug)]
+struct TfExpandDims;
+
+impl Component for TfExpandDims {
+    fn operand_arity(&self) -> usize {
+        2
+    }
+
+    fn make_operator(&self, _immediates: &Vec<Vecs<Vec<Vec<i64>>>>, operands: &[Id]) -> Operator {
+        Operator::TfExpandDims(operands[0], operands[1])
+    }
+
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vecs<Array<'a>>],
+        operands: &[Vecs<Array<'a>>],
+        bit_width: u32,
+    ) -> Vecs<Array<'a>> {
+        let const0 = zero(context, bit_width);
+        let const1 = one(context, bit_width);
+        // 由于我们是二维数组，那么axis只有0、1、-1三个选项，而-1和1功能是一样的，所以统一为0和1
+        let axis_array = operands[1].vecs.select(&const0).as_array().unwrap();
+        let axis_ = axis_array.select(&const0).as_int().unwrap();
+        let axis = axis_._eq(&const0).ite(&const0, &const1);
+
+        let domain_sort = Sort::int(&context);
+        let range_sort = Sort::int(&context);
+        let array_sort = Sort::array(context, &domain_sort, &range_sort);
+
+        let first_dim_sort = Sort::int(&context);
+        let mut array = Array::fresh_const(&context,  "expand_dims_array_axis_0", &first_dim_sort, &array_sort);
+
+        let domain_sort_1 = Sort::int(&context);
+        let range_sort_1 = Sort::int(&context);
+        let array_sort_1 = Sort::array(context, &domain_sort_1, &range_sort_1);
+
+        let first_dim_sort_1 = Sort::int(&context);
+        let mut array_1 = Array::fresh_const(&context,  "expand_dims_array_axis_1", &first_dim_sort_1, &array_sort_1);
+
+        let size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let in1_size =  operands[0].vecs.select(&size_index).as_array().unwrap();
+        let in1_size_x = in1_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
+        let _in1_size_y = in1_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
+        // axis = 0时，维度数组例如[2] -> [1, 2]，axis = 1时，维度数组例如[2] -> [2, 1]
+        let result_size_x = axis._eq(&const0).ite(&const1, &in1_size_x);
+        let result_size_y = axis._eq(&const0).ite(&in1_size_x, &const1);
+        // 只能是按照两种情况求出两种数组，然后在根据axis的值确定是哪个数组了
+        for i in 0 .. DIMSIZE[0] {
+
+            let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+
+            let domain_sort = Sort::int(&context);
+            let range_sort = Sort::int(&context);
+            let mut array_val = Array::fresh_const(context, "expand_dims_array_second:", &domain_sort, &range_sort);
+
+            for j in 0 .. DIMSIZE[1] {
+                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
+                array_val = array_val.store(&Int::from_i64(context, j as i64), &in1_value_i_j);
+            }
+
+            array = array.store(&Int::from_i64(context, i as i64), &array_val);
+        }
+
+        for i in 0 .. DIMSIZE[1] {
+
+            let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+
+            let domain_sort = Sort::int(&context);
+            let range_sort = Sort::int(&context);
+            let mut array_val = Array::fresh_const(context, "expand_dims_array_second_1:", &domain_sort, &range_sort);
+
+            for j in 0 .. DIMSIZE[0] {
+                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
+                array_val = array_val.store(&Int::from_i64(context, j as i64), &in1_value_i_j);
+            }
+
+            array_1 = array_1.store(&Int::from_i64(context, i as i64), &array_val);
+        }
+
+        array = axis._eq(&const0).ite(&array, &array_1);
+
+        let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let domain_sort = Sort::int(&context);
+        let range_sort = Sort::int(&context);
+        let mut array_val = Array::fresh_const(&context, "array_size:", &domain_sort, &range_sort);
+        array_val = array_val.store(&Int::from_i64(&context, SIZE_X), &result_size_x);
+        array_val = array_val.store(&Int::from_i64(&context, SIZE_Y), &result_size_y);
+        array = array.store(&array_size_index, &array_val);
+
+        let result = Vecs::new(operands[0].dims, array);
+        return result;
+    }
+}
+
+pub fn tf_expand_dims() -> Box<dyn Component> {
+    Box::new(TfExpandDims) as _
 }
 
 #[derive(Debug)]
@@ -1878,64 +1977,133 @@ pub fn tf_count_nonzero() -> Box<dyn Component> {
     Box::new(TfCountNonzero) as _
 }
 
-// #[derive(Debug)]
-// struct TfCumsum;
+#[derive(Debug)]
+struct TfCumsum;
 
-// impl Component for TfCumsum {
-//     fn operand_arity(&self) -> usize {
-//         3
-//     }
+impl Component for TfCumsum {
+    fn operand_arity(&self) -> usize {
+        4
+    }
 
-//     fn make_operator(&self, _immediates: &Vec<Vecs<i64>>, operands: &[Id]) -> Operator {
-//         Operator::TfCumsum(operands[0], operands[1], operands[2])
-//     }
+    fn make_operator(&self, _immediates: &Vec<Vecs<Vec<Vec<i64>>>>, operands: &[Id]) -> Operator {
+        Operator::TfCumsum(operands[0], operands[1], operands[2], operands[3])
+    }
 
-//     fn make_expression<'a>(
-//         &self,
-//         context: &'a z3::Context,
-//         _immediates: &[Vecs<Int<'a>>],
-//         operands: &[Vecs<Int<'a>>],
-//         bit_width: u32,
-//     ) -> Vecs<Int<'a>> {
-//         // 第一个是输入的数组
-//         // 第二个是判断算不算第一个，加入一个数组[a, b, c]，如果第二个参数是真，那么结果是[a, a + b, a + b + c]，否则就是[0, a, a + b]
-//         // 第三个是判断是正序还是倒序
-//         let size = operands[0].dims;
-//         let mut ans = zero(context, bit_width);
-//         let mut result: Vecs<Int> = Vecs::new(size);
-//         // 1为true，0为false
-//         let is_add_first = operands[1].vecs[0][0]._eq(&one(context, bit_width)).ite(&one(context, bit_width),&zero(context, bit_width));
-//         let is_reverse = operands[2].vecs[0][0]._eq(&one(context, bit_width)).ite(&one(context, bit_width),&zero(context, bit_width));
-//         if is_add_first == zero(context, bit_width) {
-//             for i in 0..size[0] {
-//                 // 清零操作
-//                 ans = zero(context, bit_width);
-//                 for j in 0..size[1] {
-//                     result.vecs[i].push(ans.clone().add(&operands[0].vecs[i][j]));
-//                     ans = ans.clone().add(&operands[0].vecs[i][j]);
-//                 }
-//             }
-//         } else {
-//             for i in 0..size[0] {
-//                 result.vecs[i].push(zero(context, bit_width));
-//                 for j in 0..size[1] - 1 {
-//                     result.vecs[i].push(ans.clone().add(&operands[0].vecs[i][j]));
-//                     ans = ans.clone().add(&operands[0].vecs[i][j]);
-//                 }
-//             }
-//         }
-//         if is_reverse == one(context, bit_width) {
-//             for i in 0..size[0] {
-//                 result.vecs[i].reverse();
-//             }
-//         }
-//         return result;
-//     }
-// }
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vecs<Array<'a>>],
+        operands: &[Vecs<Array<'a>>],
+        bit_width: u32,
+    ) -> Vecs<Array<'a>> {
+        let const0 = zero(context, bit_width);
+        let const1 = one(context, bit_width);
 
-// pub fn tf_cumsum() -> Box<dyn Component> {
-//     Box::new(TfCumsum) as _
-// }
+        let domain_sort = Sort::int(&context);
+        let range_sort = Sort::int(&context);
+        let array_sort = Sort::array(context, &domain_sort, &range_sort);
+
+        let first_dim_sort = Sort::int(&context);
+        let mut array = Array::fresh_const(&context,  "cumsum_array_axis_0", &first_dim_sort, &array_sort);
+
+        let domain_sort_1 = Sort::int(&context);
+        let range_sort_1 = Sort::int(&context);
+        let array_sort_1 = Sort::array(context, &domain_sort_1, &range_sort_1);
+
+        let first_dim_sort_1 = Sort::int(&context);
+        let mut array_1 = Array::fresh_const(&context,  "cumsum_array_axis_1", &first_dim_sort_1, &array_sort_1);
+
+        let size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let in1_size =  operands[0].vecs.select(&size_index).as_array().unwrap();
+        let result_size_x = in1_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
+        let result_size_y = in1_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
+        let axis_array = operands[1].vecs.select(&const0).as_array().unwrap();
+        let axis = axis_array.select(&const0).as_int().unwrap();
+        // 二维数组的axis只有可能是0或1
+        let axis_is_zero = axis._eq(&const0);
+        let exclusive_array = operands[2].vecs.select(&const0).as_array().unwrap();
+        let exclusive = exclusive_array.select(&const0).as_int().unwrap();
+        let exclusive_is_zero = exclusive._eq(&const0);
+        let reverse_array = operands[3].vecs.select(&const0).as_array().unwrap();
+        let reverse = reverse_array.select(&const0).as_int().unwrap();
+        let reverse_is_zero = reverse._eq(&const0);
+
+        for i in 0 .. DIMSIZE[0] {
+
+            let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+
+            let domain_sort = Sort::int(&context);
+            let range_sort = Sort::int(&context);
+            let mut array_val = Array::fresh_const(context, "cumsum_array_second_1:", &domain_sort, &range_sort);
+            // 这里防止exclusive的时候下标为0的位置没有值，如果为false也会被新的值覆盖，不会有影响
+            array_val.store(&const0, &const0);
+            let mut ans = zero(&context, bit_width);
+
+            for j in 0 .. DIMSIZE[1] {
+                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
+                let row_index = Int::from_i64(context, i as i64);
+                let col_index = Int::from_i64(context, j as i64);
+                let is_in_row = Int::lt(&row_index, &result_size_x);
+                let is_in_col = Int::lt(&col_index, &result_size_y);
+                ans = Int::add(&context, &[&ans, &in1_value_i_j]);
+                let value = is_in_row.ite(&is_in_col.ite(&ans, &const0), &const0);
+                // exclusive可以看作整个数组向右平移一位
+                // reverse可以看成下标为总长度减去当前长度
+                let index_with_exclusive = exclusive_is_zero.ite(&Int::from_i64(context, j as i64), &Int::from_i64(context, (j + 1) as i64));
+                let index_with_exclusive_and_reverse = reverse_is_zero.ite(&index_with_exclusive, &Int::sub(&context, &[&result_size_y, &index_with_exclusive, &const1]));
+                array_val = array_val.store(&index_with_exclusive_and_reverse, &value);
+            }
+
+            array_1 = array_1.store(&Int::from_i64(context, i as i64), &array_val);
+        }
+
+        for i in 0 .. DIMSIZE[1] {
+
+            let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+
+            let domain_sort = Sort::int(&context);
+            let range_sort = Sort::int(&context);
+            let mut array_val = Array::fresh_const(context, "cumsum_array_second_0:", &domain_sort, &range_sort);
+            // 这里防止exclusive的时候下标为0的位置没有值，如果为false也会被新的值覆盖，不会有影响
+            array_val.store(&const0, &const0);
+            let mut ans = zero(&context, bit_width);
+
+            for j in 0 .. DIMSIZE[0] {
+                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
+                let row_index = Int::from_i64(context, i as i64);
+                let col_index = Int::from_i64(context, j as i64);
+                let is_in_row = Int::lt(&row_index, &result_size_x);
+                let is_in_col = Int::lt(&col_index, &result_size_y);
+                ans = Int::add(&context, &[&ans, &in1_value_i_j]);
+                let value = is_in_row.ite(&is_in_col.ite(&ans, &const0), &const0);
+                // exclusive可以看作整个数组向右平移一位
+                // reverse可以看成下标为总长度减去当前长度
+                let index_with_exclusive = exclusive_is_zero.ite(&Int::from_i64(context, j as i64), &Int::from_i64(context, (j + 1) as i64));
+                let index_with_exclusive_and_reverse = reverse_is_zero.ite(&index_with_exclusive, &Int::sub(&context, &[&result_size_y, &index_with_exclusive, &const1]));
+                array_val = array_val.store(&index_with_exclusive_and_reverse, &value);
+            }
+
+            array = array.store(&Int::from_i64(context, i as i64), &array_val);
+        }
+
+        array = axis_is_zero.ite(&array, &array_1);
+
+        let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let domain_sort = Sort::int(&context);
+        let range_sort = Sort::int(&context);
+        let mut array_val = Array::fresh_const(&context, "array_size:", &domain_sort, &range_sort);
+        array_val = array_val.store(&Int::from_i64(&context, SIZE_X), &result_size_x);
+        array_val = array_val.store(&Int::from_i64(&context, SIZE_Y), &result_size_y);
+        array = array.store(&array_size_index, &array_val);
+
+        let result = Vecs::new(operands[0].dims, array);
+        return result;
+    }
+}
+
+pub fn tf_cumsum() -> Box<dyn Component> {
+    Box::new(TfCumsum) as _
+}
 
 #[derive(Debug)]
 struct TfMaximum;
@@ -2282,230 +2450,166 @@ pub fn tf_square() -> Box<dyn Component> {
     Box::new(TfSquare) as _
 }
 
-// #[derive(Debug)]
-// struct TfWhere;
+#[derive(Debug)]
+struct TfWhere;
 
-// impl Component for TfWhere {
-//     fn operand_arity(&self) -> usize {
-//         3
-//     }
+impl Component for TfWhere {
+    fn operand_arity(&self) -> usize {
+        3
+    }
 
-//     fn make_operator(&self, _immediates: &Vec<Vecs<i64>>, operands: &[Id]) -> Operator {
-//         Operator::TfWhere(operands[0], operands[1], operands[2])
-//     }
+    fn make_operator(&self, _immediates: &Vec<Vecs<Vec<Vec<i64>>>>, operands: &[Id]) -> Operator {
+        Operator::TfWhere(operands[0], operands[1], operands[2])
+    }
 
-//     fn make_expression<'a>(
-//         &self,
-//         context: &'a z3::Context,
-//         _immediates: &[Vecs<Int<'a>>],
-//         operands: &[Vecs<Int<'a>>],
-//         bit_width: u32,
-//     ) -> Vecs<Int<'a>> {
-//         // 根据输入的不同，方法不同。只有第一个是返回非0的位置，有后面输入，如果第一个是true则返回第二个，否则是第三个
-//         // rust能重载，但好像比较麻烦，所以目前先按照如果第二个和第三个输入为0则为未输入
-//         let mut flag = false;
-//         let size0 = operands[0].dims;
-//         let size1 = operands[1].dims;
-//         let size2 = operands[2].dims;
-//         for i in 0..size1[0] {
-//             for j in 0..size1[1] {
-//                 if operands[1].vecs[i][j] != zero(context, bit_width) {
-//                     flag = true;
-//                 }
-//             }
-//         }
-//         for i in 0..size2[0] {
-//             for j in 0..size2[1] {
-//                 if operands[2].vecs[i][j] != zero(context, bit_width) {
-//                     flag = true;
-//                 }
-//             }
-//         }
-//         // 没有输入第二个和第三个数，那么就是返回非0的位置
-//         if flag == false {
-//             // 记录下个数，作为结果的维度用
-//             let mut count = 0;
-//             // 要求建立结果的时候就要确定维度，可是一开始并不知道有多长，所以就先临时存储，最后取出即可
-//             let mut index_arr: Vec<Vec<Int>> = Vec::new();
-//             for i in 0..size0[0] {
-//                 for j in 0..size0[1] {
-//                     if operands[0].vecs[i][j] != zero(context, bit_width) {
-//                         // 要注意结果按照bitvec存储
-//                         index_arr.push([Int::from_i64(context, i as i64), Int::from_i64(context, j as i64)].to_vec());
-//                         count += 1;
-//                     }
-//                 }
-//             }
-//             // 结果数组的行数就是非0的个数，列数就是几个维度
-//             let mut result: Vecs<Int> = Vecs::new([count as usize, 2]);
-//             for i in 0..index_arr.len() {
-//                 result.vecs.push(index_arr[i].clone());
-//             }
-//             return result;
-//         } else {
-//             // 其余情况就是如果为true则返回第二个参数，为false则返回第三个参数
-//             // 用最笨的办法求最大长度，rust你为什么没有min或者max函数！！！！！！！！！！
-//             let size_x_max = if size0[0] > size1[0] && size0[0] > size2[0] {
-//                 size0[0]
-//             } else if size1[0] > size0[0] && size1[0] > size2[0] {
-//                 size1[0]
-//             } else {
-//                 size2[0]
-//             };
-//             let size_y_max = if size0[1] > size1[1] && size0[1] > size2[1] {
-//                 size0[1]
-//             } else if size1[1] > size0[1] && size1[1] > size2[1] {
-//                 size1[1]
-//             } else {
-//                 size2[1]
-//             };
-//             // 三个数组广播，那就两两广播
-//             // 广播规则：维度低的向量有1，则扩充，也就是标量会扩充到和向量一样的维度
-//             // 尾部尺寸一致的，按照行进行扩充，如4行3列和1行3列的数组，都是3列，所以1行3列的数组会扩充到4行3列
-//             // 二者结合，比如3行1列和1行3列的数组，因为有1列和3列，所以都会扩充到3行3列
-//             // 能广播，第一种情况是两个维度上一定有一个是一样的
-//             if size0[1] == size1[1] && size0[0] != size1[0] || size0[0] == size1[0] && size0[1] != size1[1] {
-//                 // 横向维度一样，扩展纵向
-//                 if size0[0] == size1[0] {
-//                     // 第一个长度小于第二个
-//                     if size0[1] < size1[1] {
-//                         for i in 0..size0[0] {
-//                             for j in size0[1]..size1[1] {
-//                                 // 举个例子，一个长度为2的数组扩展到长度为5，那么要从下标为2开始，下标为5（不含）中止，每次要放入的数就是长度为2数组下标为0、1、0、1的数
-//                                 operands[0].clone().vecs[i].push(operands[0].vecs[i][j % size0[1]].clone());
-//                             }
-//                         }
-//                     } else {
-//                         for i in 0..size1[0] {
-//                             for j in size1[1]..size0[1] {
-//                                 operands[1].clone().vecs[i].push(operands[1].vecs[i][j % size1[1]].clone());
-//                             }
-//                         }
-//                     }
-//                 // 纵向维度一样，扩展横向
-//                 } else if size0[1] == size1[1] {
-//                     // 第一个长度小于第二个
-//                     if size0[0] < size1[0] {
-//                         for i in size0[0]..size1[0] {
-//                             // 和上面的例子一样
-//                             operands[0].clone().vecs.push(operands[0].vecs[i % size0[0]].clone());
-//                         }
-//                     } else {
-//                         for i in size1[0]..size0[0] {
-//                             operands[1].clone().vecs.push(operands[1].vecs[i % size1[0]].clone());
-//                         }
-//                     }
-//                 }
-//             // 虽不相同，但是其中有两个维度是1，也可以扩展
-//             } else if size0[0] != size1[0] && size0[1] != size1[1] && (size0[0] == 1 || size0[1] == 1 || size1[0] == 1 || size1[1] == 1) {
-//                 if size0[1] == 1 {
-//                     for i in 0..size0[0] {
-//                         // 既然一个为1，另一个就不是1，所以扩展的最终长度是另一个的长度
-//                         for _j in 0..size1[1] - 1 {
-//                             operands[0].clone().vecs[i].push(operands[0].vecs[i][0].clone());
-//                         }
-//                     }
-//                 }
-//                 if size1[1] == 1 {
-//                     for i in 0..size1[0] {
-//                         for _j in 0..size0[1] - 1 {
-//                             operands[1].clone().vecs[i].push(operands[1].vecs[i][0].clone());
-//                         }
-//                     }
-//                 }
-//                 if size0[0] == 1 {
-//                     for _i in 0..size1[0] - 1 {
-//                         operands[0].clone().vecs.push(operands[0].vecs[0].clone());
-//                     }
-//                 }
-//                 if size1[0] == 1 {
-//                     for _i in 0..size0[0] - 1 {
-//                         operands[1].clone().vecs.push(operands[1].vecs[0].clone());
-//                     }
-//                 }
-//             }
-//             // 广播规则：维度低的向量有1，则扩充，也就是标量会扩充到和向量一样的维度
-//             // 尾部尺寸一致的，按照行进行扩充，如4行3列和1行3列的数组，都是3列，所以1行3列的数组会扩充到4行3列
-//             // 二者结合，比如3行1列和1行3列的数组，因为有1列和3列，所以都会扩充到3行3列
-//             // 能广播，第一种情况是两个维度上一定有一个是一样的
-//             if size2[1] == size1[1] && size2[0] != size1[0] || size2[0] == size1[0] && size2[1] != size1[1] {
-//                 // 横向维度一样，扩展纵向
-//                 if size2[0] == size1[0] {
-//                     // 第一个长度小于第二个
-//                     if size2[1] < size1[1] {
-//                         for i in 0..size2[0] {
-//                             for j in size2[1]..size1[1] {
-//                                 // 举个例子，一个长度为2的数组扩展到长度为5，那么要从下标为2开始，下标为5（不含）中止，每次要放入的数就是长度为2数组下标为0、1、0、1的数
-//                                 operands[2].clone().vecs[i].push(operands[2].vecs[i][j % size2[1]].clone());
-//                             }
-//                         }
-//                     } else {
-//                         for i in 0..size1[0] {
-//                             for j in size1[1]..size2[1] {
-//                                 operands[1].clone().vecs[i].push(operands[1].vecs[i][j % size1[1]].clone());
-//                             }
-//                         }
-//                     }
-//                 // 纵向维度一样，扩展横向
-//                 } else if size2[1] == size1[1] {
-//                     // 第一个长度小于第二个
-//                     if size2[0] < size1[0] {
-//                         for i in size2[0]..size1[0] {
-//                             // 和上面的例子一样
-//                             operands[2].clone().vecs.push(operands[2].vecs[i % size2[0]].clone());
-//                         }
-//                     } else {
-//                         for i in size1[0]..size2[0] {
-//                             operands[1].clone().vecs.push(operands[1].vecs[i % size1[0]].clone());
-//                         }
-//                     }
-//                 }
-//             // 虽不相同，但是其中有两个维度是1，也可以扩展
-//             } else if size2[0] != size1[0] && size2[1] != size1[1] && (size2[0] == 1 || size2[1] == 1 || size1[0] == 1 || size1[1] == 1) {
-//                 if size2[1] == 1 {
-//                     for i in 0..size2[0] {
-//                         // 既然一个为1，另一个就不是1，所以扩展的最终长度是另一个的长度
-//                         for _j in 0..size1[1] - 1 {
-//                             operands[2].clone().vecs[i].push(operands[2].vecs[i][0].clone());
-//                         }
-//                     }
-//                 }
-//                 if size1[1] == 1 {
-//                     for i in 0..size1[0] {
-//                         for _j in 0..size2[1] - 1 {
-//                             operands[1].clone().vecs[i].push(operands[1].vecs[i][0].clone());
-//                         }
-//                     }
-//                 }
-//                 if size2[0] == 1 {
-//                     for _i in 0..size1[0] - 1 {
-//                         operands[2].clone().vecs.push(operands[2].vecs[0].clone());
-//                     }
-//                 }
-//                 if size1[0] == 1 {
-//                     for _i in 0..size2[0] - 1 {
-//                         operands[1].clone().vecs.push(operands[1].vecs[0].clone());
-//                     }
-//                 }
-//             }
-//             let mut result: Vecs<Int> = Vecs::new([size_x_max, size_y_max]);
-//             for i in 0..size_x_max {
-//                 for j in 0..size_y_max {
-//                     if operands[0].vecs[i][j] == zero(context, bit_width) {
-//                         result.vecs[i][j] = operands[1].vecs[i][j].clone();
-//                     } else {
-//                         result.vecs[i][j] = operands[2].vecs[i][j].clone();
-//                     }
-//                 }
-//             }
-//             return result;
-//         }
-//     }
-// }
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vecs<Array<'a>>],
+        operands: &[Vecs<Array<'a>>],
+        bit_width: u32,
+    ) -> Vecs<Array<'a>> {
+        let const0 = zero(context, bit_width);
+        let const1 = one(context, bit_width);
 
-// pub fn tf_where() -> Box<dyn Component> {
-//     Box::new(TfWhere) as _
-// }
+        let domain_sort = Sort::int(&context);
+        let range_sort = Sort::int(&context);
+        let array_sort = Sort::array(context, &domain_sort, &range_sort);
+
+        let first_dim_sort = Sort::int(&context);
+        let mut array = Array::fresh_const(&context,  "where_array_without_2_3", &first_dim_sort, &array_sort);
+
+        let domain_sort_1 = Sort::int(&context);
+        let range_sort_1 = Sort::int(&context);
+        let array_sort_1 = Sort::array(context, &domain_sort_1, &range_sort_1);
+
+        let first_dim_sort_1 = Sort::int(&context);
+        let mut array_1 = Array::fresh_const(&context,  "where_array_with_2_3", &first_dim_sort_1, &array_sort_1);
+
+        let domain_sort_1_ = Sort::int(&context);
+        let range_sort_1_ = Sort::int(&context);
+        let mut array_val_1_ = Array::fresh_const(context, "where_array_second_without_2_3:", &domain_sort_1_, &range_sort_1_);
+
+        let size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let in1_size =  operands[0].vecs.select(&size_index).as_array().unwrap();
+        let in2_size =  operands[1].vecs.select(&size_index).as_array().unwrap();
+        let in3_size =  operands[2].vecs.select(&size_index).as_array().unwrap();
+        let in1_size_x = in1_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
+        let in1_size_y = in1_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
+        let in2_size_x = in2_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
+        let in2_size_y = in2_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
+        let in3_size_x = in3_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
+        let in3_size_y = in3_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
+        // 记录下第一种情况中行的个数，由于行的个数由非0的个数来计算，因此需要一个变量
+        let mut count_result_size_x = zero(context, bit_width);
+        // 和boolean_mask一样，需要一个变量放下多余的变量用来处理
+        let zhanweifu = Int::from_i64(&context, 114514);
+        // 由于第二个和第三个输入都是0和不都是0是不一样的功能，因此得先处理是不是都是0
+        let mut is_all_zero = Bool::from_bool(&context, true);
+
+        for i in 0 .. DIMSIZE[0] {
+            let in2_value = operands[1].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            let in3_value = operands[2].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            for j in 0 .. DIMSIZE[1] {
+                let in2_value_i_j = in2_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
+                let in3_value_i_j = in3_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
+                let row_index = Int::from_i64(context, i as i64);
+                let col_index = Int::from_i64(context, j as i64);
+                let is_in2_in_row = Int::lt(&row_index, &in2_size_x);
+                let is_in2_in_col = Int::lt(&col_index, &in2_size_y);
+                let is_in3_in_row = Int::lt(&row_index, &in3_size_x);
+                let is_in3_in_col = Int::lt(&col_index, &in3_size_y);
+                let in2_is_zero = in2_value_i_j._eq(&const0);
+                let in3_is_zero = in3_value_i_j._eq(&const0);
+                let false_value = Bool::from_bool(&context, false);
+                is_all_zero = is_in2_in_row.ite(
+                    &is_in2_in_col.ite(
+                        &is_in3_in_row.ite(
+                            &is_in3_in_col.ite(
+                                &in2_is_zero.ite(
+                                    &in3_is_zero, 
+                                    &false_value), 
+                                    &is_all_zero), 
+                                    &is_all_zero), 
+                                    &is_all_zero), 
+                                    &is_all_zero);
+            }
+        }
+        // 如果第二个和第三个都没输入（也就是都是0）那就统计非0的下标，一维数组就只有行，二维数组有行有列
+        for i in 0 .. DIMSIZE[0] {
+
+            let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+
+            for j in 0 .. DIMSIZE[1] {
+                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
+                let row_index = Int::from_i64(context, i as i64);
+                let col_index = Int::from_i64(context, j as i64);
+                let is_in_row = Int::lt(&row_index, &in1_size_x);
+                let is_in_col = Int::lt(&col_index, &in1_size_y);
+                let false_value = Bool::from_bool(&context, false);
+                let is_zero = is_in_row.ite(&is_in_col.ite(&in1_value_i_j._eq(&const0), &false_value), &false_value);
+                // 一维数组只存一个维度，也就是纵坐标，二维数组要存两个维度，第一个是纵坐标，第二个是横坐标
+                let one_dim_array = array_val_1_.store(&is_zero.ite(&zhanweifu, &const0), &col_index);
+                let two_dim_array = array_val_1_.store(&is_zero.ite(&zhanweifu, &const0), &row_index)
+                                                        .store(&is_zero.ite(&zhanweifu, &const1), &col_index);
+                count_result_size_x = is_zero.ite(&count_result_size_x, &Int::add(&context, &[&count_result_size_x, &const1]));
+                array_val_1_ = in1_size_x._eq(&const1).ite(&one_dim_array, &two_dim_array);
+            }
+        }
+
+        array = array.store(&const0, &array_val_1_);
+        //否则就比较，如果第一个数组的位置的值为真则返回第二的数组位置的值，否则是第三个数组位置的值
+        for i in 0 .. DIMSIZE[0] {
+
+            let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            let in2_value = operands[1].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            let in3_value = operands[2].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+
+            let domain_sort = Sort::int(&context);
+            let range_sort = Sort::int(&context);
+            let mut array_val = Array::fresh_const(context, "where_array_second_with_2_3:", &domain_sort, &range_sort);
+
+            for j in 0 .. DIMSIZE[1] {
+                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
+                let in2_value_i_j = in2_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
+                let in3_value_i_j = in3_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
+                let row_index = Int::from_i64(context, i as i64);
+                let col_index = Int::from_i64(context, j as i64);
+                let is_in_row = Int::lt(&row_index, &in2_size_x);
+                let is_in_col = Int::lt(&col_index, &in2_size_y);
+                let value = is_in_row.ite(&is_in_col.ite(&in1_value_i_j._eq(&const0).ite(&in2_value_i_j, &in3_value_i_j), &const0), &const0);
+                array_val = array_val.store(&Int::from_i64(context, j as i64), &value);
+            }
+
+            array_1 = array_1.store(&Int::from_i64(context, i as i64), &array_val);
+        }
+
+        array = is_all_zero.ite(&array, &array_1);
+        // 最终长度，第一种情况第一维度就是非0的个数，第二维度就是第一个输入的行数
+        // 第二种情况形状不变
+        let result_size_x_without_2_3 = count_result_size_x.clone();
+        let result_size_y_without_2_3 = in1_size_x.clone();
+        let result_size_x_with_2_3 = in2_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
+        let result_size_y_with_2_3 = in2_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
+        let result_size_x = is_all_zero.ite(&result_size_x_without_2_3, &result_size_x_with_2_3);
+        let result_size_y = is_all_zero.ite(&result_size_y_without_2_3, &result_size_y_with_2_3);
+
+        let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let domain_sort = Sort::int(&context);
+        let range_sort = Sort::int(&context);
+        let mut array_val = Array::fresh_const(&context, "array_size:", &domain_sort, &range_sort);
+        array_val = array_val.store(&Int::from_i64(&context, SIZE_X), &result_size_x);
+        array_val = array_val.store(&Int::from_i64(&context, SIZE_Y), &result_size_y);
+        array = array.store(&array_size_index, &array_val);
+
+        let result = Vecs::new(operands[0].dims, array);
+        return result;
+    }
+}
+
+pub fn tf_where() -> Box<dyn Component> {
+    Box::new(TfWhere) as _
+}
 
 macro_rules! with_operator_component {
     ( $me:expr , |$c:ident| $body:expr ) => {
@@ -2564,6 +2668,10 @@ macro_rules! with_operator_component {
                 let $c = TfEqual;
                 $body
             }
+            Operator::TfExpandDims(_, _) => {
+                let $c = TfExpandDims;
+                $body
+            }
             Operator::TfEye(_, _) => {
                 let $c = TfEye;
                 $body
@@ -2616,10 +2724,10 @@ macro_rules! with_operator_component {
                 let $c = TfCountNonzero;
                 $body
             }
-            // Operator::TfCumsum(_, _, _) => {
-            //     let $c = TfCumsum;
-            //     $body
-            // }
+            Operator::TfCumsum(_, _, _, _) => {
+                let $c = TfCumsum;
+                $body
+            }
             Operator::TfMaximum(_, _) => {
                 let $c = TfMaximum;
                 $body
@@ -2640,10 +2748,10 @@ macro_rules! with_operator_component {
                 let $c = TfSquare;
                 $body
             }
-            // Operator::TfWhere(_, _, _) => {
-            //     let $c = TfWhere;
-            //     $body
-            // }
+            Operator::TfWhere(_, _, _) => {
+                let $c = TfWhere;
+                $body
+            }
         }
     };
 }

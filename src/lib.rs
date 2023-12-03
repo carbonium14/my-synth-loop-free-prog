@@ -26,7 +26,7 @@ use z3::ast::{Ast, Bool, Int, Array};
 
 // const FULL_BIT_WIDTH: u32 = 32;
 
-const DIMSIZE : [usize ; 2] = [4,10];
+const DIMSIZE : [usize ; 2] = [4, 10];
 const SIZE_STORE_INDEX : i64 = -2;
 const SIZE_X : i64 = 0;
 const SIZE_Y : i64 = 1;
@@ -353,6 +353,7 @@ impl Library {
                 component::tf_clip_by_value(),
                 component::tf_concat(),
                 component::tf_equal(),
+                component::tf_expand_dims(),
                 component::tf_eye(),
                 component::tf_ones(),
                 component::tf_zeros(),
@@ -369,13 +370,13 @@ impl Library {
                 component::tf_argmin(),
                 component::tf_bincount(),
                 component::tf_count_nonzero(),
-                // component::tf_cumsum(),
+                component::tf_cumsum(),
                 component::tf_maximum(),
                 component::tf_minimum(),
                 component::tf_reverse(),
                 component::tf_sign(),
                 component::tf_square(),
-                // component::tf_where()
+                component::tf_where()
             ],
         }
     }

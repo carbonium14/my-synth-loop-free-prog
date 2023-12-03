@@ -1,7 +1,7 @@
 use std::vec;
 
 use structopt::*;
-use synth_loop_free_prog::{Result as SynthResult, *, component::tf_eye};
+use synth_loop_free_prog::{Result as SynthResult, *};
 
 macro_rules! benchmarks {
     ( $($name:ident,)* ) => {
@@ -19,11 +19,14 @@ fn main() {
     let mut opts = Options::from_args();
     if opts.mytest {
         opts.problems = vec![
-            "test_benchmarks_test_add".to_string(),
-            "mytest2".to_string(),
-            "mytest3".to_string(),
-            "mytest4".to_string(),
-            "mytest5".to_string(),
+            "test_add".to_string(),
+            "test_cast".to_string(),
+            "duplicate_test_add".to_string(),
+            "simple_cast".to_string(),
+            "simple_using_output_shape".to_string(),
+            "simple_using_output_shape_tuple".to_string(),
+            "simple_using_primitive_input".to_string(),
+            "google_10".to_string(),
         ];
     }
 
@@ -38,10 +41,13 @@ fn main() {
         fn(&z3::Context, &Options) -> SynthResult<Program>,
     )> = benchmarks! { 
         test_add,
-        // mytest2,
+        test_cast,
+        duplicate_test_add,
+        simple_cast,
+        simple_using_output_shape,
+        simple_using_output_shape_tuple,
+        simple_using_primitive_input,
         google_10,
-        // mytest4,
-        // mytest5,
     };
 
     for (name, p) in problems {
@@ -123,9 +129,6 @@ fn test_add(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
 
     let library = Library::brahma_std();
     let mut builder = ProgramBuilder::new();
-    
-    // Modify：调用var()的时候接收一个参数，将输入的vec传入到spec中
-    // Modify：调用var()的时候接收一个参数，将输入的vec传入到spec中
      
     let mut input1 : Vec<Vec<i64>> = Vec::new();   
     input1.push(vec![10]);
@@ -136,48 +139,36 @@ fn test_add(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     let in1 = builder.var(input1);
     let in2 = builder.var(input2);
 
-    // let z = builder.tf_add(in1, in2);
     let _ = builder.tf_add(in1, in2);
     let spec = builder.finish();
 
     return synthesize(opts, context, &spec, &library); 
 }
 
-// todo: test_cast
+// test_cast
+fn test_cast(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
 
-// test_inconsistent_target_program 
-// fn test_benchmarks_test_inconsistent_target_program(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
-
-//     let library = Library::brahma_std();
-//     let mut builder = ProgramBuilder::new();
-    
-//     // Modify：调用var()的时候接收一个参数，将输入的vec传入到spec中
-//     // Modify：调用var()的时候接收一个参数，将输入的vec传入到spec中
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
      
-//     let mut input1 : Vec<Vec<i64>> = Vec::new();   
-//     input1.push(vec![10]);
+    let mut input1 : Vec<Vec<i64>> = Vec::new();   
+    input1.push(vec![1, 0, 1, 1, 0]);
 
-//     let mut input2 : Vec<Vec<i64>> = Vec::new();
-//     input2.push(vec![20]);    
+    let in1 = builder.var(input1);
 
-//     let in1 = builder.var(input1);
-//     let in2 = builder.var(input2);
+    let _ = builder.tf_cast(in1);
+    let spec = builder.finish();
 
-//     // let z = builder.tf_add(in1, in2);
-//     let _ = builder.tf_add(in1, in2);
-//     let spec = builder.finish();
+    return synthesize(opts, context, &spec, &library); 
+}
 
-//     return synthesize(opts, context, &spec, &library); 
-// }
+// test_inconsistent_target_program 不用管这个，这个是错误的样例
 
 //duplicate_test_add
 fn duplicate_test_add(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
 
     let library = Library::brahma_std();
     let mut builder = ProgramBuilder::new();
-    
-    // Modify：调用var()的时候接收一个参数，将输入的vec传入到spec中
-    // Modify：调用var()的时候接收一个参数，将输入的vec传入到spec中
      
     let mut input1 : Vec<Vec<i64>> = Vec::new();   
     input1.push(vec![10]);
@@ -188,7 +179,6 @@ fn duplicate_test_add(context: &z3::Context, opts: &Options) -> SynthResult<Prog
     let in1 = builder.var(input1);
     let in2 = builder.var(input2);
 
-    // let z = builder.tf_add(in1, in2);
     let _ = builder.tf_add(in1, in2);
     let spec = builder.finish();
 
@@ -201,7 +191,22 @@ fn duplicate_test_add(context: &z3::Context, opts: &Options) -> SynthResult<Prog
 
 //todo simple_with_input_names tf.expand_dims
 
-//todo simple_cast tf.cast
+//simple_cast
+fn simple_cast(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+     
+    let mut input1 : Vec<Vec<i64>> = Vec::new();   
+    input1.push(vec![12, 34, 56]);
+
+    let in1 = builder.var(input1);
+
+    let _ = builder.tf_cast(in1);
+    let spec = builder.finish();
+
+    return synthesize(opts, context, &spec, &library); 
+}
 
 //todo simple_index 直接数组下标操作 in1[in2]
 
@@ -258,9 +263,6 @@ fn simple_using_output_shape_tuple(context: &z3::Context, opts: &Options) -> Syn
 
     let library = Library::brahma_std();
     let mut builder = ProgramBuilder::new();
-    
-    // Modify：调用var()的时候接收一个参数，将输入的vec传入到spec中
-    // Modify：调用var()的时候接收一个参数，将输入的vec传入到spec中
      
     let mut input1 : Vec<Vec<i64>> = Vec::new();   
     input1.push(vec![2,3,4,5]);
@@ -282,9 +284,6 @@ fn simple_using_primitive_input(context: &z3::Context, opts: &Options) -> SynthR
 
     let library = Library::brahma_std();
     let mut builder = ProgramBuilder::new();
-    
-    // Modify：调用var()的时候接收一个参数，将输入的vec传入到spec中
-    // Modify：调用var()的时候接收一个参数，将输入的vec传入到spec中
      
     let mut input1 : Vec<Vec<i64>> = Vec::new();   
     input1.push(vec![123]);
@@ -295,7 +294,6 @@ fn simple_using_primitive_input(context: &z3::Context, opts: &Options) -> SynthR
     let in1 = builder.var(input1);
     let in2 = builder.var(input2);
 
-    // let z = builder.tf_add(in1, in2);
     let _ = builder.tf_add(in1, in2);
     let spec = builder.finish();
 

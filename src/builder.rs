@@ -209,6 +209,15 @@ impl ProgramBuilder {
         result
     }
 
+    pub fn tf_expand_dims(&mut self, a: Id, b: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfExpandDims(a, b),
+        });
+        result
+    }
+
     pub fn tf_eye(&mut self, a: Id, b: Id) -> Id {
         let result = self.next_id();
         self.program.instructions.push(Instruction {
@@ -326,14 +335,14 @@ impl ProgramBuilder {
         result
     }
 
-    // pub fn tf_cumsum(&mut self, a: Id, b: Id, c: Id) -> Id {
-    //     let result = self.next_id();
-    //     self.program.instructions.push(Instruction {
-    //         result,
-    //         operator: Operator::TfCumsum(a, b, c),
-    //     });
-    //     result
-    // }
+    pub fn tf_cumsum(&mut self, a: Id, b: Id, c: Id, d: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfCumsum(a, b, c, d),
+        });
+        result
+    }
 
     pub fn tf_maximum(&mut self, a: Id, b: Id) -> Id {
         let result = self.next_id();
@@ -380,13 +389,13 @@ impl ProgramBuilder {
         result
     }
 
-    // pub fn tf_where(&mut self, a: Id, b: Id, c: Id) -> Id {
-    //     let result = self.next_id();
-    //     self.program.instructions.push(Instruction {
-    //         result,
-    //         operator: Operator::TfWhere(a, b, c),
-    //     });
-    //     result
-    // }
+    pub fn tf_where(&mut self, a: Id, b: Id, c: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfWhere(a, b, c),
+        });
+        result
+    }
 
 }

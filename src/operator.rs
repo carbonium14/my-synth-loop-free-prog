@@ -33,6 +33,8 @@ pub enum Operator {
     TfConcat(Id, Id),
     // 相等
     TfEqual(Id, Id),
+    // 扩充维度
+    TfExpandDims(Id, Id),
     // 按照单位矩阵的位置填充1
     TfEye(Id, Id),
     // 填充0
@@ -60,7 +62,7 @@ pub enum Operator {
     // 统计非0个数出现的次数
     TfCountNonzero(Id),
     // 遍历依次累加求和，每次的结果放在每一项里
-    // TfCumsum(Id, Id, Id),
+    TfCumsum(Id, Id, Id, Id),
     // 两个数组每一项的最大值
     TfMaximum(Id, Id),
     // 两个数组每一项的最小值
@@ -72,7 +74,7 @@ pub enum Operator {
     // 每个数的平方
     TfSquare(Id),
     // 返回非0所在的位置，或者按照掩码返回第一个还是第二个数
-    // TfWhere(Id, Id, Id),
+    TfWhere(Id, Id, Id),
 }
 
 impl Operator {
@@ -101,6 +103,7 @@ impl Operator {
             | Operator::TfBooleanMask(_, _) 
             | Operator::TfConcat(_, _) 
             | Operator::TfEqual(_, _)
+            | Operator::TfExpandDims(_, _)
             | Operator::TfEye(_, _)
             | Operator::TfFill(_, _) 
             | Operator::TfGreater(_, _) 
@@ -110,10 +113,11 @@ impl Operator {
             | Operator::TfMinimum(_, _) 
             => 2,
             Operator::TfClipByValue(_, _, _) 
-            // | Operator::TfCumsum(_, _, _)
-            // | Operator::TfWhere(_, _, _) 
+            | Operator::TfWhere(_, _, _) 
             => 3,
-            Operator::TfBincount(_, _, _, _) => 4,
+            Operator::TfBincount(_, _, _, _) 
+            | Operator::TfCumsum(_, _, _, _) 
+            => 4,
         }
     }
 
@@ -149,6 +153,7 @@ impl Operator {
             | Operator::TfBooleanMask(a, b) 
             | Operator::TfConcat(a, b) 
             | Operator::TfEqual(a, b) 
+            | Operator::TfExpandDims(a, b)
             | Operator::TfEye(a, b)
             | Operator::TfFill(a, b) 
             | Operator::TfGreater(a, b) 
@@ -161,14 +166,15 @@ impl Operator {
                 f(b);
             },
             Operator::TfClipByValue(a, b, c) 
-            // | Operator::TfCumsum(a, b, c)
-            // | Operator::TfWhere(a, b, c) 
+            | Operator::TfWhere(a, b, c) 
             => {
                 f(a);
                 f(b);
                 f(c);
             },
-            Operator::TfBincount(a, b, c, d) => {
+            Operator::TfBincount(a, b, c, d) 
+            | Operator::TfCumsum(a, b, c, d)
+            => {
                 f(a);
                 f(b);
                 f(c);
@@ -203,6 +209,7 @@ impl Operator {
             | Operator::TfBooleanMask(a, b) 
             | Operator::TfConcat(a, b) 
             | Operator::TfEqual(a, b) 
+            | Operator::TfExpandDims(a, b)
             | Operator::TfEye(a, b)
             | Operator::TfFill(a, b) 
             | Operator::TfGreater(a, b) 
@@ -215,14 +222,15 @@ impl Operator {
                 f(b);
             },
             Operator::TfClipByValue(a, b, c) 
-            // | Operator::TfCumsum(a, b, c)
-            // | Operator::TfWhere(a, b, c) 
+            | Operator::TfWhere(a, b, c) 
             => {
                 f(a);
                 f(b);
                 f(c);
             },
-            Operator::TfBincount(a, b, c, d) => {
+            Operator::TfBincount(a, b, c, d) 
+            | Operator::TfCumsum(a, b, c, d)     
+            => {
                 f(a);
                 f(b);
                 f(c);
@@ -248,6 +256,7 @@ impl Display for Operator {
             Operator::TfClipByValue(a, b, c) => write!(f, "TfClipByValue: {}, {}, {}", a, b, c),
             Operator::TfConcat(a, b) => write!(f, "TfConcat: {}, {}", a, b),
             Operator::TfEqual(a, b) => write!(f, "TfEqual: {}, {}", a, b),
+            Operator::TfExpandDims(a, b) => write!(f, "TfExpandDims: {}, {}", a, b),
             Operator::TfEye(a, b) => write!(f, "TfEye: {}, {}", a, b),
             Operator::TfOnes(a) => write!(f, "TfOnes: {}", a),
             Operator::TfZeros(a) => write!(f, "TfZeros: {}", a),
@@ -261,13 +270,13 @@ impl Display for Operator {
             Operator::TfReciprocal(id) => write!(f, "TfReciprocal: {}", id),
             Operator::TfBincount(a, b, c, d) => write!(f, "TfBincount: {}, {}, {}, {}", a, b, c, d),
             Operator::TfCountNonzero(id) => write!(f, "TfCountNonzero: {}", id),
-            // Operator::TfCumsum(a, b, c) => write!(f, "TfCumsum: {}, {}, {}", a, b, c),
+            Operator::TfCumsum(a, b, c, d) => write!(f, "TfCumsum: {}, {}, {}, {}", a, b, c, d),
             Operator::TfMaximum(a, b) => write!(f, "TfMaximum, {}, {}", a, b),
             Operator::TfMinimum(a, b) => write!(f, "TfMinimum, {}, {}", a, b),
             Operator::TfReverse(a) => write!(f, "TfReverse: {}", a),
             Operator::TfSign(a) => write!(f, "TfSign: {}", a),
             Operator::TfSquare(a) => write!(f, "TfSquare: {}", a),
-            // Operator::TfWhere(a, b, c) => write!(f, "TfWhere: {}, {}, {}", a, b, c),
+            Operator::TfWhere(a, b, c) => write!(f, "TfWhere: {}, {}, {}", a, b, c),
         }
     }
 }
