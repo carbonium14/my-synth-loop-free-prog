@@ -146,20 +146,20 @@ impl ProgramBuilder {
         result
     }
 
-    pub fn tf_argmax(&mut self, a: Id) -> Id {
+    pub fn tf_argmax(&mut self, a: Id, b: Id) -> Id {
         let result = self.next_id();
         self.program.instructions.push(Instruction {
             result,
-            operator: Operator::TfArgMax(a),
+            operator: Operator::TfArgMax(a, b),
         });
         result
     }
 
-    pub fn tf_argmin(&mut self, a: Id) -> Id {
+    pub fn tf_argmin(&mut self, a: Id, b: Id) -> Id {
         let result = self.next_id();
         self.program.instructions.push(Instruction {
             result,
-            operator: Operator::TfArgMin(a),
+            operator: Operator::TfArgMin(a, b),
         });
         result
     }
@@ -173,11 +173,11 @@ impl ProgramBuilder {
         result
     }
 
-    pub fn tf_concat(&mut self, a: Id, b: Id) -> Id {
+    pub fn tf_concat(&mut self, a: Id, b: Id, c: Id) -> Id {
         let result = self.next_id();
         self.program.instructions.push(Instruction {
             result,
-            operator: Operator::TfConcat(a, b),
+            operator: Operator::TfConcat(a, b, c),
         });
         result
     }

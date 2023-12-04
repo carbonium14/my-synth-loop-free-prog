@@ -20,9 +20,9 @@ pub enum Operator {
     // 相除
     TfDiv(Id, Id),
     // 数组最大值的下标
-    TfArgMax(Id),
+    TfArgMax(Id, Id),
     // 数组最小值的下标
-    TfArgMin(Id),
+    TfArgMin(Id, Id),
     // 掩码，即如果为1则返回原值，为0则什么也不做
     TfBooleanMask(Id, Id),
     // 类型转换，目前还是原样返回
@@ -30,7 +30,7 @@ pub enum Operator {
     // 限制在最大值和最小值之间取值
     TfClipByValue(Id, Id, Id),
     // 根据给定的轴拼接数组
-    TfConcat(Id, Id),
+    TfConcat(Id, Id, Id),
     // 相等
     TfEqual(Id, Id),
     // 扩充维度
@@ -86,8 +86,6 @@ impl Operator {
             | Operator::TfNegative(_) 
             | Operator::TfReciprocal(_)
             | Operator::TfCast(_) 
-            | Operator::TfArgMax(_)
-            | Operator::TfArgMin(_) 
             | Operator::TfCountNonzero(_) 
             | Operator::TfReverse(_) 
             | Operator::TfSign(_) 
@@ -100,8 +98,9 @@ impl Operator {
             Operator::TfAdd(_, _)
             | Operator::TfMul(_, _) 
             | Operator::TfDiv(_, _) 
+            | Operator::TfArgMax(_, _)
+            | Operator::TfArgMin(_, _) 
             | Operator::TfBooleanMask(_, _) 
-            | Operator::TfConcat(_, _) 
             | Operator::TfEqual(_, _)
             | Operator::TfExpandDims(_, _)
             | Operator::TfEye(_, _)
@@ -112,7 +111,8 @@ impl Operator {
             | Operator::TfMaximum(_, _) 
             | Operator::TfMinimum(_, _) 
             => 2,
-            Operator::TfClipByValue(_, _, _) 
+            Operator::TfConcat(_, _, _) 
+            | Operator::TfClipByValue(_, _, _) 
             | Operator::TfWhere(_, _, _) 
             => 3,
             Operator::TfBincount(_, _, _, _) 
@@ -136,8 +136,6 @@ impl Operator {
             | Operator::TfNegative(a) 
             | Operator::TfReciprocal(a)
             | Operator::TfCast(a)
-            | Operator::TfArgMax(a)
-            | Operator::TfArgMin(a) 
             | Operator::TfCountNonzero(a) 
             | Operator::TfReverse(a) 
             | Operator::TfSign(a) 
@@ -150,8 +148,9 @@ impl Operator {
             Operator::TfAdd(a, b)
             | Operator::TfMul(a, b) 
             | Operator::TfDiv(a, b) 
+            | Operator::TfArgMax(a, b)
+            | Operator::TfArgMin(a, b) 
             | Operator::TfBooleanMask(a, b) 
-            | Operator::TfConcat(a, b) 
             | Operator::TfEqual(a, b) 
             | Operator::TfExpandDims(a, b)
             | Operator::TfEye(a, b)
@@ -165,7 +164,8 @@ impl Operator {
                 f(a);
                 f(b);
             },
-            Operator::TfClipByValue(a, b, c) 
+            Operator::TfConcat(a, b, c) 
+            | Operator::TfClipByValue(a, b, c) 
             | Operator::TfWhere(a, b, c) 
             => {
                 f(a);
@@ -192,8 +192,6 @@ impl Operator {
             | Operator::TfNegative(a) 
             | Operator::TfReciprocal(a)
             | Operator::TfCast(a)
-            | Operator::TfArgMax(a)
-            | Operator::TfArgMin(a) 
             | Operator::TfCountNonzero(a) 
             | Operator::TfReverse(a) 
             | Operator::TfSign(a) 
@@ -206,8 +204,9 @@ impl Operator {
             Operator::TfAdd(a, b)
             | Operator::TfMul(a, b) 
             | Operator::TfDiv(a, b) 
+            | Operator::TfArgMax(a, b)
+            | Operator::TfArgMin(a, b) 
             | Operator::TfBooleanMask(a, b) 
-            | Operator::TfConcat(a, b) 
             | Operator::TfEqual(a, b) 
             | Operator::TfExpandDims(a, b)
             | Operator::TfEye(a, b)
@@ -221,7 +220,8 @@ impl Operator {
                 f(a);
                 f(b);
             },
-            Operator::TfClipByValue(a, b, c) 
+            Operator::TfConcat(a, b, c) 
+            | Operator::TfClipByValue(a, b, c) 
             | Operator::TfWhere(a, b, c) 
             => {
                 f(a);
@@ -249,12 +249,12 @@ impl Display for Operator {
             Operator::TfAdd(a, b) => write!(f, "TfAdd: {}, {}", a, b),
             Operator::TfMul(a, b) => write!(f, "TfMul: {}, {}", a, b),
             Operator::TfDiv(a, b) => write!(f, "TfDiv: {}, {}", a, b),
-            Operator::TfArgMax(a) => write!(f, "TfArgMax: {}", a),
-            Operator::TfArgMin(a) => write!(f, "TfArgMin: {}", a),
+            Operator::TfArgMax(a, b) => write!(f, "TfArgMax: {}, {}", a, b),
+            Operator::TfArgMin(a, b) => write!(f, "TfArgMin: {}, {}", a, b),
             Operator::TfBooleanMask(a, b) => write!(f, "TfBooleanMask: {}, {}", a, b),
             Operator::TfCast(a) => write!(f, "TfCast: {}", a),
             Operator::TfClipByValue(a, b, c) => write!(f, "TfClipByValue: {}, {}, {}", a, b, c),
-            Operator::TfConcat(a, b) => write!(f, "TfConcat: {}, {}", a, b),
+            Operator::TfConcat(a, b, c) => write!(f, "TfConcat: {}, {}, {}", a, b, c),
             Operator::TfEqual(a, b) => write!(f, "TfEqual: {}, {}", a, b),
             Operator::TfExpandDims(a, b) => write!(f, "TfExpandDims: {}, {}", a, b),
             Operator::TfEye(a, b) => write!(f, "TfEye: {}, {}", a, b),
