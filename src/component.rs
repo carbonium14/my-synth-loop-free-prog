@@ -1,6 +1,6 @@
 use crate::{Id, Operator, Vecs};
 use std::{fmt::Debug, ops::Sub, usize};
-use z3::ast::{Ast, Int, Array, Bool};
+use z3::ast::{Ast, Array, Bool, BV};
 
 use z3::Sort;
 
@@ -31,19 +31,19 @@ const SIZE_Y : i64 = 1;
 // fn one(context: &z3::Context, bit_width: u32) -> BitVec {
 //     bit_vec_from_u64(context, 1, bit_width)
 // }
-fn int_from_i64(context: &z3::Context, val: i64, _bit_width: u32) -> Int {
-    Int::from_i64(context, val as i64)
+fn int_from_i64(context: &z3::Context, val: i64, bit_width: u32) -> BV {
+    BV::from_i64(context, val as i64, bit_width)
 }
 
-fn zero(context: &z3::Context, bit_width: u32) -> Int {
+fn zero(context: &z3::Context, bit_width: u32) -> BV {
     int_from_i64(context, 0, bit_width)
 }
 
-fn one(context: &z3::Context, bit_width: u32) -> Int {
+fn one(context: &z3::Context, bit_width: u32) -> BV {
     int_from_i64(context, 1, bit_width)
 }
 
-fn _min_int(context: &z3::Context, bit_width: u32) -> Int {
+fn _min_int(context: &z3::Context, bit_width: u32) -> BV {
     int_from_i64(context, -2^63, bit_width)
 }
 
@@ -109,7 +109,7 @@ impl Component for Const {
         
         for i in 0 .. dims[0] {
             for j in 0 .. dims[1] {
-                result.vecs[i as usize].push(Int::from_i64(context, (self.0)[i][j]));
+                result.vecs[i as usize].push(BV::from_i64(context, (self.0)[i][j]));
             }
         }
 
@@ -160,36 +160,36 @@ impl Component for TfAbs {
         let const0 = zero(context, bit_width);
         let op_arr = &operands[0].vecs;
         
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let array_sort = Sort::array(context, &domain_sort, &range_sort);
 
-        let first_dim_sort = Sort::int(&context);
+        let first_dim_sort = Sort::bitvector(&context, bit_width);
         let mut array = Array::fresh_const(&context,  "abs_array", &first_dim_sort, &array_sort);
     
 
         // 它（for循环）是标准库提供的类型，用来生成从一个数字开始到另一个数字之前结束的所有数字的序列。
         // 所以这里是左闭右开区间
         for i in 0..DIMSIZE[0] {
-            let now_index = Int::from_i64(context, i as i64);
+            let now_index = BV::from_i64(context, i as i64, bit_width);
 
-            let domain_sort = Sort::int(&context);
-            let range_sort = Sort::int(&context);
+            let domain_sort = Sort::bitvector(&context, bit_width);
+            let range_sort = Sort::bitvector(&context, bit_width);
             let mut array_val = Array::fresh_const(context, "abs_array_second:", &domain_sort, &range_sort);
 
-            let now_arr = op_arr.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            let now_arr = op_arr.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
             for j in 0..DIMSIZE[1] {
-                let index = Int::from_i64(context, j as i64);
-                let m: Int<'_> = now_arr.select(&index).as_int().unwrap();
+                let index = BV::from_i64(context, j as i64, bit_width);
+                let m = now_arr.select(&index).as_bv().unwrap();
 
-                array_val = array_val.store(&index ,&(m.lt(&const0).ite(&(const0.clone().sub(&m)), &m)));
+                array_val = array_val.store(&index ,&(m.bvslt(&const0).ite(&(const0.clone().sub(&m)), &m)));
             } 
             array = array.store(&now_index, &array_val);
         }
 
         //abs对于数组的维度不会产生变化，直接获取即可
-        let size_info = operands[0].vecs.select(&Int::from_i64(&context, SIZE_STORE_INDEX)).as_array().unwrap();
-        array = array.store(&Int::from_i64(&context, SIZE_STORE_INDEX), &size_info);
+        let size_info = operands[0].vecs.select(&BV::from_i64(&context, SIZE_STORE_INDEX, bit_width)).as_array().unwrap();
+        array = array.store(&BV::from_i64(&context, SIZE_STORE_INDEX, bit_width), &size_info);
 
         let result: Vecs<Array> = Vecs::new(operands[0].dims, array);
         return result;
@@ -217,46 +217,46 @@ impl Component for TfAdd {
         context: &'a z3::Context,
         _immediates: &[Vecs<Array<'a>>],
         operands: &[Vecs<Array<'a>>],
-        _bit_width: u32,
+        bit_width: u32,
     ) -> Vecs<Array<'a>> {
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let array_sort = Sort::array(context, &domain_sort, &range_sort);
 
-        let first_dim_sort = Sort::int(&context);
+        let first_dim_sort = Sort::bitvector(&context, bit_width);
         let mut array = Array::fresh_const(&context,  "add_array", &first_dim_sort, &array_sort);
 
-        let size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
         let in1_size =  operands[0].vecs.select(&size_index).as_array().unwrap();
         let _in2_size =  operands[1].vecs.select(&size_index).as_array().unwrap();
-        let result_size_x = in1_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
-        let result_size_y = in1_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
+        let result_size_x = in1_size.select(&BV::from_i64(&context, SIZE_X, bit_width)).as_bv().unwrap();
+        let result_size_y = in1_size.select(&BV::from_i64(&context, SIZE_Y, bit_width)).as_bv().unwrap();
 
         for i in 0 .. DIMSIZE[0] {
 
-            let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
-            let in2_value = operands[1].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            let in1_value = operands[0].vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
+            let in2_value = operands[1].vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
 
-            let domain_sort = Sort::int(&context);
-            let range_sort = Sort::int(&context);
+            let domain_sort = Sort::bitvector(&context, bit_width);
+            let range_sort = Sort::bitvector(&context, bit_width);
             let mut array_val = Array::fresh_const(context, "add_array_second:", &domain_sort, &range_sort);
 
             for j in 0 .. DIMSIZE[1] {
-                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                let in2_value_i_j = in2_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                let value = Int::add(&context, &[&in1_value_i_j, &in2_value_i_j]);
-                array_val = array_val.store(&Int::from_i64(context, j as i64), &value);
+                let in1_value_i_j = in1_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                let in2_value_i_j = in2_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                let value = BV::bvadd(&in1_value_i_j, &in2_value_i_j);
+                array_val = array_val.store(&BV::from_i64(context, j as i64, bit_width), &value);
             }
 
-            array = array.store(&Int::from_i64(context, i as i64), &array_val);
+            array = array.store(&BV::from_i64(context, i as i64, bit_width), &array_val);
         }
 
-        let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let array_size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let mut array_val = Array::fresh_const(&context, "array_size:", &domain_sort, &range_sort);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_X), &result_size_x);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_Y), &result_size_y);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_X, bit_width), &result_size_x);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_Y, bit_width), &result_size_y);
         array = array.store(&array_size_index, &array_val);
 
         let result = Vecs::new(operands[0].dims, array);
@@ -285,46 +285,46 @@ impl Component for TfMul {
         context: &'a z3::Context,
         _immediates: &[Vecs<Array<'a>>],
         operands: &[Vecs<Array<'a>>],
-        _bit_width: u32,
+        bit_width: u32,
     ) -> Vecs<Array<'a>> {
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let array_sort = Sort::array(context, &domain_sort, &range_sort);
 
-        let first_dim_sort = Sort::int(&context);
+        let first_dim_sort = Sort::bitvector(&context, bit_width);
         let mut array = Array::fresh_const(&context,  "mul_array", &first_dim_sort, &array_sort);
 
-        let size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
         let in1_size =  operands[0].vecs.select(&size_index).as_array().unwrap();
         let _in2_size =  operands[1].vecs.select(&size_index).as_array().unwrap();
-        let result_size_x = in1_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
-        let result_size_y = in1_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
+        let result_size_x = in1_size.select(&BV::from_i64(&context, SIZE_X, bit_width)).as_bv().unwrap();
+        let result_size_y = in1_size.select(&BV::from_i64(&context, SIZE_Y, bit_width)).as_bv().unwrap();
 
         for i in 0 .. DIMSIZE[0] {
 
-            let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
-            let in2_value = operands[1].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            let in1_value = operands[0].vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
+            let in2_value = operands[1].vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
 
-            let domain_sort = Sort::int(&context);
-            let range_sort = Sort::int(&context);
+            let domain_sort = Sort::bitvector(&context, bit_width);
+            let range_sort = Sort::bitvector(&context, bit_width);
             let mut array_val = Array::fresh_const(context, "mul_array_second:", &domain_sort, &range_sort);
 
             for j in 0 .. DIMSIZE[1] {
-                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                let in2_value_i_j = in2_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                let value = Int::mul(&context, &[&in1_value_i_j, &in2_value_i_j]);
-                array_val = array_val.store(&Int::from_i64(context, j as i64), &value);
+                let in1_value_i_j = in1_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                let in2_value_i_j = in2_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                let value = BV::bvmul(&in1_value_i_j, &in2_value_i_j);
+                array_val = array_val.store(&BV::from_i64(context, j as i64, bit_width), &value);
             }
 
-            array = array.store(&Int::from_i64(context, i as i64), &array_val);
+            array = array.store(&BV::from_i64(context, i as i64, bit_width), &array_val);
         }
 
-        let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let array_size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let mut array_val = Array::fresh_const(&context, "array_size:", &domain_sort, &range_sort);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_X), &result_size_x);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_Y), &result_size_y);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_X, bit_width), &result_size_x);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_Y, bit_width), &result_size_y);
         array = array.store(&array_size_index, &array_val);
 
         let result = Vecs::new(operands[0].dims, array);
@@ -358,46 +358,46 @@ impl Component for TfDiv {
         let const0 = zero(context, bit_width);
         let const1 = one(context, bit_width);
 
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let array_sort = Sort::array(context, &domain_sort, &range_sort);
 
-        let first_dim_sort = Sort::int(&context);
+        let first_dim_sort = Sort::bitvector(&context, bit_width);
         let mut array = Array::fresh_const(&context,  "div_array", &first_dim_sort, &array_sort);
 
-        let size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
         let in1_size =  operands[0].vecs.select(&size_index).as_array().unwrap();
         let _in2_size =  operands[1].vecs.select(&size_index).as_array().unwrap();
-        let result_size_x = in1_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
-        let result_size_y = in1_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
+        let result_size_x = in1_size.select(&BV::from_i64(&context, SIZE_X, bit_width)).as_bv().unwrap();
+        let result_size_y = in1_size.select(&BV::from_i64(&context, SIZE_Y, bit_width)).as_bv().unwrap();
 
         for i in 0 .. DIMSIZE[0] {
 
-            let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
-            let in2_value = operands[1].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            let in1_value = operands[0].vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
+            let in2_value = operands[1].vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
 
-            let domain_sort = Sort::int(&context);
-            let range_sort = Sort::int(&context);
+            let domain_sort = Sort::bitvector(&context, bit_width);
+            let range_sort = Sort::bitvector(&context, bit_width);
             let mut array_val = Array::fresh_const(context, "div_array_second:", &domain_sort, &range_sort);
 
             for j in 0 .. DIMSIZE[1] {
-                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                let in2_value_i_j = in2_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
+                let in1_value_i_j = in1_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                let in2_value_i_j = in2_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
                 // 要注意分母不能是0
-                let div_value = Int::_eq(&in2_value_i_j, &const0).ite(&const1, &in2_value_i_j);
-                let value = Int::div(&in1_value_i_j, &div_value);
-                array_val = array_val.store(&Int::from_i64(context, j as i64), &value);
+                let div_value = BV::_eq(&in2_value_i_j, &const0).ite(&const1, &in2_value_i_j);
+                let value = BV::bvsdiv(&in1_value_i_j, &div_value);
+                array_val = array_val.store(&BV::from_i64(context, j as i64, bit_width), &value);
             }
 
-            array = array.store(&Int::from_i64(context, i as i64), &array_val);
+            array = array.store(&BV::from_i64(context, i as i64, bit_width), &array_val);
         }
 
-        let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let array_size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let mut array_val = Array::fresh_const(&context, "array_size:", &domain_sort, &range_sort);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_X), &result_size_x);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_Y), &result_size_y);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_X, bit_width), &result_size_x);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_Y, bit_width), &result_size_y);
         array = array.store(&array_size_index, &array_val);
 
         let result = Vecs::new(operands[0].dims, array);
@@ -429,109 +429,109 @@ impl Component for TfArgMax {
         bit_width: u32,
     ) -> Vecs<Array<'a>> {
         let const0 = zero(context, bit_width);
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let array_sort = Sort::array(context, &domain_sort, &range_sort);
 
-        let first_dim_sort = Sort::int(&context);
+        let first_dim_sort = Sort::bitvector(&context, bit_width);
         let mut array = Array::fresh_const(&context,  "argmax_array_axis_1", &first_dim_sort, &array_sort);
 
-        let domain_sort_ = Sort::int(&context);
-        let range_sort_ = Sort::int(&context);
+        let domain_sort_ = Sort::bitvector(&context, bit_width);
+        let range_sort_ = Sort::bitvector(&context, bit_width);
         let array_sort_ = Sort::array(context, &domain_sort_, &range_sort_);
 
-        let first_dim_sort_ = Sort::int(&context);
+        let first_dim_sort_ = Sort::bitvector(&context, bit_width);
         let mut array_ = Array::fresh_const(&context,  "argmax_array_axis_0", &first_dim_sort_, &array_sort_);
 
-        let size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
         let in1_size =  operands[0].vecs.select(&size_index).as_array().unwrap();
-        let in1_size_x = in1_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
-        let in1_size_y = in1_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
-        let axis = operands[1].vecs.select(&const0).as_array().unwrap().select(&const0).as_int().unwrap();
+        let in1_size_x = in1_size.select(&BV::from_i64(&context, SIZE_X, bit_width)).as_bv().unwrap();
+        let in1_size_y = in1_size.select(&BV::from_i64(&context, SIZE_Y, bit_width)).as_bv().unwrap();
+        let axis = operands[1].vecs.select(&const0).as_array().unwrap().select(&const0).as_bv().unwrap();
         // 注意维度是一个一维数组，长度是数入数组的第一维度
-        let result_size_x = Int::from_i64(&context, 1);
-        let result_size_y_0 = in1_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
-        let result_size_y_1 = in1_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
+        let result_size_x = BV::from_i64(&context, 1, bit_width);
+        let result_size_y_0 = in1_size.select(&BV::from_i64(&context, SIZE_Y, bit_width)).as_bv().unwrap();
+        let result_size_y_1 = in1_size.select(&BV::from_i64(&context, SIZE_X, bit_width)).as_bv().unwrap();
         let result_size_y = axis._eq(&const0).ite(&result_size_y_0, &result_size_y_1);
 
-        let domain_sort_1 = Sort::int(&context);
-        let range_sort_1 = Sort::int(&context);
+        let domain_sort_1 = Sort::bitvector(&context, bit_width);
+        let range_sort_1 = Sort::bitvector(&context, bit_width);
         let mut array_val_1 = Array::fresh_const(context, "argmax_array_second_axis_1:", &domain_sort_1, &range_sort_1);
 
-        let domain_sort_1_ = Sort::int(&context);
-        let range_sort_1_ = Sort::int(&context);
+        let domain_sort_1_ = Sort::bitvector(&context, bit_width);
+        let range_sort_1_ = Sort::bitvector(&context, bit_width);
         let mut array_val_1_ = Array::fresh_const(context, "argmax_array_second_axis_0:", &domain_sort_1_, &range_sort_1_);
 
         for i in 0 .. DIMSIZE[0] {
-            let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            let in1_value = operands[0].vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
             // 记录最大值
             let mut value = zero(context, bit_width);
 
             for j in 0 .. DIMSIZE[1] {
-                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                let row_index = Int::from_i64(context, i as i64);
-                let col_index = Int::from_i64(context, j as i64);
-                let is_in_row = Int::lt(&row_index, &in1_size_x);
-                let is_in_col = Int::lt(&col_index, &in1_size_y);
+                let in1_value_i_j = in1_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                let row_index = BV::from_i64(context, i as i64, bit_width);
+                let col_index = BV::from_i64(context, j as i64, bit_width);
+                let is_in_row = BV::bvslt(&row_index, &in1_size_x);
+                let is_in_col = BV::bvslt(&col_index, &in1_size_y);
                 // 在范围内则依次比较，找到最大值
-                value = is_in_row.ite(&is_in_col.ite(&Int::gt(&in1_value_i_j, &value).ite(&in1_value_i_j, &value), &value), &value);
+                value = is_in_row.ite(&is_in_col.ite(&BV::bvsgt(&in1_value_i_j, &value).ite(&in1_value_i_j, &value), &value), &value);
             }
             // 记录最大值对应的下标
             let mut res = zero(context, bit_width);
             for j in 0 .. DIMSIZE[1] {
-                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                let row_index = Int::from_i64(context, i as i64);
-                let col_index = Int::from_i64(context, j as i64);
-                let is_in_row = Int::lt(&row_index, &result_size_x);
-                let is_in_col = Int::lt(&col_index, &result_size_y);
+                let in1_value_i_j = in1_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                let row_index = BV::from_i64(context, i as i64, bit_width);
+                let col_index = BV::from_i64(context, j as i64, bit_width);
+                let is_in_row = BV::bvslt(&row_index, &result_size_x);
+                let is_in_col = BV::bvslt(&col_index, &result_size_y);
                 // 在范围内则找到最大值对应的下标
-                res = is_in_row.ite(&is_in_col.ite(&Int::_eq(&value, &in1_value_i_j).ite(&col_index, &res), &res), &res);
+                res = is_in_row.ite(&is_in_col.ite(&BV::_eq(&value, &in1_value_i_j).ite(&col_index, &res), &res), &res);
             }
             // 找到最终结果之后再放入
-            array_val_1 = array_val_1.store(&Int::from_i64(context, i as i64), &res);
+            array_val_1 = array_val_1.store(&BV::from_i64(context, i as i64, bit_width), &res);
         }
 
-        array = array.store(&Int::from_i64(context, 0), &array_val_1);
+        array = array.store(&BV::from_i64(context, 0, bit_width), &array_val_1);
 
         for i in 0 .. DIMSIZE[1] {
-            let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            let in1_value = operands[0].vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
             // 记录最大值
             let mut value = zero(context, bit_width);
 
             for j in 0 .. DIMSIZE[0] {
-                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                let row_index = Int::from_i64(context, j as i64);
-                let col_index = Int::from_i64(context, i as i64);
-                let is_in_row = Int::lt(&row_index, &in1_size_x);
-                let is_in_col = Int::lt(&col_index, &in1_size_y);
+                let in1_value_i_j = in1_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                let row_index = BV::from_i64(context, j as i64, bit_width);
+                let col_index = BV::from_i64(context, i as i64, bit_width);
+                let is_in_row = BV::bvslt(&row_index, &in1_size_x);
+                let is_in_col = BV::bvslt(&col_index, &in1_size_y);
                 // 在范围内则依次比较，找到最大值
-                value = is_in_row.ite(&is_in_col.ite(&Int::gt(&in1_value_i_j, &value).ite(&in1_value_i_j, &value), &value), &value);
+                value = is_in_row.ite(&is_in_col.ite(&BV::bvsgt(&in1_value_i_j, &value).ite(&in1_value_i_j, &value), &value), &value);
             }
             // 记录最大值对应的下标
             let mut res = zero(context, bit_width);
             for j in 0 .. DIMSIZE[1] {
-                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                let row_index = Int::from_i64(context, i as i64);
-                let col_index = Int::from_i64(context, j as i64);
-                let is_in_row = Int::lt(&row_index, &result_size_x);
-                let is_in_col = Int::lt(&col_index, &result_size_y);
+                let in1_value_i_j = in1_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                let row_index = BV::from_i64(context, i as i64, bit_width);
+                let col_index = BV::from_i64(context, j as i64, bit_width);
+                let is_in_row = BV::bvslt(&row_index, &result_size_x);
+                let is_in_col = BV::bvslt(&col_index, &result_size_y);
                 // 在范围内则找到最大值对应的下标
-                res = is_in_row.ite(&is_in_col.ite(&Int::_eq(&value, &in1_value_i_j).ite(&col_index, &res), &res), &res);
+                res = is_in_row.ite(&is_in_col.ite(&BV::_eq(&value, &in1_value_i_j).ite(&col_index, &res), &res), &res);
             }
             // 找到最终结果之后再放入
-            array_val_1_ = array_val_1_.store(&Int::from_i64(context, i as i64), &res);
+            array_val_1_ = array_val_1_.store(&BV::from_i64(context, i as i64, bit_width), &res);
         }
 
-        array_ = array_.store(&Int::from_i64(context, 0), &array_val_1_);
+        array_ = array_.store(&BV::from_i64(context, 0, bit_width), &array_val_1_);
 
         array = axis._eq(&const0).ite(&array_, &array);
 
-        let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let array_size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let mut array_val = Array::fresh_const(&context, "array_size:", &domain_sort, &range_sort);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_X), &result_size_x);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_Y), &result_size_y);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_X, bit_width), &result_size_x);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_Y, bit_width), &result_size_y);
         array = array.store(&array_size_index, &array_val);
 
         let result = Vecs::new(operands[0].dims, array);
@@ -563,109 +563,109 @@ impl Component for TfArgMin {
         bit_width: u32,
     ) -> Vecs<Array<'a>> {
         let const0 = zero(context, bit_width);
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let array_sort = Sort::array(context, &domain_sort, &range_sort);
 
-        let first_dim_sort = Sort::int(&context);
+        let first_dim_sort = Sort::bitvector(&context, bit_width);
         let mut array = Array::fresh_const(&context,  "argmax_array_axis_1", &first_dim_sort, &array_sort);
 
-        let domain_sort_ = Sort::int(&context);
-        let range_sort_ = Sort::int(&context);
+        let domain_sort_ = Sort::bitvector(&context, bit_width);
+        let range_sort_ = Sort::bitvector(&context, bit_width);
         let array_sort_ = Sort::array(context, &domain_sort_, &range_sort_);
 
-        let first_dim_sort_ = Sort::int(&context);
+        let first_dim_sort_ = Sort::bitvector(&context, bit_width);
         let mut array_ = Array::fresh_const(&context,  "argmax_array_axis_0", &first_dim_sort_, &array_sort_);
 
-        let size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
         let in1_size =  operands[0].vecs.select(&size_index).as_array().unwrap();
-        let in1_size_x = in1_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
-        let in1_size_y = in1_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
-        let axis = operands[1].vecs.select(&const0).as_array().unwrap().select(&const0).as_int().unwrap();
+        let in1_size_x = in1_size.select(&BV::from_i64(&context, SIZE_X, bit_width)).as_bv().unwrap();
+        let in1_size_y = in1_size.select(&BV::from_i64(&context, SIZE_Y, bit_width)).as_bv().unwrap();
+        let axis = operands[1].vecs.select(&const0).as_array().unwrap().select(&const0).as_bv().unwrap();
         // 注意维度是一个一维数组，长度是数入数组的第一维度
-        let result_size_x = Int::from_i64(&context, 1);
-        let result_size_y_0 = in1_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
-        let result_size_y_1 = in1_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
+        let result_size_x = BV::from_i64(&context, 1, bit_width);
+        let result_size_y_0 = in1_size.select(&BV::from_i64(&context, SIZE_Y, bit_width)).as_bv().unwrap();
+        let result_size_y_1 = in1_size.select(&BV::from_i64(&context, SIZE_X, bit_width)).as_bv().unwrap();
         let result_size_y = axis._eq(&const0).ite(&result_size_y_0, &result_size_y_1);
 
-        let domain_sort_1 = Sort::int(&context);
-        let range_sort_1 = Sort::int(&context);
+        let domain_sort_1 = Sort::bitvector(&context, bit_width);
+        let range_sort_1 = Sort::bitvector(&context, bit_width);
         let mut array_val_1 = Array::fresh_const(context, "argmax_array_second_axis_1:", &domain_sort_1, &range_sort_1);
 
-        let domain_sort_1_ = Sort::int(&context);
-        let range_sort_1_ = Sort::int(&context);
+        let domain_sort_1_ = Sort::bitvector(&context, bit_width);
+        let range_sort_1_ = Sort::bitvector(&context, bit_width);
         let mut array_val_1_ = Array::fresh_const(context, "argmax_array_second_axis_0:", &domain_sort_1_, &range_sort_1_);
 
         for i in 0 .. DIMSIZE[0] {
-            let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            let in1_value = operands[0].vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
             // 记录最小值
-            let mut value = Int::from_i64(&context, 9223372036854775807);
+            let mut value = BV::from_i64(&context, 9223372036854775807, bit_width);
 
             for j in 0 .. DIMSIZE[1] {
-                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                let row_index = Int::from_i64(context, i as i64);
-                let col_index = Int::from_i64(context, j as i64);
-                let is_in_row = Int::lt(&row_index, &in1_size_x);
-                let is_in_col = Int::lt(&col_index, &in1_size_y);
+                let in1_value_i_j = in1_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                let row_index = BV::from_i64(context, i as i64, bit_width);
+                let col_index = BV::from_i64(context, j as i64, bit_width);
+                let is_in_row = BV::bvslt(&row_index, &in1_size_x);
+                let is_in_col = BV::bvslt(&col_index, &in1_size_y);
                 // 在范围内则依次比较，找到最小值
-                value = is_in_row.ite(&is_in_col.ite(&Int::lt(&in1_value_i_j, &value).ite(&in1_value_i_j, &value), &value), &value);
+                value = is_in_row.ite(&is_in_col.ite(&BV::bvslt(&in1_value_i_j, &value).ite(&in1_value_i_j, &value), &value), &value);
             }
             // 记录最小值对应的下标
             let mut res = zero(context, bit_width);
             for j in 0 .. DIMSIZE[1] {
-                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                let row_index = Int::from_i64(context, i as i64);
-                let col_index = Int::from_i64(context, j as i64);
-                let is_in_row = Int::lt(&row_index, &result_size_x);
-                let is_in_col = Int::lt(&col_index, &result_size_y);
+                let in1_value_i_j = in1_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                let row_index = BV::from_i64(context, i as i64, bit_width);
+                let col_index = BV::from_i64(context, j as i64, bit_width);
+                let is_in_row = BV::bvslt(&row_index, &result_size_x);
+                let is_in_col = BV::bvslt(&col_index, &result_size_y);
                 // 在范围内则找到最小值对应的下标
-                res = is_in_row.ite(&is_in_col.ite(&Int::_eq(&value, &in1_value_i_j).ite(&col_index, &res), &res), &res);
+                res = is_in_row.ite(&is_in_col.ite(&BV::_eq(&value, &in1_value_i_j).ite(&col_index, &res), &res), &res);
             }
             // 找到最终结果之后再放入
-            array_val_1 = array_val_1.store(&Int::from_i64(context, i as i64), &res);
+            array_val_1 = array_val_1.store(&BV::from_i64(context, i as i64, bit_width), &res);
         }
 
-        array = array.store(&Int::from_i64(context, 0), &array_val_1);
+        array = array.store(&BV::from_i64(context, 0, bit_width), &array_val_1);
 
         for i in 0 .. DIMSIZE[1] {
-            let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            let in1_value = operands[0].vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
             // 记录最小值
             let mut value = zero(context, bit_width);
 
             for j in 0 .. DIMSIZE[0] {
-                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                let row_index = Int::from_i64(context, j as i64);
-                let col_index = Int::from_i64(context, i as i64);
-                let is_in_row = Int::lt(&row_index, &in1_size_x);
-                let is_in_col = Int::lt(&col_index, &in1_size_y);
+                let in1_value_i_j = in1_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                let row_index = BV::from_i64(context, j as i64, bit_width);
+                let col_index = BV::from_i64(context, i as i64, bit_width);
+                let is_in_row = BV::bvslt(&row_index, &in1_size_x);
+                let is_in_col = BV::bvslt(&col_index, &in1_size_y);
                 // 在范围内则依次比较，找到最小值
-                value = is_in_row.ite(&is_in_col.ite(&Int::gt(&in1_value_i_j, &value).ite(&in1_value_i_j, &value), &value), &value);
+                value = is_in_row.ite(&is_in_col.ite(&BV::bvsgt(&in1_value_i_j, &value).ite(&in1_value_i_j, &value), &value), &value);
             }
             // 记录最小值对应的下标
             let mut res = zero(context, bit_width);
             for j in 0 .. DIMSIZE[1] {
-                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                let row_index = Int::from_i64(context, i as i64);
-                let col_index = Int::from_i64(context, j as i64);
-                let is_in_row = Int::lt(&row_index, &result_size_x);
-                let is_in_col = Int::lt(&col_index, &result_size_y);
+                let in1_value_i_j = in1_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                let row_index = BV::from_i64(context, i as i64, bit_width);
+                let col_index = BV::from_i64(context, j as i64, bit_width);
+                let is_in_row = BV::bvslt(&row_index, &result_size_x);
+                let is_in_col = BV::bvslt(&col_index, &result_size_y);
                 // 在范围内则找到最小值对应的下标
-                res = is_in_row.ite(&is_in_col.ite(&Int::_eq(&value, &in1_value_i_j).ite(&col_index, &res), &res), &res);
+                res = is_in_row.ite(&is_in_col.ite(&BV::_eq(&value, &in1_value_i_j).ite(&col_index, &res), &res), &res);
             }
             // 找到最终结果之后再放入
-            array_val_1_ = array_val_1_.store(&Int::from_i64(context, i as i64), &res);
+            array_val_1_ = array_val_1_.store(&BV::from_i64(context, i as i64, bit_width), &res);
         }
 
-        array_ = array_.store(&Int::from_i64(context, 0), &array_val_1_);
+        array_ = array_.store(&BV::from_i64(context, 0, bit_width), &array_val_1_);
 
         array = axis._eq(&const0).ite(&array_, &array);
 
-        let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let array_size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let mut array_val = Array::fresh_const(&context, "array_size:", &domain_sort, &range_sort);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_X), &result_size_x);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_Y), &result_size_y);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_X, bit_width), &result_size_x);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_Y, bit_width), &result_size_y);
         array = array.store(&array_size_index, &array_val);
 
         let result = Vecs::new(operands[0].dims, array);
@@ -701,24 +701,24 @@ impl Component for TfBooleanMask {
         // 填充物，如果掩码部分不是1，那么就返回0
         let const0 = zero(context, bit_width);
         let const1 = one(context, bit_width);
-        let const_mins_1 = Int::from_i64(context, -1);
+        let const_mins_1 = BV::from_i64(context, -1, bit_width);
         //let const_min = min_int(context, bit_width);
         // 保证两个长度相等，否则报错
 
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let array_sort = Sort::array(context, &domain_sort, &range_sort);
 
-        let first_dim_sort = Sort::int(&context);
+        let first_dim_sort = Sort::bitvector(&context, bit_width);
         let mut array = Array::fresh_const(&context,  "boolean_mask_array", &first_dim_sort, &array_sort);
 
         //先把mask的size取出来
-        let size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
         let value_size =  operands[0].vecs.select(&size_index).as_array().unwrap();
-        let value_size_x = value_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
+        let value_size_x = value_size.select(&BV::from_i64(&context, SIZE_X, bit_width)).as_bv().unwrap();
         let mask_size = operands[1].vecs.select(&size_index).as_array().unwrap();
-        let mask_size_x = mask_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
-        let _mask_size_y = mask_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
+        let mask_size_x = mask_size.select(&BV::from_i64(&context, SIZE_X, bit_width)).as_bv().unwrap();
+        let _mask_size_y = mask_size.select(&BV::from_i64(&context, SIZE_Y, bit_width)).as_bv().unwrap();
 
         //result的size
         let mut result_size_x = value_size_x.clone();
@@ -726,47 +726,47 @@ impl Component for TfBooleanMask {
 
         //to value是1*多少的数组，mask也是1*多少的数组
 
-        let mask_value_0 = operands[1].vecs.select(&Int::from_i64(context, 0 as i64)).as_array().unwrap();
+        let mask_value_0 = operands[1].vecs.select(&BV::from_i64(context, 0, bit_width)).as_array().unwrap();
 
         for i in 0 .. DIMSIZE[0] {
-            let mut index_result = Int::from_i64(context, 0);
+            let mut index_result = BV::from_i64(context, 0, bit_width);
 
-            let operand_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
-            let mask_value = operands[1].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            let operand_value = operands[0].vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
+            let mask_value = operands[1].vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
 
-            let domain_sort = Sort::int(&context);
-            let range_sort = Sort::int(&context);
+            let domain_sort = Sort::bitvector(&context, bit_width);
+            let range_sort = Sort::bitvector(&context, bit_width);
             let mut array_val = Array::fresh_const(context, "boolean_mask_array_second:", &domain_sort, &range_sort);
 
-            let mask_value_0_i = mask_value_0.select(&Int::from_i64(context, i as i64)).as_int().unwrap();
+            let mask_value_0_i = mask_value_0.select(&BV::from_i64(context, i as i64, bit_width)).as_bv().unwrap();
 
             for j in 0 .. DIMSIZE[1] {
                 //对于操作数的[i][j]
-                let mask_value_i_j = mask_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                let operand_i_j = operand_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();                
+                let mask_value_i_j = mask_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                let operand_i_j = operand_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();                
 
                 //采用mask_value_0_i的情况：mask_size_x == 1 and value_size_x > 1
                 
-                let mask_judge = Bool::and(&context, &[&mask_size_x._eq(&const1), &value_size_x.gt(&const1)]).ite(&mask_value_0_i, &mask_value_i_j);
+                let mask_judge = Bool::and(&context, &[&mask_size_x._eq(&const1), &value_size_x.bvsgt(&const1)]).ite(&mask_value_0_i, &mask_value_i_j);
                 let temp_index = mask_judge._eq(&const0).ite(&const_mins_1, &index_result);
                
                 array_val = array_val.store(&temp_index, &operand_i_j); 
                 
-                index_result = temp_index._eq(&const_mins_1).ite(&index_result, &(Int::add(context, &[&index_result, &const1])));
+                index_result = temp_index._eq(&const_mins_1).ite(&index_result, &(BV::bvadd(&index_result, &const1)));
             }
             result_size_y = index_result.clone();
-            result_size_x = index_result._eq(&const0).ite(&(Int::sub(context, &[&result_size_x, &const1])), &result_size_x);
+            result_size_x = index_result._eq(&const0).ite(&(BV::bvsub(&result_size_x, &const1)), &result_size_x);
 
-            array = array.store(&Int::from_i64(context, i as i64), &array_val);
+            array = array.store(&BV::from_i64(context, i as i64, bit_width), &array_val);
         }
 
         //将真实size存入
-        let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let array_size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let mut array_val = Array::fresh_const(&context, "array_size:", &domain_sort, &range_sort);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_X), &result_size_x);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_Y), &result_size_y);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_X, bit_width), &result_size_x);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_Y, bit_width), &result_size_y);
         array = array.store(&array_size_index, &array_val);
 
         let result = Vecs::new(operands[0].dims, array);
@@ -795,43 +795,43 @@ impl Component for TfCast {
         context: &'a z3::Context,
         _immediates: &[Vecs<Array<'a>>],
         operands: &[Vecs<Array<'a>>],
-        _bit_width: u32,
+        bit_width: u32,
     ) -> Vecs<Array<'a>> {
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let array_sort = Sort::array(context, &domain_sort, &range_sort);
 
-        let first_dim_sort = Sort::int(&context);
+        let first_dim_sort = Sort::bitvector(&context, bit_width);
         let mut array = Array::fresh_const(&context,  "cast_array", &first_dim_sort, &array_sort);
 
-        let size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
         let in1_size =  operands[0].vecs.select(&size_index).as_array().unwrap();
-        let result_size_x = in1_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
-        let result_size_y = in1_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
+        let result_size_x = in1_size.select(&BV::from_i64(&context, SIZE_X, bit_width)).as_bv().unwrap();
+        let result_size_y = in1_size.select(&BV::from_i64(&context, SIZE_Y, bit_width)).as_bv().unwrap();
 
         for i in 0 .. DIMSIZE[0] {
 
-            let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            let in1_value = operands[0].vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
 
-            let domain_sort = Sort::int(&context);
-            let range_sort = Sort::int(&context);
+            let domain_sort = Sort::bitvector(&context, bit_width);
+            let range_sort = Sort::bitvector(&context, bit_width);
             let mut array_val = Array::fresh_const(context, "cast_array_second:", &domain_sort, &range_sort);
 
             for j in 0 .. DIMSIZE[1] {
-                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                let value = Int::from_i64(context, in1_value_i_j.as_i64().unwrap());
-                array_val = array_val.store(&Int::from_i64(context, j as i64), &value);
+                let in1_value_i_j = in1_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                let value = BV::from_i64(context, in1_value_i_j.as_i64().unwrap(), bit_width);
+                array_val = array_val.store(&BV::from_i64(context, j as i64, bit_width), &value);
             }
 
-            array = array.store(&Int::from_i64(context, i as i64), &array_val);
+            array = array.store(&BV::from_i64(context, i as i64, bit_width), &array_val);
         }
 
-        let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let array_size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let mut array_val = Array::fresh_const(&context, "array_size:", &domain_sort, &range_sort);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_X), &result_size_x);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_Y), &result_size_y);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_X, bit_width), &result_size_x);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_Y, bit_width), &result_size_y);
         array = array.store(&array_size_index, &array_val);
 
         let result = Vecs::new(operands[0].dims, array);
@@ -864,101 +864,101 @@ impl Component for TfConcat {
     ) -> Vecs<Array<'a>> {
         let const0 = zero(context, bit_width);
 
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let array_sort = Sort::array(context, &domain_sort, &range_sort);
 
-        let first_dim_sort = Sort::int(&context);
+        let first_dim_sort = Sort::bitvector(&context, bit_width);
         let mut array = Array::fresh_const(&context,  "concat_array_axis_1", &first_dim_sort, &array_sort);
 
-        let domain_sort_ = Sort::int(&context);
-        let range_sort_ = Sort::int(&context);
+        let domain_sort_ = Sort::bitvector(&context, bit_width);
+        let range_sort_ = Sort::bitvector(&context, bit_width);
         let array_sort_ = Sort::array(context, &domain_sort_, &range_sort_);
 
-        let first_dim_sort_ = Sort::int(&context);
+        let first_dim_sort_ = Sort::bitvector(&context, bit_width);
         let mut array_ = Array::fresh_const(&context,  "concat_array_axis_0", &first_dim_sort_, &array_sort_);
 
-        let size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
         let in1_size =  operands[0].vecs.select(&size_index).as_array().unwrap();
         let in2_size =  operands[1].vecs.select(&size_index).as_array().unwrap();
-        let axis = operands[2].vecs.select(&const0).as_array().unwrap().select(&const0).as_int().unwrap();
-        let result_size_x_1 = in1_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
-        let result_size_y_1_1 = in1_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
-        let result_size_y_2_1 = in2_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
-        let result_size_y_1 = Int::add(context, &[&result_size_y_1_1, &result_size_y_2_1]);
-        let result_size_y_0 = in1_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
-        let result_size_x_1_0 = in1_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
-        let result_size_x_2_0 = in2_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
-        let result_size_x_0 = Int::add(context, &[&result_size_x_1_0, &result_size_x_2_0]);
+        let axis = operands[2].vecs.select(&const0).as_array().unwrap().select(&const0).as_bv().unwrap();
+        let result_size_x_1 = in1_size.select(&BV::from_i64(&context, SIZE_X, bit_width)).as_bv().unwrap();
+        let result_size_y_1_1 = in1_size.select(&BV::from_i64(&context, SIZE_Y, bit_width)).as_bv().unwrap();
+        let result_size_y_2_1 = in2_size.select(&BV::from_i64(&context, SIZE_Y, bit_width)).as_bv().unwrap();
+        let result_size_y_1 = BV::bvadd(&result_size_y_1_1, &result_size_y_2_1);
+        let result_size_y_0 = in1_size.select(&BV::from_i64(&context, SIZE_Y, bit_width)).as_bv().unwrap();
+        let result_size_x_1_0 = in1_size.select(&BV::from_i64(&context, SIZE_X, bit_width)).as_bv().unwrap();
+        let result_size_x_2_0 = in2_size.select(&BV::from_i64(&context, SIZE_X, bit_width)).as_bv().unwrap();
+        let result_size_x_0 = BV::bvadd(&result_size_x_1_0, &result_size_x_2_0);
         let result_size_x = axis._eq(&const0).ite(&result_size_x_0, &result_size_x_1);
         let result_size_y = axis._eq(&const0).ite(&result_size_y_0, &result_size_y_1);
 
         for i in 0 .. DIMSIZE[0] {
 
-            let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
-            let in2_value = operands[1].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            let in1_value = operands[0].vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
+            let in2_value = operands[1].vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
 
-            let domain_sort = Sort::int(&context);
-            let range_sort = Sort::int(&context);
+            let domain_sort = Sort::bitvector(&context, bit_width);
+            let range_sort = Sort::bitvector(&context, bit_width);
             let mut array_val = Array::fresh_const(context, "concat_array_second_axis_1:", &domain_sort, &range_sort);
 
             for j in 0 .. DIMSIZE[1] {
-                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                let in2_value_i_j = in2_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                let row_index = Int::from_i64(context, i as i64);
-                let col_index = Int::from_i64(context, j as i64);
-                let is_in_row = Int::lt(&row_index, &result_size_x_1);
-                let in1_is_in_col = Int::lt(&col_index, &result_size_y_1_1);
-                let in2_is_in_col = Int::lt(&col_index, &result_size_y_1);
+                let in1_value_i_j = in1_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                let in2_value_i_j = in2_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                let row_index = BV::from_i64(context, i as i64, bit_width);
+                let col_index = BV::from_i64(context, j as i64, bit_width);
+                let is_in_row = BV::bvslt(&row_index, &result_size_x_1);
+                let in1_is_in_col = BV::bvslt(&col_index, &result_size_y_1_1);
+                let in2_is_in_col = BV::bvslt(&col_index, &result_size_y_1);
                 // result_size_y_1是第一个输入的纵坐标，result_size_y_1到result_size_y是第二个输入的纵坐标
                 // 如果在第一个输入纵坐标内就用第一个数，如果不在第一个输入纵坐标内但是在第二个输入纵坐标内就用第二个数，否则就不动
                 let value = is_in_row.ite(&in1_is_in_col.ite(&in1_value_i_j, &in2_is_in_col.ite(&in2_value_i_j, &const0)), &const0);
-                array_val = array_val.store(&Int::from_i64(context, j as i64), &value);
+                array_val = array_val.store(&BV::from_i64(context, j as i64, bit_width), &value);
             }
 
-            array = array.store(&Int::from_i64(context, i as i64), &array_val);
+            array = array.store(&BV::from_i64(context, i as i64, bit_width), &array_val);
         }
 
         for i in 0 .. DIMSIZE[0] {
 
-            let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
-            let in2_value = operands[1].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            let in1_value = operands[0].vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
+            let in2_value = operands[1].vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
 
-            let domain_sort = Sort::int(&context);
-            let range_sort = Sort::int(&context);
+            let domain_sort = Sort::bitvector(&context, bit_width);
+            let range_sort = Sort::bitvector(&context, bit_width);
             let mut array_val = Array::fresh_const(context, "concat_array_second_axis_0_1:", &domain_sort, &range_sort);
 
-            let domain_sort_ = Sort::int(&context);
-            let range_sort_ = Sort::int(&context);
+            let domain_sort_ = Sort::bitvector(&context, bit_width);
+            let range_sort_ = Sort::bitvector(&context, bit_width);
             let mut array_val_ = Array::fresh_const(context, "concat_array_second_axis_0_2:", &domain_sort_, &range_sort_);
 
             for j in 0 .. DIMSIZE[1] {
-                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                let in2_value_i_j = in2_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                let row_index = Int::from_i64(context, i as i64);
-                let col_index = Int::from_i64(context, j as i64);
-                let is_in_row = Int::lt(&row_index, &result_size_x_1_0);
-                let is_in_row_ = Int::lt(&row_index, &result_size_x_2_0);
-                let is_in_col = Int::lt(&col_index, &result_size_y_0);
+                let in1_value_i_j = in1_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                let in2_value_i_j = in2_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                let row_index = BV::from_i64(context, i as i64, bit_width);
+                let col_index = BV::from_i64(context, j as i64, bit_width);
+                let is_in_row = BV::bvslt(&row_index, &result_size_x_1_0);
+                let is_in_row_ = BV::bvslt(&row_index, &result_size_x_2_0);
+                let is_in_col = BV::bvslt(&col_index, &result_size_y_0);
                 // 按照原来的顺序取出来，然后第二个放进去的时候横坐标偏移量是第一个数组的第一维度
                 let value = is_in_row.ite(&is_in_col.ite(&in1_value_i_j, &const0), &const0);
                 let value_ = is_in_row_.ite(&is_in_col.ite(&in2_value_i_j, &const0), &const0);
-                array_val = array_val.store(&Int::from_i64(context, j as i64), &value);
-                array_val_ = array_val_.store(&Int::from_i64(context, j as i64), &value_);
+                array_val = array_val.store(&BV::from_i64(context, j as i64, bit_width), &value);
+                array_val_ = array_val_.store(&BV::from_i64(context, j as i64, bit_width), &value_);
             }
 
-            array_ = array_.store(&Int::from_i64(context, i as i64), &array_val);
-            array_ = array_.store(&Int::add(&context, &[&Int::from_i64(context, i as i64), &result_size_x_1_0]), &array_val_);
+            array_ = array_.store(&BV::from_i64(context, i as i64, bit_width), &array_val);
+            array_ = array_.store(&BV::bvadd(&BV::from_i64(context, i as i64, bit_width), &result_size_x_1_0), &array_val_);
         }
 
         array = axis._eq(&const0).ite(&array_, &array);
 
-        let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let array_size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let mut array_val = Array::fresh_const(&context, "array_size:", &domain_sort, &range_sort);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_X), &result_size_x);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_Y), &result_size_y);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_X, bit_width), &result_size_x);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_Y, bit_width), &result_size_y);
         array = array.store(&array_size_index, &array_val);
 
         let result = Vecs::new(operands[0].dims, array);
@@ -987,53 +987,53 @@ impl Component for TfClipByValue {
         context: &'a z3::Context,
         _immediates: &[Vecs<Array<'a>>],
         operands: &[Vecs<Array<'a>>],
-        _bit_width: u32,
+        bit_width: u32,
     ) -> Vecs<Array<'a>> {
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let array_sort = Sort::array(context, &domain_sort, &range_sort);
 
-        let first_dim_sort = Sort::int(&context);
+        let first_dim_sort = Sort::bitvector(&context, bit_width);
         let mut array = Array::fresh_const(&context,  "clip_by_value_array", &first_dim_sort, &array_sort);
 
-        let size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
         let in1_size =  operands[0].vecs.select(&size_index).as_array().unwrap();
         let _in2_size =  operands[1].vecs.select(&size_index).as_array().unwrap();
         let _in3_size =  operands[2].vecs.select(&size_index).as_array().unwrap();
-        let result_size_x = in1_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
-        let result_size_y = in1_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
+        let result_size_x = in1_size.select(&BV::from_i64(&context, SIZE_X, bit_width)).as_bv().unwrap();
+        let result_size_y = in1_size.select(&BV::from_i64(&context, SIZE_Y, bit_width)).as_bv().unwrap();
 
         // 假定最大值最小值就在数组的第一个位置上
-        let min_array = operands[1].vecs.select(&Int::from_i64(context, 0 as i64)).as_array().unwrap();
-        let min = min_array.select(&Int::from_i64(context, 0 as i64)).as_int().unwrap();
-        let max_array = operands[2].vecs.select(&Int::from_i64(context, 0 as i64)).as_array().unwrap();
-        let max = max_array.select(&Int::from_i64(context, 0 as i64)).as_int().unwrap();
+        let min_array = operands[1].vecs.select(&BV::from_i64(context, 0, bit_width)).as_array().unwrap();
+        let min = min_array.select(&BV::from_i64(context, 0, bit_width)).as_bv().unwrap();
+        let max_array = operands[2].vecs.select(&BV::from_i64(context, 0, bit_width)).as_array().unwrap();
+        let max = max_array.select(&BV::from_i64(context, 0, bit_width)).as_bv().unwrap();
 
         for i in 0 .. DIMSIZE[0] {
 
-            let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            let in1_value = operands[0].vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
 
-            let domain_sort = Sort::int(&context);
-            let range_sort = Sort::int(&context);
+            let domain_sort = Sort::bitvector(&context, bit_width);
+            let range_sort = Sort::bitvector(&context, bit_width);
             let mut array_val = Array::fresh_const(context, "clip_by_value_array_second:", &domain_sort, &range_sort);
 
             for j in 0 .. DIMSIZE[1] {
-                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                let is_max = Int::gt(&in1_value_i_j, &max);
-                let is_min = Int::lt(&in1_value_i_j, &min);
+                let in1_value_i_j = in1_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                let is_max = BV::bvsgt(&in1_value_i_j, &max);
+                let is_min = BV::bvslt(&in1_value_i_j, &min);
                 let value = is_max.ite(&max, &is_min.ite(&min, &in1_value_i_j));
-                array_val = array_val.store(&Int::from_i64(context, j as i64), &value);
+                array_val = array_val.store(&BV::from_i64(context, j as i64, bit_width), &value);
             }
 
-            array = array.store(&Int::from_i64(context, i as i64), &array_val);
+            array = array.store(&BV::from_i64(context, i as i64, bit_width), &array_val);
         }
 
-        let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let array_size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let mut array_val = Array::fresh_const(&context, "array_size:", &domain_sort, &range_sort);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_X), &result_size_x);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_Y), &result_size_y);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_X, bit_width), &result_size_x);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_Y, bit_width), &result_size_y);
         array = array.store(&array_size_index, &array_val);
 
         let result = Vecs::new(operands[0].dims, array);
@@ -1067,44 +1067,44 @@ impl Component for TfEqual {
         let const0 = zero(context, bit_width);
         let const1 = one(context, bit_width);
 
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let array_sort = Sort::array(context, &domain_sort, &range_sort);
 
-        let first_dim_sort = Sort::int(&context);
+        let first_dim_sort = Sort::bitvector(&context, bit_width);
         let mut array = Array::fresh_const(&context,  "equal_array", &first_dim_sort, &array_sort);
 
-        let size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
         let in1_size =  operands[0].vecs.select(&size_index).as_array().unwrap();
         let _in2_size =  operands[1].vecs.select(&size_index).as_array().unwrap();
-        let result_size_x = in1_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
-        let result_size_y = in1_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
+        let result_size_x = in1_size.select(&BV::from_i64(&context, SIZE_X, bit_width)).as_bv().unwrap();
+        let result_size_y = in1_size.select(&BV::from_i64(&context, SIZE_Y, bit_width)).as_bv().unwrap();
 
         for i in 0 .. DIMSIZE[0] {
 
-            let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
-            let in2_value = operands[1].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            let in1_value = operands[0].vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
+            let in2_value = operands[1].vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
 
-            let domain_sort = Sort::int(&context);
-            let range_sort = Sort::int(&context);
+            let domain_sort = Sort::bitvector(&context, bit_width);
+            let range_sort = Sort::bitvector(&context, bit_width);
             let mut array_val = Array::fresh_const(context, "equal_array_second:", &domain_sort, &range_sort);
 
             for j in 0 .. DIMSIZE[1] {
-                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                let in2_value_i_j = in2_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                let value = Int::_eq(&in1_value_i_j, &in2_value_i_j).ite(&const1, &const0);
-                array_val = array_val.store(&Int::from_i64(context, j as i64), &value);
+                let in1_value_i_j = in1_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                let in2_value_i_j = in2_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                let value = BV::_eq(&in1_value_i_j, &in2_value_i_j).ite(&const1, &const0);
+                array_val = array_val.store(&BV::from_i64(context, j as i64, bit_width), &value);
             }
 
-            array = array.store(&Int::from_i64(context, i as i64), &array_val);
+            array = array.store(&BV::from_i64(context, i as i64, bit_width), &array_val);
         }
 
-        let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let array_size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let mut array_val = Array::fresh_const(&context, "array_size:", &domain_sort, &range_sort);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_X), &result_size_x);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_Y), &result_size_y);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_X, bit_width), &result_size_x);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_Y, bit_width), &result_size_y);
         array = array.store(&array_size_index, &array_val);
 
         let result = Vecs::new(operands[0].dims, array);
@@ -1139,71 +1139,71 @@ impl Component for TfExpandDims {
         let const1 = one(context, bit_width);
         // 由于我们是二维数组，那么axis只有0、1、-1三个选项，而-1和1功能是一样的，所以统一为0和1
         let axis_array = operands[1].vecs.select(&const0).as_array().unwrap();
-        let axis_ = axis_array.select(&const0).as_int().unwrap();
+        let axis_ = axis_array.select(&const0).as_bv().unwrap();
         let axis = axis_._eq(&const0).ite(&const0, &const1);
 
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let array_sort = Sort::array(context, &domain_sort, &range_sort);
 
-        let first_dim_sort = Sort::int(&context);
+        let first_dim_sort = Sort::bitvector(&context, bit_width);
         let mut array = Array::fresh_const(&context,  "expand_dims_array_axis_0", &first_dim_sort, &array_sort);
 
-        let domain_sort_1 = Sort::int(&context);
-        let range_sort_1 = Sort::int(&context);
+        let domain_sort_1 = Sort::bitvector(&context, bit_width);
+        let range_sort_1 = Sort::bitvector(&context, bit_width);
         let array_sort_1 = Sort::array(context, &domain_sort_1, &range_sort_1);
 
-        let first_dim_sort_1 = Sort::int(&context);
+        let first_dim_sort_1 = Sort::bitvector(&context, bit_width);
         let mut array_1 = Array::fresh_const(&context,  "expand_dims_array_axis_1", &first_dim_sort_1, &array_sort_1);
 
-        let size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
         let in1_size =  operands[0].vecs.select(&size_index).as_array().unwrap();
-        let in1_size_x = in1_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
-        let _in1_size_y = in1_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
+        let in1_size_x = in1_size.select(&BV::from_i64(&context, SIZE_X, bit_width)).as_bv().unwrap();
+        let _in1_size_y = in1_size.select(&BV::from_i64(&context, SIZE_Y, bit_width)).as_bv().unwrap();
         // axis = 0时，维度数组例如[2] -> [1, 2]，axis = 1时，维度数组例如[2] -> [2, 1]
         let result_size_x = axis._eq(&const0).ite(&const1, &in1_size_x);
         let result_size_y = axis._eq(&const0).ite(&in1_size_x, &const1);
         // 只能是按照两种情况求出两种数组，然后在根据axis的值确定是哪个数组了
         for i in 0 .. DIMSIZE[0] {
 
-            let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            let in1_value = operands[0].vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
 
-            let domain_sort = Sort::int(&context);
-            let range_sort = Sort::int(&context);
+            let domain_sort = Sort::bitvector(&context, bit_width);
+            let range_sort = Sort::bitvector(&context, bit_width);
             let mut array_val = Array::fresh_const(context, "expand_dims_array_second:", &domain_sort, &range_sort);
 
             for j in 0 .. DIMSIZE[1] {
-                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                array_val = array_val.store(&Int::from_i64(context, j as i64), &in1_value_i_j);
+                let in1_value_i_j = in1_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                array_val = array_val.store(&BV::from_i64(context, j as i64, bit_width), &in1_value_i_j);
             }
 
-            array = array.store(&Int::from_i64(context, i as i64), &array_val);
+            array = array.store(&BV::from_i64(context, i as i64, bit_width), &array_val);
         }
 
         for i in 0 .. DIMSIZE[1] {
 
-            let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            let in1_value = operands[0].vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
 
-            let domain_sort = Sort::int(&context);
-            let range_sort = Sort::int(&context);
+            let domain_sort = Sort::bitvector(&context, bit_width);
+            let range_sort = Sort::bitvector(&context, bit_width);
             let mut array_val = Array::fresh_const(context, "expand_dims_array_second_1:", &domain_sort, &range_sort);
 
             for j in 0 .. DIMSIZE[0] {
-                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                array_val = array_val.store(&Int::from_i64(context, j as i64), &in1_value_i_j);
+                let in1_value_i_j = in1_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                array_val = array_val.store(&BV::from_i64(context, j as i64, bit_width), &in1_value_i_j);
             }
 
-            array_1 = array_1.store(&Int::from_i64(context, i as i64), &array_val);
+            array_1 = array_1.store(&BV::from_i64(context, i as i64, bit_width), &array_val);
         }
 
         array = axis._eq(&const0).ite(&array, &array_1);
 
-        let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let array_size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let mut array_val = Array::fresh_const(&context, "array_size:", &domain_sort, &range_sort);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_X), &result_size_x);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_Y), &result_size_y);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_X, bit_width), &result_size_x);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_Y, bit_width), &result_size_y);
         array = array.store(&array_size_index, &array_val);
 
         let result = Vecs::new(operands[0].dims, array);
@@ -1237,43 +1237,43 @@ impl Component for TfEye {
         let const0 = zero(context, bit_width);
         let const1 = one(context, bit_width);
 
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let array_sort = Sort::array(context, &domain_sort, &range_sort);
 
-        let first_dim_sort = Sort::int(&context);
+        let first_dim_sort = Sort::bitvector(&context, bit_width);
         let mut array = Array::fresh_const(&context,  "eye_array", &first_dim_sort, &array_sort);
 
-        let row_array = operands[0].vecs.select(&Int::from_i64(context, 0)).as_array().unwrap();
-        let result_size_x = row_array.select(&Int::from_i64(context, 0)).as_int().unwrap();
-        let col_array = operands[1].vecs.select(&Int::from_i64(context, 0)).as_array().unwrap();
-        let result_size_y = col_array.select(&Int::from_i64(context, 0)).as_int().unwrap();
+        let row_array = operands[0].vecs.select(&BV::from_i64(context, 0, bit_width)).as_array().unwrap();
+        let result_size_x = row_array.select(&BV::from_i64(context, 0, bit_width)).as_bv().unwrap();
+        let col_array = operands[1].vecs.select(&BV::from_i64(context, 0, bit_width)).as_array().unwrap();
+        let result_size_y = col_array.select(&BV::from_i64(context, 0, bit_width)).as_bv().unwrap();
 
 
         for i in 0 .. DIMSIZE[0] {
-            let domain_sort = Sort::int(&context);
-            let range_sort = Sort::int(&context);
+            let domain_sort = Sort::bitvector(&context, bit_width);
+            let range_sort = Sort::bitvector(&context, bit_width);
             let mut array_val = Array::fresh_const(context, "eye_array_second:", &domain_sort, &range_sort);
 
             for j in 0 .. DIMSIZE[1] {
-                let row_index = Int::from_i64(context, i as i64);
-                let col_index = Int::from_i64(context, j as i64);
-                let is_in_row = Int::lt(&row_index, &result_size_x);
-                let is_in_col = Int::lt(&col_index, &result_size_y);
-                let is_row_equal_col = Int::_eq(&row_index, &col_index);
+                let row_index = BV::from_i64(context, i as i64, bit_width);
+                let col_index = BV::from_i64(context, j as i64, bit_width);
+                let is_in_row = BV::bvslt(&row_index, &result_size_x);
+                let is_in_col = BV::bvslt(&col_index, &result_size_y);
+                let is_row_equal_col = BV::_eq(&row_index, &col_index);
                 let value = is_in_row.ite(&is_in_col.ite(&is_row_equal_col.ite(&const1, &const0), &const0), &const0);
-                array_val = array_val.store(&Int::from_i64(context, j as i64), &value);
+                array_val = array_val.store(&BV::from_i64(context, j as i64, bit_width), &value);
             }
 
-            array = array.store(&Int::from_i64(context, i as i64), &array_val);
+            array = array.store(&BV::from_i64(context, i as i64, bit_width), &array_val);
         }
 
-        let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let array_size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let mut array_val = Array::fresh_const(&context, "array_size:", &domain_sort, &range_sort);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_X), &result_size_x);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_Y), &result_size_y);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_X, bit_width), &result_size_x);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_Y, bit_width), &result_size_y);
         array = array.store(&array_size_index, &array_val);
 
         let result = Vecs::new(operands[0].dims, array);
@@ -1307,42 +1307,42 @@ impl Component for TfOnes {
         let const0 = zero(context, bit_width);
         let const1 = one(context, bit_width);
 
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let array_sort = Sort::array(context, &domain_sort, &range_sort);
 
-        let first_dim_sort = Sort::int(&context);
+        let first_dim_sort = Sort::bitvector(&context, bit_width);
         let mut array = Array::fresh_const(&context,  "one_array", &first_dim_sort, &array_sort);
 
         // 这里输入的参数就是数组的维度，如【2， 3】就是两行三列的数组
-        let row_array = operands[0].vecs.select(&Int::from_i64(context, 0)).as_array().unwrap();
-        let result_size_x = row_array.select(&Int::from_i64(context, 0)).as_int().unwrap();
-        let col_array = operands[0].vecs.select(&Int::from_i64(context, 0)).as_array().unwrap();
-        let result_size_y = col_array.select(&Int::from_i64(context, 1)).as_int().unwrap();
+        let row_array = operands[0].vecs.select(&BV::from_i64(context, 0, bit_width)).as_array().unwrap();
+        let result_size_x = row_array.select(&BV::from_i64(context, 0, bit_width)).as_bv().unwrap();
+        let col_array = operands[0].vecs.select(&BV::from_i64(context, 0, bit_width)).as_array().unwrap();
+        let result_size_y = col_array.select(&BV::from_i64(context, 1, bit_width)).as_bv().unwrap();
 
         for i in 0 .. DIMSIZE[0] {
-            let domain_sort = Sort::int(&context);
-            let range_sort = Sort::int(&context);
+            let domain_sort = Sort::bitvector(&context, bit_width);
+            let range_sort = Sort::bitvector(&context, bit_width);
             let mut array_val = Array::fresh_const(context, "one_array_second:", &domain_sort, &range_sort);
 
             for j in 0 .. DIMSIZE[1] {
-                let row_index = Int::from_i64(context, i as i64);
-                let col_index = Int::from_i64(context, j as i64);
-                let is_in_row = Int::lt(&row_index, &result_size_x);
-                let is_in_col = Int::lt(&col_index, &result_size_y);
+                let row_index = BV::from_i64(context, i as i64, bit_width);
+                let col_index = BV::from_i64(context, j as i64, bit_width);
+                let is_in_row = BV::bvslt(&row_index, &result_size_x);
+                let is_in_col = BV::bvslt(&col_index, &result_size_y);
                 let value = is_in_row.ite(&is_in_col.ite(&const1, &const0), &const0);
-                array_val = array_val.store(&Int::from_i64(context, j as i64), &value);
+                array_val = array_val.store(&BV::from_i64(context, j as i64, bit_width), &value);
             }
 
-            array = array.store(&Int::from_i64(context, i as i64), &array_val);
+            array = array.store(&BV::from_i64(context, i as i64, bit_width), &array_val);
         }
 
-        let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let array_size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let mut array_val = Array::fresh_const(&context, "array_size:", &domain_sort, &range_sort);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_X), &result_size_x);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_Y), &result_size_y);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_X, bit_width), &result_size_x);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_Y, bit_width), &result_size_y);
         array = array.store(&array_size_index, &array_val);
 
         let result = Vecs::new(operands[0].dims, array);
@@ -1375,43 +1375,43 @@ impl Component for TfZeros {
     ) -> Vecs<Array<'a>> {
         let const0 = zero(context, bit_width);
 
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let array_sort = Sort::array(context, &domain_sort, &range_sort);
 
-        let first_dim_sort = Sort::int(&context);
+        let first_dim_sort = Sort::bitvector(&context, bit_width);
         let mut array = Array::fresh_const(&context,  "one_array", &first_dim_sort, &array_sort);
 
         // 这里输入的参数就是数组的维度，如【2， 3】就是两行三列的数组
-        let row_array = operands[0].vecs.select(&Int::from_i64(context, 0)).as_array().unwrap();
-        let result_size_x = row_array.select(&Int::from_i64(context, 0)).as_int().unwrap();
-        let col_array = operands[0].vecs.select(&Int::from_i64(context, 0)).as_array().unwrap();
-        let result_size_y = col_array.select(&Int::from_i64(context, 1)).as_int().unwrap();
+        let row_array = operands[0].vecs.select(&BV::from_i64(context, 0, bit_width)).as_array().unwrap();
+        let result_size_x = row_array.select(&BV::from_i64(context, 0, bit_width)).as_bv().unwrap();
+        let col_array = operands[0].vecs.select(&BV::from_i64(context, 0, bit_width)).as_array().unwrap();
+        let result_size_y = col_array.select(&BV::from_i64(context, 1, bit_width)).as_bv().unwrap();
 
         for i in 0 .. DIMSIZE[0] {
-            let domain_sort = Sort::int(&context);
-            let range_sort = Sort::int(&context);
+            let domain_sort = Sort::bitvector(&context, bit_width);
+            let range_sort = Sort::bitvector(&context, bit_width);
             let mut array_val = Array::fresh_const(context, "one_array_second:", &domain_sort, &range_sort);
 
             for j in 0 .. DIMSIZE[1] {
-                let row_index = Int::from_i64(context, i as i64);
-                let col_index = Int::from_i64(context, j as i64);
+                let row_index = BV::from_i64(context, i as i64, bit_width);
+                let col_index = BV::from_i64(context, j as i64, bit_width);
                 // 好吧，谁也不知道这里的判断有啥用。。。反正都是0，但也不敢乱该，怕以后改掉了咋办
-                let is_in_row = Int::lt(&row_index, &result_size_x);
-                let is_in_col = Int::lt(&col_index, &result_size_y);
+                let is_in_row = BV::bvslt(&row_index, &result_size_x);
+                let is_in_col = BV::bvslt(&col_index, &result_size_y);
                 let value = is_in_row.ite(&is_in_col.ite(&const0, &const0), &const0);
-                array_val = array_val.store(&Int::from_i64(context, j as i64), &value);
+                array_val = array_val.store(&BV::from_i64(context, j as i64, bit_width), &value);
             }
 
-            array = array.store(&Int::from_i64(context, i as i64), &array_val);
+            array = array.store(&BV::from_i64(context, i as i64, bit_width), &array_val);
         }
 
-        let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let array_size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let mut array_val = Array::fresh_const(&context, "array_size:", &domain_sort, &range_sort);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_X), &result_size_x);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_Y), &result_size_y);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_X, bit_width), &result_size_x);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_Y, bit_width), &result_size_y);
         array = array.store(&array_size_index, &array_val);
 
         let result = Vecs::new(operands[0].dims, array);
@@ -1445,41 +1445,41 @@ impl Component for TfOnesLike {
         let const0 = zero(context, bit_width);
         let const1 = one(context, bit_width);
 
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let array_sort = Sort::array(context, &domain_sort, &range_sort);
 
-        let first_dim_sort = Sort::int(&context);
+        let first_dim_sort = Sort::bitvector(&context, bit_width);
         let mut array = Array::fresh_const(&context,  "ones_like_array", &first_dim_sort, &array_sort);
 
-        let size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
         let in1_size =  operands[0].vecs.select(&size_index).as_array().unwrap();
-        let result_size_x = in1_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
-        let result_size_y = in1_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
+        let result_size_x = in1_size.select(&BV::from_i64(&context, SIZE_X, bit_width)).as_bv().unwrap();
+        let result_size_y = in1_size.select(&BV::from_i64(&context, SIZE_Y, bit_width)).as_bv().unwrap();
 
         for i in 0 .. DIMSIZE[0] {
-            let domain_sort = Sort::int(&context);
-            let range_sort = Sort::int(&context);
+            let domain_sort = Sort::bitvector(&context, bit_width);
+            let range_sort = Sort::bitvector(&context, bit_width);
             let mut array_val = Array::fresh_const(context, "ones_like_array_second:", &domain_sort, &range_sort);
 
             for j in 0 .. DIMSIZE[1] {
-                let row_index = Int::from_i64(context, i as i64);
-                let col_index = Int::from_i64(context, j as i64);
-                let is_in_row = Int::lt(&row_index, &result_size_x);
-                let is_in_col = Int::lt(&col_index, &result_size_y);
+                let row_index = BV::from_i64(context, i as i64, bit_width);
+                let col_index = BV::from_i64(context, j as i64, bit_width);
+                let is_in_row = BV::bvslt(&row_index, &result_size_x);
+                let is_in_col = BV::bvslt(&col_index, &result_size_y);
                 let value = is_in_row.ite(&is_in_col.ite(&const1, &const0), &const0);
-                array_val = array_val.store(&Int::from_i64(context, j as i64), &value);
+                array_val = array_val.store(&BV::from_i64(context, j as i64, bit_width), &value);
             }
 
-            array = array.store(&Int::from_i64(context, i as i64), &array_val);
+            array = array.store(&BV::from_i64(context, i as i64, bit_width), &array_val);
         }
 
-        let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let array_size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let mut array_val = Array::fresh_const(&context, "array_size:", &domain_sort, &range_sort);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_X), &result_size_x);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_Y), &result_size_y);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_X, bit_width), &result_size_x);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_Y, bit_width), &result_size_y);
         array = array.store(&array_size_index, &array_val);
 
         let result = Vecs::new(operands[0].dims, array);
@@ -1512,41 +1512,41 @@ impl Component for TfZerosLike {
     ) -> Vecs<Array<'a>> {
         let const0 = zero(context, bit_width);
 
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let array_sort = Sort::array(context, &domain_sort, &range_sort);
 
-        let first_dim_sort = Sort::int(&context);
+        let first_dim_sort = Sort::bitvector(&context, bit_width);
         let mut array = Array::fresh_const(&context,  "zeros_like_array", &first_dim_sort, &array_sort);
 
-        let size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
         let in1_size =  operands[0].vecs.select(&size_index).as_array().unwrap();
-        let result_size_x = in1_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
-        let result_size_y = in1_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
+        let result_size_x = in1_size.select(&BV::from_i64(&context, SIZE_X, bit_width)).as_bv().unwrap();
+        let result_size_y = in1_size.select(&BV::from_i64(&context, SIZE_Y, bit_width)).as_bv().unwrap();
 
         for i in 0 .. DIMSIZE[0] {
-            let domain_sort = Sort::int(&context);
-            let range_sort = Sort::int(&context);
+            let domain_sort = Sort::bitvector(&context, bit_width);
+            let range_sort = Sort::bitvector(&context, bit_width);
             let mut array_val = Array::fresh_const(context, "zeros_like_array_second:", &domain_sort, &range_sort);
 
             for j in 0 .. DIMSIZE[1] {
-                let row_index = Int::from_i64(context, i as i64);
-                let col_index = Int::from_i64(context, j as i64);
-                let is_in_row = Int::lt(&row_index, &result_size_x);
-                let is_in_col = Int::lt(&col_index, &result_size_y);
+                let row_index = BV::from_i64(context, i as i64, bit_width);
+                let col_index = BV::from_i64(context, j as i64, bit_width);
+                let is_in_row = BV::bvslt(&row_index, &result_size_x);
+                let is_in_col = BV::bvslt(&col_index, &result_size_y);
                 let value = is_in_row.ite(&is_in_col.ite(&const0, &const0), &const0);
-                array_val = array_val.store(&Int::from_i64(context, j as i64), &value);
+                array_val = array_val.store(&BV::from_i64(context, j as i64, bit_width), &value);
             }
 
-            array = array.store(&Int::from_i64(context, i as i64), &array_val);
+            array = array.store(&BV::from_i64(context, i as i64, bit_width), &array_val);
         }
 
-        let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let array_size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let mut array_val = Array::fresh_const(&context, "array_size:", &domain_sort, &range_sort);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_X), &result_size_x);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_Y), &result_size_y);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_X, bit_width), &result_size_x);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_Y, bit_width), &result_size_y);
         array = array.store(&array_size_index, &array_val);
 
         let result = Vecs::new(operands[0].dims, array);
@@ -1579,44 +1579,44 @@ impl Component for TfFill {
     ) -> Vecs<Array<'a>> {
         let const0 = zero(context, bit_width);
 
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let array_sort = Sort::array(context, &domain_sort, &range_sort);
 
-        let first_dim_sort = Sort::int(&context);
+        let first_dim_sort = Sort::bitvector(&context, bit_width);
         let mut array = Array::fresh_const(&context,  "fill_array", &first_dim_sort, &array_sort);
 
         // 这里输入的参数就是数组的维度，如【2， 3】就是两行三列的数组
-        let row_array = operands[0].vecs.select(&Int::from_i64(context, 0)).as_array().unwrap();
-        let result_size_x = row_array.select(&Int::from_i64(context, 0)).as_int().unwrap();
-        let col_array = operands[0].vecs.select(&Int::from_i64(context, 0)).as_array().unwrap();
-        let result_size_y = col_array.select(&Int::from_i64(context, 1)).as_int().unwrap();
-        let fill_value_array = operands[1].vecs.select(&Int::from_i64(context, 0)).as_array().unwrap();
-        let fill_value = fill_value_array.select(&Int::from_i64(context, 0)).as_int().unwrap();
+        let row_array = operands[0].vecs.select(&BV::from_i64(context, 0, bit_width)).as_array().unwrap();
+        let result_size_x = row_array.select(&BV::from_i64(context, 0, bit_width)).as_bv().unwrap();
+        let col_array = operands[0].vecs.select(&BV::from_i64(context, 0, bit_width)).as_array().unwrap();
+        let result_size_y = col_array.select(&BV::from_i64(context, 1, bit_width)).as_bv().unwrap();
+        let fill_value_array = operands[1].vecs.select(&BV::from_i64(context, 0, bit_width)).as_array().unwrap();
+        let fill_value = fill_value_array.select(&BV::from_i64(context, 0, bit_width)).as_bv().unwrap();
 
         for i in 0 .. DIMSIZE[0] {
-            let domain_sort = Sort::int(&context);
-            let range_sort = Sort::int(&context);
+            let domain_sort = Sort::bitvector(&context, bit_width);
+            let range_sort = Sort::bitvector(&context, bit_width);
             let mut array_val = Array::fresh_const(context, "fill_array_second:", &domain_sort, &range_sort);
 
             for j in 0 .. DIMSIZE[1] {
-                let row_index = Int::from_i64(context, i as i64);
-                let col_index = Int::from_i64(context, j as i64);
-                let is_in_row = Int::lt(&row_index, &result_size_x);
-                let is_in_col = Int::lt(&col_index, &result_size_y);
+                let row_index = BV::from_i64(context, i as i64, bit_width);
+                let col_index = BV::from_i64(context, j as i64, bit_width);
+                let is_in_row = BV::bvslt(&row_index, &result_size_x);
+                let is_in_col = BV::bvslt(&col_index, &result_size_y);
                 let value = is_in_row.ite(&is_in_col.ite(&fill_value, &const0), &const0);
-                array_val = array_val.store(&Int::from_i64(context, j as i64), &value);
+                array_val = array_val.store(&BV::from_i64(context, j as i64, bit_width), &value);
             }
 
-            array = array.store(&Int::from_i64(context, i as i64), &array_val);
+            array = array.store(&BV::from_i64(context, i as i64, bit_width), &array_val);
         }
 
-        let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let array_size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let mut array_val = Array::fresh_const(&context, "array_size:", &domain_sort, &range_sort);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_X), &result_size_x);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_Y), &result_size_y);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_X, bit_width), &result_size_x);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_Y, bit_width), &result_size_y);
         array = array.store(&array_size_index, &array_val);
 
         let result = Vecs::new(operands[0].dims, array);
@@ -1650,44 +1650,44 @@ impl Component for TfGreater {
         let const0 = zero(context, bit_width);
         let const1 = one(context, bit_width);
 
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let array_sort = Sort::array(context, &domain_sort, &range_sort);
 
-        let first_dim_sort = Sort::int(&context);
+        let first_dim_sort = Sort::bitvector(&context, bit_width);
         let mut array = Array::fresh_const(&context,  "greater_array", &first_dim_sort, &array_sort);
 
-        let size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
         let in1_size =  operands[0].vecs.select(&size_index).as_array().unwrap();
         let _in2_size =  operands[1].vecs.select(&size_index).as_array().unwrap();
-        let result_size_x = in1_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
-        let result_size_y = in1_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
+        let result_size_x = in1_size.select(&BV::from_i64(&context, SIZE_X, bit_width)).as_bv().unwrap();
+        let result_size_y = in1_size.select(&BV::from_i64(&context, SIZE_Y, bit_width)).as_bv().unwrap();
 
         for i in 0 .. DIMSIZE[0] {
 
-            let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
-            let in2_value = operands[1].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            let in1_value = operands[0].vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
+            let in2_value = operands[1].vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
 
-            let domain_sort = Sort::int(&context);
-            let range_sort = Sort::int(&context);
+            let domain_sort = Sort::bitvector(&context, bit_width);
+            let range_sort = Sort::bitvector(&context, bit_width);
             let mut array_val = Array::fresh_const(context, "greater_array_second:", &domain_sort, &range_sort);
 
             for j in 0 .. DIMSIZE[1] {
-                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                let in2_value_i_j = in2_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                let value = Int::gt(&in1_value_i_j, &in2_value_i_j).ite(&const1, &const0);
-                array_val = array_val.store(&Int::from_i64(context, j as i64), &value);
+                let in1_value_i_j = in1_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                let in2_value_i_j = in2_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                let value = BV::bvsgt(&in1_value_i_j, &in2_value_i_j).ite(&const1, &const0);
+                array_val = array_val.store(&BV::from_i64(context, j as i64, bit_width), &value);
             }
 
-            array = array.store(&Int::from_i64(context, i as i64), &array_val);
+            array = array.store(&BV::from_i64(context, i as i64, bit_width), &array_val);
         }
 
-        let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let array_size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let mut array_val = Array::fresh_const(&context, "array_size:", &domain_sort, &range_sort);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_X), &result_size_x);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_Y), &result_size_y);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_X, bit_width), &result_size_x);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_Y, bit_width), &result_size_y);
         array = array.store(&array_size_index, &array_val);
 
         let result = Vecs::new(operands[0].dims, array);
@@ -1721,44 +1721,44 @@ impl Component for TfGreaterEqual {
         let const0 = zero(context, bit_width);
         let const1 = one(context, bit_width);
 
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let array_sort = Sort::array(context, &domain_sort, &range_sort);
 
-        let first_dim_sort = Sort::int(&context);
+        let first_dim_sort = Sort::bitvector(&context, bit_width);
         let mut array = Array::fresh_const(&context,  "greater_equal_array", &first_dim_sort, &array_sort);
 
-        let size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
         let in1_size =  operands[0].vecs.select(&size_index).as_array().unwrap();
         let _in2_size =  operands[1].vecs.select(&size_index).as_array().unwrap();
-        let result_size_x = in1_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
-        let result_size_y = in1_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
+        let result_size_x = in1_size.select(&BV::from_i64(&context, SIZE_X, bit_width)).as_bv().unwrap();
+        let result_size_y = in1_size.select(&BV::from_i64(&context, SIZE_Y, bit_width)).as_bv().unwrap();
 
         for i in 0 .. DIMSIZE[0] {
 
-            let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
-            let in2_value = operands[1].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            let in1_value = operands[0].vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
+            let in2_value = operands[1].vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
 
-            let domain_sort = Sort::int(&context);
-            let range_sort = Sort::int(&context);
+            let domain_sort = Sort::bitvector(&context, bit_width);
+            let range_sort = Sort::bitvector(&context, bit_width);
             let mut array_val = Array::fresh_const(context, "greater_equal_array_second:", &domain_sort, &range_sort);
 
             for j in 0 .. DIMSIZE[1] {
-                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                let in2_value_i_j = in2_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                let value = Int::ge(&in1_value_i_j, &in2_value_i_j).ite(&const1, &const0);
-                array_val = array_val.store(&Int::from_i64(context, j as i64), &value);
+                let in1_value_i_j = in1_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                let in2_value_i_j = in2_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                let value = BV::bvsge(&in1_value_i_j, &in2_value_i_j).ite(&const1, &const0);
+                array_val = array_val.store(&BV::from_i64(context, j as i64, bit_width), &value);
             }
 
-            array = array.store(&Int::from_i64(context, i as i64), &array_val);
+            array = array.store(&BV::from_i64(context, i as i64, bit_width), &array_val);
         }
 
-        let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let array_size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let mut array_val = Array::fresh_const(&context, "array_size:", &domain_sort, &range_sort);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_X), &result_size_x);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_Y), &result_size_y);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_X, bit_width), &result_size_x);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_Y, bit_width), &result_size_y);
         array = array.store(&array_size_index, &array_val);
 
         let result = Vecs::new(operands[0].dims, array);
@@ -1792,44 +1792,44 @@ impl Component for TfNotEqual {
         let const0 = zero(context, bit_width);
         let const1 = one(context, bit_width);
 
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let array_sort = Sort::array(context, &domain_sort, &range_sort);
 
-        let first_dim_sort = Sort::int(&context);
+        let first_dim_sort = Sort::bitvector(&context, bit_width);
         let mut array = Array::fresh_const(&context,  "not_equal_array", &first_dim_sort, &array_sort);
 
-        let size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
         let in1_size =  operands[0].vecs.select(&size_index).as_array().unwrap();
         let _in2_size =  operands[1].vecs.select(&size_index).as_array().unwrap();
-        let result_size_x = in1_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
-        let result_size_y = in1_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
+        let result_size_x = in1_size.select(&BV::from_i64(&context, SIZE_X, bit_width)).as_bv().unwrap();
+        let result_size_y = in1_size.select(&BV::from_i64(&context, SIZE_Y, bit_width)).as_bv().unwrap();
 
         for i in 0 .. DIMSIZE[0] {
 
-            let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
-            let in2_value = operands[1].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            let in1_value = operands[0].vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
+            let in2_value = operands[1].vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
 
-            let domain_sort = Sort::int(&context);
-            let range_sort = Sort::int(&context);
+            let domain_sort = Sort::bitvector(&context, bit_width);
+            let range_sort = Sort::bitvector(&context, bit_width);
             let mut array_val = Array::fresh_const(context, "not_equal_array_second:", &domain_sort, &range_sort);
 
             for j in 0 .. DIMSIZE[1] {
-                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                let in2_value_i_j = in2_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                let value = Int::_eq(&in1_value_i_j, &in2_value_i_j).ite(&const0, &const1);
-                array_val = array_val.store(&Int::from_i64(context, j as i64), &value);
+                let in1_value_i_j = in1_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                let in2_value_i_j = in2_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                let value = BV::_eq(&in1_value_i_j, &in2_value_i_j).ite(&const0, &const1);
+                array_val = array_val.store(&BV::from_i64(context, j as i64, bit_width), &value);
             }
 
-            array = array.store(&Int::from_i64(context, i as i64), &array_val);
+            array = array.store(&BV::from_i64(context, i as i64, bit_width), &array_val);
         }
 
-        let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let array_size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let mut array_val = Array::fresh_const(&context, "array_size:", &domain_sort, &range_sort);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_X), &result_size_x);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_Y), &result_size_y);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_X, bit_width), &result_size_x);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_Y, bit_width), &result_size_y);
         array = array.store(&array_size_index, &array_val);
 
         let result = Vecs::new(operands[0].dims, array);
@@ -1862,41 +1862,41 @@ impl Component for TfNegative {
     ) -> Vecs<Array<'a>> {
         let const0 = zero(context, bit_width);
 
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let array_sort = Sort::array(context, &domain_sort, &range_sort);
 
-        let first_dim_sort = Sort::int(&context);
+        let first_dim_sort = Sort::bitvector(&context, bit_width);
         let mut array = Array::fresh_const(&context,  "negative_array", &first_dim_sort, &array_sort);
 
-        let size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
         let in1_size =  operands[0].vecs.select(&size_index).as_array().unwrap();
-        let result_size_x = in1_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
-        let result_size_y = in1_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
+        let result_size_x = in1_size.select(&BV::from_i64(&context, SIZE_X, bit_width)).as_bv().unwrap();
+        let result_size_y = in1_size.select(&BV::from_i64(&context, SIZE_Y, bit_width)).as_bv().unwrap();
 
         for i in 0 .. DIMSIZE[0] {
 
-            let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            let in1_value = operands[0].vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
 
-            let domain_sort = Sort::int(&context);
-            let range_sort = Sort::int(&context);
+            let domain_sort = Sort::bitvector(&context, bit_width);
+            let range_sort = Sort::bitvector(&context, bit_width);
             let mut array_val = Array::fresh_const(context, "negative_array_second:", &domain_sort, &range_sort);
 
             for j in 0 .. DIMSIZE[1] {
-                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                let value = Int::sub(&context, &[&const0, &in1_value_i_j]);
-                array_val = array_val.store(&Int::from_i64(context, j as i64), &value);
+                let in1_value_i_j = in1_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                let value = BV::bvsub(&const0, &in1_value_i_j);
+                array_val = array_val.store(&BV::from_i64(context, j as i64, bit_width), &value);
             }
 
-            array = array.store(&Int::from_i64(context, i as i64), &array_val);
+            array = array.store(&BV::from_i64(context, i as i64, bit_width), &array_val);
         }
 
-        let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let array_size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let mut array_val = Array::fresh_const(&context, "array_size:", &domain_sort, &range_sort);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_X), &result_size_x);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_Y), &result_size_y);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_X, bit_width), &result_size_x);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_Y, bit_width), &result_size_y);
         array = array.store(&array_size_index, &array_val);
 
         let result = Vecs::new(operands[0].dims, array);
@@ -1930,43 +1930,43 @@ impl Component for TfReciprocal {
         let const1 = one(context, bit_width);
         let const0 = zero(context, bit_width);
 
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let array_sort = Sort::array(context, &domain_sort, &range_sort);
 
-        let first_dim_sort = Sort::int(&context);
+        let first_dim_sort = Sort::bitvector(&context, bit_width);
         let mut array = Array::fresh_const(&context,  "reciprocal_array", &first_dim_sort, &array_sort);
 
-        let size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
         let in1_size =  operands[0].vecs.select(&size_index).as_array().unwrap();
-        let result_size_x = in1_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
-        let result_size_y = in1_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
+        let result_size_x = in1_size.select(&BV::from_i64(&context, SIZE_X, bit_width)).as_bv().unwrap();
+        let result_size_y = in1_size.select(&BV::from_i64(&context, SIZE_Y, bit_width)).as_bv().unwrap();
 
         for i in 0 .. DIMSIZE[0] {
 
-            let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            let in1_value = operands[0].vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
 
-            let domain_sort = Sort::int(&context);
-            let range_sort = Sort::int(&context);
+            let domain_sort = Sort::bitvector(&context, bit_width);
+            let range_sort = Sort::bitvector(&context, bit_width);
             let mut array_val = Array::fresh_const(context, "reciprocal_array_second:", &domain_sort, &range_sort);
 
             for j in 0 .. DIMSIZE[1] {
-                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
+                let in1_value_i_j = in1_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
                 // 要注意分母不能为0
-                let div_value = Int::_eq(&in1_value_i_j, &const0).ite(&const1, &in1_value_i_j);
-                let value = Int::div(&const1, &div_value);
-                array_val = array_val.store(&Int::from_i64(context, j as i64), &value);
+                let div_value = BV::_eq(&in1_value_i_j, &const0).ite(&const1, &in1_value_i_j);
+                let value = BV::bvsdiv(&const1, &div_value);
+                array_val = array_val.store(&BV::from_i64(context, j as i64, bit_width), &value);
             }
 
-            array = array.store(&Int::from_i64(context, i as i64), &array_val);
+            array = array.store(&BV::from_i64(context, i as i64, bit_width), &array_val);
         }
 
-        let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let array_size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let mut array_val = Array::fresh_const(&context, "array_size:", &domain_sort, &range_sort);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_X), &result_size_x);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_Y), &result_size_y);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_X, bit_width), &result_size_x);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_Y, bit_width), &result_size_y);
         array = array.store(&array_size_index, &array_val);
 
         let result = Vecs::new(operands[0].dims, array);
@@ -1997,59 +1997,59 @@ impl Component for TfBincount {
         operands: &[Vecs<Array<'a>>],
         bit_width: u32,
     ) -> Vecs<Array<'a>> {
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let array_sort = Sort::array(context, &domain_sort, &range_sort);
 
-        let first_dim_sort = Sort::int(&context);
+        let first_dim_sort = Sort::bitvector(&context, bit_width);
         let mut array = Array::fresh_const(&context,  "bincount_array", &first_dim_sort, &array_sort);
 
-        let size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
         let in1_size =  operands[0].vecs.select(&size_index).as_array().unwrap();
-        let result_size_x = in1_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
+        let result_size_x = in1_size.select(&BV::from_i64(&context, SIZE_X, bit_width)).as_bv().unwrap();
         // 确保第二维度在min和max之间
-        let min_length_array = operands[2].vecs.select(&Int::from_i64(context, 0)).as_array().unwrap();
-        let min_length = min_length_array.select(&Int::from_i64(context, 0)).as_int().unwrap();
-        let max_length_array = operands[3].vecs.select(&Int::from_i64(context, 0)).as_array().unwrap();
-        let max_length = max_length_array.select(&Int::from_i64(context, 0)).as_int().unwrap();
+        let min_length_array = operands[2].vecs.select(&BV::from_i64(context, 0, bit_width)).as_array().unwrap();
+        let min_length = min_length_array.select(&BV::from_i64(context, 0, bit_width)).as_bv().unwrap();
+        let max_length_array = operands[3].vecs.select(&BV::from_i64(context, 0, bit_width)).as_array().unwrap();
+        let max_length = max_length_array.select(&BV::from_i64(context, 0, bit_width)).as_bv().unwrap();
         // 记录数组长度的最大值
         let mut max_value = zero(context, bit_width);
-        let zhanweifu = Int::from_i64(context, 114514);
+        let zhanweifu = BV::from_i64(context, 114514, bit_width);
 
         for i in 0 .. DIMSIZE[0] {
-            let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
-            let in2_value = operands[1].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            let in1_value = operands[0].vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
+            let in2_value = operands[1].vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
 
-            let domain_sort = Sort::int(&context);
-            let range_sort = Sort::int(&context);
+            let domain_sort = Sort::bitvector(&context, bit_width);
+            let range_sort = Sort::bitvector(&context, bit_width);
             let mut array_val = Array::fresh_const(context, "bincount_array_second:", &domain_sort, &range_sort);
 
             for j in 0 .. DIMSIZE[1] {
-                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                let in2_value_i_j = in2_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                max_value = Int::gt(&in1_value_i_j, &max_value).ite(&in1_value_i_j, &max_value);
-                let value = Int::mul(&context, &[&in1_value_i_j, &in2_value_i_j]);
+                let in1_value_i_j = in1_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                let in2_value_i_j = in2_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                max_value = BV::bvsgt(&in1_value_i_j, &max_value).ite(&in1_value_i_j, &max_value);
+                let value = BV::bvmul(&in1_value_i_j, &in2_value_i_j);
                 // 确保第二维度在min和max之间
-                let is_min = Int::lt(&in1_value_i_j, &min_length);
-                let is_max = Int::gt(&in1_value_i_j, &max_length);
-                let is_in_range = Int::lt(&in1_value_i_j, &max_value);
+                let is_min = BV::bvslt(&in1_value_i_j, &min_length);
+                let is_max = BV::bvsgt(&in1_value_i_j, &max_length);
+                let is_in_range = BV::bvslt(&in1_value_i_j, &max_value);
                 // 由于之前填充了0，所以不能直接让index为0，这个时候就要判断如果不在范围之内那么就得让他在占位符里面呆着
                 let index = is_min.ite(&min_length, &is_max.ite(&max_length, &is_in_range.ite(&in1_value_i_j, &zhanweifu)));
                 array_val = array_val.store(&index, &value);
             }
 
-            array = array.store(&Int::from_i64(context, i as i64), &array_val);
+            array = array.store(&BV::from_i64(context, i as i64, bit_width), &array_val);
         }
-        let is_min = Int::lt(&max_value, &min_length);
-        let is_max = Int::gt(&max_value, &max_length);
+        let is_min = BV::bvslt(&max_value, &min_length);
+        let is_max = BV::bvsgt(&max_value, &max_length);
         let result_size_y = is_min.ite(&min_length, &is_max.ite(&max_length, &max_value));
 
-        let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let array_size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let mut array_val = Array::fresh_const(&context, "array_size:", &domain_sort, &range_sort);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_X), &result_size_x);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_Y), &result_size_y);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_X, bit_width), &result_size_x);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_Y, bit_width), &result_size_y);
         array = array.store(&array_size_index, &array_val);
 
         let result = Vecs::new(operands[0].dims, array);
@@ -2083,39 +2083,39 @@ impl Component for TfCountNonzero {
         let const1 = one(context, bit_width);
         let const0 = zero(context, bit_width);
 
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let array_sort = Sort::array(context, &domain_sort, &range_sort);
 
-        let first_dim_sort = Sort::int(&context);
+        let first_dim_sort = Sort::bitvector(&context, bit_width);
         let mut array = Array::fresh_const(&context,  "count_nonzero_array", &first_dim_sort, &array_sort);
-        let result_size_x = Int::from_i64(&context, 1);
-        let result_size_y = Int::from_i64(&context, 1);
+        let result_size_x = BV::from_i64(&context, 1, bit_width);
+        let result_size_y = BV::from_i64(&context, 1, bit_width);
         let mut count = zero(context, bit_width);
 
-        let domain_sort_1 = Sort::int(&context);
-        let range_sort_1 = Sort::int(&context);
+        let domain_sort_1 = Sort::bitvector(&context, bit_width);
+        let range_sort_1 = Sort::bitvector(&context, bit_width);
         let mut array_val = Array::fresh_const(context, "count_nonzero_array_second:", &domain_sort_1, &range_sort_1);
 
         for i in 0 .. DIMSIZE[0] {
 
-            let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            let in1_value = operands[0].vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
 
             for j in 0 .. DIMSIZE[1] {
-                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                let is_zero = Int::_eq(&in1_value_i_j, &const0);
-                count = is_zero.ite(&count, &Int::add(&context, &[&count, &const1]));
+                let in1_value_i_j = in1_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                let is_zero = BV::_eq(&in1_value_i_j, &const0);
+                count = is_zero.ite(&count, &BV::bvadd(&count, &const1));
             }
         }
-        array_val = array_val.store(&Int::from_i64(context, 0), &count);
-        array = array.store(&Int::from_i64(context, 0), &array_val);
+        array_val = array_val.store(&BV::from_i64(context, 0, bit_width), &count);
+        array = array.store(&BV::from_i64(context, 0, bit_width), &array_val);
 
-        let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let array_size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let mut array_val = Array::fresh_const(&context, "array_size:", &domain_sort, &range_sort);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_X), &result_size_x);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_Y), &result_size_y);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_X, bit_width), &result_size_x);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_Y, bit_width), &result_size_y);
         array = array.store(&array_size_index, &array_val);
 
         let result = Vecs::new(operands[0].dims, array);
@@ -2149,101 +2149,101 @@ impl Component for TfCumsum {
         let const0 = zero(context, bit_width);
         let const1 = one(context, bit_width);
 
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let array_sort = Sort::array(context, &domain_sort, &range_sort);
 
-        let first_dim_sort = Sort::int(&context);
+        let first_dim_sort = Sort::bitvector(&context, bit_width);
         let mut array = Array::fresh_const(&context,  "cumsum_array_axis_0", &first_dim_sort, &array_sort);
 
-        let domain_sort_1 = Sort::int(&context);
-        let range_sort_1 = Sort::int(&context);
+        let domain_sort_1 = Sort::bitvector(&context, bit_width);
+        let range_sort_1 = Sort::bitvector(&context, bit_width);
         let array_sort_1 = Sort::array(context, &domain_sort_1, &range_sort_1);
 
-        let first_dim_sort_1 = Sort::int(&context);
+        let first_dim_sort_1 = Sort::bitvector(&context, bit_width);
         let mut array_1 = Array::fresh_const(&context,  "cumsum_array_axis_1", &first_dim_sort_1, &array_sort_1);
 
-        let size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
         let in1_size =  operands[0].vecs.select(&size_index).as_array().unwrap();
-        let result_size_x = in1_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
-        let result_size_y = in1_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
+        let result_size_x = in1_size.select(&BV::from_i64(&context, SIZE_X, bit_width)).as_bv().unwrap();
+        let result_size_y = in1_size.select(&BV::from_i64(&context, SIZE_Y, bit_width)).as_bv().unwrap();
         let axis_array = operands[1].vecs.select(&const0).as_array().unwrap();
-        let axis = axis_array.select(&const0).as_int().unwrap();
+        let axis = axis_array.select(&const0).as_bv().unwrap();
         // 二维数组的axis只有可能是0或1
         let axis_is_zero = axis._eq(&const0);
         let exclusive_array = operands[2].vecs.select(&const0).as_array().unwrap();
-        let exclusive = exclusive_array.select(&const0).as_int().unwrap();
+        let exclusive = exclusive_array.select(&const0).as_bv().unwrap();
         let exclusive_is_zero = exclusive._eq(&const0);
         let reverse_array = operands[3].vecs.select(&const0).as_array().unwrap();
-        let reverse = reverse_array.select(&const0).as_int().unwrap();
+        let reverse = reverse_array.select(&const0).as_bv().unwrap();
         let reverse_is_zero = reverse._eq(&const0);
 
         for i in 0 .. DIMSIZE[0] {
 
-            let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            let in1_value = operands[0].vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
 
-            let domain_sort = Sort::int(&context);
-            let range_sort = Sort::int(&context);
+            let domain_sort = Sort::bitvector(&context, bit_width);
+            let range_sort = Sort::bitvector(&context, bit_width);
             let mut array_val = Array::fresh_const(context, "cumsum_array_second_1:", &domain_sort, &range_sort);
             // 这里防止exclusive的时候下标为0的位置没有值，如果为false也会被新的值覆盖，不会有影响
             array_val.store(&const0, &const0);
             let mut ans = zero(&context, bit_width);
 
             for j in 0 .. DIMSIZE[1] {
-                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                let row_index = Int::from_i64(context, i as i64);
-                let col_index = Int::from_i64(context, j as i64);
-                let is_in_row = Int::lt(&row_index, &result_size_x);
-                let is_in_col = Int::lt(&col_index, &result_size_y);
-                ans = Int::add(&context, &[&ans, &in1_value_i_j]);
+                let in1_value_i_j = in1_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                let row_index = BV::from_i64(context, i as i64, bit_width);
+                let col_index = BV::from_i64(context, j as i64, bit_width);
+                let is_in_row = BV::bvslt(&row_index, &result_size_x);
+                let is_in_col = BV::bvslt(&col_index, &result_size_y);
+                ans = BV::bvadd(&ans, &in1_value_i_j);
                 let value = is_in_row.ite(&is_in_col.ite(&ans, &const0), &const0);
                 // exclusive可以看作整个数组向右平移一位
                 // reverse可以看成下标为总长度减去当前长度
-                let index_with_exclusive = exclusive_is_zero.ite(&Int::from_i64(context, j as i64), &Int::from_i64(context, (j + 1) as i64));
-                let index_with_exclusive_and_reverse = reverse_is_zero.ite(&index_with_exclusive, &Int::sub(&context, &[&result_size_y, &index_with_exclusive, &const1]));
+                let index_with_exclusive = exclusive_is_zero.ite(&BV::from_i64(context, j as i64, bit_width), &BV::from_i64(context, (j + 1) as i64, bit_width));
+                let index_with_exclusive_and_reverse = reverse_is_zero.ite(&index_with_exclusive, &BV::bvsub(&result_size_y, &index_with_exclusive).bvsub(&const1));
                 array_val = array_val.store(&index_with_exclusive_and_reverse, &value);
             }
 
-            array_1 = array_1.store(&Int::from_i64(context, i as i64), &array_val);
+            array_1 = array_1.store(&BV::from_i64(context, i as i64, bit_width), &array_val);
         }
 
         for i in 0 .. DIMSIZE[1] {
 
-            let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            let in1_value = operands[0].vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
 
-            let domain_sort = Sort::int(&context);
-            let range_sort = Sort::int(&context);
+            let domain_sort = Sort::bitvector(&context, bit_width);
+            let range_sort = Sort::bitvector(&context, bit_width);
             let mut array_val = Array::fresh_const(context, "cumsum_array_second_0:", &domain_sort, &range_sort);
             // 这里防止exclusive的时候下标为0的位置没有值，如果为false也会被新的值覆盖，不会有影响
             array_val.store(&const0, &const0);
             let mut ans = zero(&context, bit_width);
 
             for j in 0 .. DIMSIZE[0] {
-                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                let row_index = Int::from_i64(context, i as i64);
-                let col_index = Int::from_i64(context, j as i64);
-                let is_in_row = Int::lt(&row_index, &result_size_x);
-                let is_in_col = Int::lt(&col_index, &result_size_y);
-                ans = Int::add(&context, &[&ans, &in1_value_i_j]);
+                let in1_value_i_j = in1_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                let row_index = BV::from_i64(context, i as i64, bit_width);
+                let col_index = BV::from_i64(context, j as i64, bit_width);
+                let is_in_row = BV::bvslt(&row_index, &result_size_x);
+                let is_in_col = BV::bvslt(&col_index, &result_size_y);
+                ans = BV::bvadd(&ans, &in1_value_i_j);
                 let value = is_in_row.ite(&is_in_col.ite(&ans, &const0), &const0);
                 // exclusive可以看作整个数组向右平移一位
                 // reverse可以看成下标为总长度减去当前长度
-                let index_with_exclusive = exclusive_is_zero.ite(&Int::from_i64(context, j as i64), &Int::from_i64(context, (j + 1) as i64));
-                let index_with_exclusive_and_reverse = reverse_is_zero.ite(&index_with_exclusive, &Int::sub(&context, &[&result_size_y, &index_with_exclusive, &const1]));
+                let index_with_exclusive = exclusive_is_zero.ite(&BV::from_i64(context, j as i64, bit_width), &BV::from_i64(context, (j + 1) as i64, bit_width));
+                let index_with_exclusive_and_reverse = reverse_is_zero.ite(&index_with_exclusive, &BV::bvsub(&result_size_y, &index_with_exclusive).bvsub(&const1));
                 array_val = array_val.store(&index_with_exclusive_and_reverse, &value);
             }
 
-            array = array.store(&Int::from_i64(context, i as i64), &array_val);
+            array = array.store(&BV::from_i64(context, i as i64, bit_width), &array_val);
         }
 
         array = axis_is_zero.ite(&array, &array_1);
 
-        let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let array_size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let mut array_val = Array::fresh_const(&context, "array_size:", &domain_sort, &range_sort);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_X), &result_size_x);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_Y), &result_size_y);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_X, bit_width), &result_size_x);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_Y, bit_width), &result_size_y);
         array = array.store(&array_size_index, &array_val);
 
         let result = Vecs::new(operands[0].dims, array);
@@ -2272,46 +2272,46 @@ impl Component for TfMaximum {
         context: &'a z3::Context,
         _immediates: &[Vecs<Array<'a>>],
         operands: &[Vecs<Array<'a>>],
-        _bit_width: u32,
+        bit_width: u32,
     ) -> Vecs<Array<'a>> {
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let array_sort = Sort::array(context, &domain_sort, &range_sort);
 
-        let first_dim_sort = Sort::int(&context);
+        let first_dim_sort = Sort::bitvector(&context, bit_width);
         let mut array = Array::fresh_const(&context,  "maximum_array", &first_dim_sort, &array_sort);
 
-        let size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
         let in1_size =  operands[0].vecs.select(&size_index).as_array().unwrap();
         let _in2_size =  operands[1].vecs.select(&size_index).as_array().unwrap();
-        let result_size_x = in1_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
-        let result_size_y = in1_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
+        let result_size_x = in1_size.select(&BV::from_i64(&context, SIZE_X, bit_width)).as_bv().unwrap();
+        let result_size_y = in1_size.select(&BV::from_i64(&context, SIZE_Y, bit_width)).as_bv().unwrap();
 
         for i in 0 .. DIMSIZE[0] {
 
-            let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
-            let in2_value = operands[1].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            let in1_value = operands[0].vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
+            let in2_value = operands[1].vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
 
-            let domain_sort = Sort::int(&context);
-            let range_sort = Sort::int(&context);
+            let domain_sort = Sort::bitvector(&context, bit_width);
+            let range_sort = Sort::bitvector(&context, bit_width);
             let mut array_val = Array::fresh_const(context, "maximum_array_second:", &domain_sort, &range_sort);
 
             for j in 0 .. DIMSIZE[1] {
-                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                let in2_value_i_j = in2_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                let value = Int::gt(&in1_value_i_j, &in2_value_i_j).ite(&in1_value_i_j, &in2_value_i_j);
-                array_val = array_val.store(&Int::from_i64(context, j as i64), &value);
+                let in1_value_i_j = in1_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                let in2_value_i_j = in2_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                let value = BV::bvsgt(&in1_value_i_j, &in2_value_i_j).ite(&in1_value_i_j, &in2_value_i_j);
+                array_val = array_val.store(&BV::from_i64(context, j as i64, bit_width), &value);
             }
 
-            array = array.store(&Int::from_i64(context, i as i64), &array_val);
+            array = array.store(&BV::from_i64(context, i as i64, bit_width), &array_val);
         }
 
-        let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let array_size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let mut array_val = Array::fresh_const(&context, "array_size:", &domain_sort, &range_sort);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_X), &result_size_x);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_Y), &result_size_y);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_X, bit_width), &result_size_x);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_Y, bit_width), &result_size_y);
         array = array.store(&array_size_index, &array_val);
 
         let result = Vecs::new(operands[0].dims, array);
@@ -2340,46 +2340,46 @@ impl Component for TfMinimum {
         context: &'a z3::Context,
         _immediates: &[Vecs<Array<'a>>],
         operands: &[Vecs<Array<'a>>],
-        _bit_width: u32,
+        bit_width: u32,
     ) -> Vecs<Array<'a>> {
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let array_sort = Sort::array(context, &domain_sort, &range_sort);
 
-        let first_dim_sort = Sort::int(&context);
+        let first_dim_sort = Sort::bitvector(&context, bit_width);
         let mut array = Array::fresh_const(&context,  "minimum_array", &first_dim_sort, &array_sort);
 
-        let size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
         let in1_size =  operands[0].vecs.select(&size_index).as_array().unwrap();
         let _in2_size =  operands[1].vecs.select(&size_index).as_array().unwrap();
-        let result_size_x = in1_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
-        let result_size_y = in1_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
+        let result_size_x = in1_size.select(&BV::from_i64(&context, SIZE_X, bit_width)).as_bv().unwrap();
+        let result_size_y = in1_size.select(&BV::from_i64(&context, SIZE_Y, bit_width)).as_bv().unwrap();
 
         for i in 0 .. DIMSIZE[0] {
 
-            let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
-            let in2_value = operands[1].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            let in1_value = operands[0].vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
+            let in2_value = operands[1].vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
 
-            let domain_sort = Sort::int(&context);
-            let range_sort = Sort::int(&context);
+            let domain_sort = Sort::bitvector(&context, bit_width);
+            let range_sort = Sort::bitvector(&context, bit_width);
             let mut array_val = Array::fresh_const(context, "minimum_array_second:", &domain_sort, &range_sort);
 
             for j in 0 .. DIMSIZE[1] {
-                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                let in2_value_i_j = in2_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                let value = Int::lt(&in1_value_i_j, &in2_value_i_j).ite(&in1_value_i_j, &in2_value_i_j);
-                array_val = array_val.store(&Int::from_i64(context, j as i64), &value);
+                let in1_value_i_j = in1_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                let in2_value_i_j = in2_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                let value = BV::bvslt(&in1_value_i_j, &in2_value_i_j).ite(&in1_value_i_j, &in2_value_i_j);
+                array_val = array_val.store(&BV::from_i64(context, j as i64, bit_width), &value);
             }
 
-            array = array.store(&Int::from_i64(context, i as i64), &array_val);
+            array = array.store(&BV::from_i64(context, i as i64, bit_width), &array_val);
         }
 
-        let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let array_size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let mut array_val = Array::fresh_const(&context, "array_size:", &domain_sort, &range_sort);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_X), &result_size_x);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_Y), &result_size_y);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_X, bit_width), &result_size_x);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_Y, bit_width), &result_size_y);
         array = array.store(&array_size_index, &array_val);
 
         let result = Vecs::new(operands[0].dims, array);
@@ -2408,50 +2408,50 @@ impl Component for TfReverse {
         context: &'a z3::Context,
         _immediates: &[Vecs<Array<'a>>],
         operands: &[Vecs<Array<'a>>],
-        _bit_width: u32,
+        bit_width: u32,
     ) -> Vecs<Array<'a>> {
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let array_sort = Sort::array(context, &domain_sort, &range_sort);
 
-        let first_dim_sort = Sort::int(&context);
+        let first_dim_sort = Sort::bitvector(&context, bit_width);
         let mut array = Array::fresh_const(&context,  "reverse_array", &first_dim_sort, &array_sort);
 
-        let size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
         let in1_size =  operands[0].vecs.select(&size_index).as_array().unwrap();
-        let result_size_x = in1_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
-        let result_size_y = in1_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
+        let result_size_x = in1_size.select(&BV::from_i64(&context, SIZE_X, bit_width)).as_bv().unwrap();
+        let result_size_y = in1_size.select(&BV::from_i64(&context, SIZE_Y, bit_width)).as_bv().unwrap();
 
         for i in 0 .. DIMSIZE[0] {
 
-            let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            let in1_value = operands[0].vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
 
-            let domain_sort = Sort::int(&context);
-            let range_sort = Sort::int(&context);
+            let domain_sort = Sort::bitvector(&context, bit_width);
+            let range_sort = Sort::bitvector(&context, bit_width);
             let mut array_val = Array::fresh_const(context, "reverse_array_second:", &domain_sort, &range_sort);
 
             for j in 0 .. DIMSIZE[1] {
-                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                let row_index = Int::from_i64(context, i as i64);
-                let col_index = Int::from_i64(context, j as i64);
-                let is_in_row = Int::lt(&row_index, &result_size_x);
-                let is_in_col = Int::lt(&col_index, &result_size_y);
+                let in1_value_i_j = in1_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                let row_index = BV::from_i64(context, i as i64, bit_width);
+                let col_index = BV::from_i64(context, j as i64, bit_width);
+                let is_in_row = BV::bvslt(&row_index, &result_size_x);
+                let is_in_col = BV::bvslt(&col_index, &result_size_y);
                 // 相反就是纵坐标总长度减去当前纵坐标，然后放到数组中
                 // 要注意有一些是0，所以把这些排除掉
-                let reverse_index = Int::sub(context, &[&result_size_y, &col_index]);
+                let reverse_index = BV::bvsub(&result_size_y, &col_index);
                 let value_index = is_in_row.ite(&is_in_col.ite(&reverse_index, &col_index), &col_index);
                 array_val = array_val.store(&value_index, &in1_value_i_j);
             }
 
-            array = array.store(&Int::from_i64(context, i as i64), &array_val);
+            array = array.store(&BV::from_i64(context, i as i64, bit_width), &array_val);
         }
 
-        let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let array_size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let mut array_val = Array::fresh_const(&context, "array_size:", &domain_sort, &range_sort);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_X), &result_size_x);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_Y), &result_size_y);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_X, bit_width), &result_size_x);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_Y, bit_width), &result_size_y);
         array = array.store(&array_size_index, &array_val);
 
         let result = Vecs::new(operands[0].dims, array);
@@ -2484,46 +2484,46 @@ impl Component for TfSign {
     ) -> Vecs<Array<'a>> {
         let const0 = zero(context, bit_width);
         let const1 = one(context, bit_width);
-        let const_mins_1 = Int::from_i64(context, -1);
+        let const_mins_1 = BV::from_i64(context, -1, bit_width);
 
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let array_sort = Sort::array(context, &domain_sort, &range_sort);
 
-        let first_dim_sort = Sort::int(&context);
+        let first_dim_sort = Sort::bitvector(&context, bit_width);
         let mut array = Array::fresh_const(&context,  "sign_array", &first_dim_sort, &array_sort);
 
-        let size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
         let in1_size =  operands[0].vecs.select(&size_index).as_array().unwrap();
-        let result_size_x = in1_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
-        let result_size_y = in1_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
+        let result_size_x = in1_size.select(&BV::from_i64(&context, SIZE_X, bit_width)).as_bv().unwrap();
+        let result_size_y = in1_size.select(&BV::from_i64(&context, SIZE_Y, bit_width)).as_bv().unwrap();
 
         for i in 0 .. DIMSIZE[0] {
 
-            let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            let in1_value = operands[0].vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
 
-            let domain_sort = Sort::int(&context);
-            let range_sort = Sort::int(&context);
+            let domain_sort = Sort::bitvector(&context, bit_width);
+            let range_sort = Sort::bitvector(&context, bit_width);
             let mut array_val = Array::fresh_const(context, "sign_array_second:", &domain_sort, &range_sort);
 
             for j in 0 .. DIMSIZE[1] {
-                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
+                let in1_value_i_j = in1_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
                 // 和0比小的返回-1，和0比大的返回1，和0相等返回0
-                let is_plus = Int::gt(&in1_value_i_j, &const0);
-                let is_minus = Int::lt(&in1_value_i_j, &const0);
+                let is_plus = BV::bvsgt(&in1_value_i_j, &const0);
+                let is_minus = BV::bvslt(&in1_value_i_j, &const0);
                 let value = is_minus.ite(&const_mins_1, &is_plus.ite(&const1, &const0));
-                array_val = array_val.store(&Int::from_i64(context, j as i64), &value);
+                array_val = array_val.store(&BV::from_i64(context, j as i64, bit_width), &value);
             }
 
-            array = array.store(&Int::from_i64(context, i as i64), &array_val);
+            array = array.store(&BV::from_i64(context, i as i64, bit_width), &array_val);
         }
 
-        let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let array_size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let mut array_val = Array::fresh_const(&context, "array_size:", &domain_sort, &range_sort);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_X), &result_size_x);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_Y), &result_size_y);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_X, bit_width), &result_size_x);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_Y, bit_width), &result_size_y);
         array = array.store(&array_size_index, &array_val);
 
         let result = Vecs::new(operands[0].dims, array);
@@ -2552,43 +2552,43 @@ impl Component for TfSquare {
         context: &'a z3::Context,
         _immediates: &[Vecs<Array<'a>>],
         operands: &[Vecs<Array<'a>>],
-        _bit_width: u32,
+        bit_width: u32,
     ) -> Vecs<Array<'a>> {
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let array_sort = Sort::array(context, &domain_sort, &range_sort);
 
-        let first_dim_sort = Sort::int(&context);
+        let first_dim_sort = Sort::bitvector(&context, bit_width);
         let mut array = Array::fresh_const(&context,  "square_array", &first_dim_sort, &array_sort);
 
-        let size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
         let in1_size =  operands[0].vecs.select(&size_index).as_array().unwrap();
-        let result_size_x = in1_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
-        let result_size_y = in1_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
+        let result_size_x = in1_size.select(&BV::from_i64(&context, SIZE_X, bit_width)).as_bv().unwrap();
+        let result_size_y = in1_size.select(&BV::from_i64(&context, SIZE_Y, bit_width)).as_bv().unwrap();
 
         for i in 0 .. DIMSIZE[0] {
 
-            let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            let in1_value = operands[0].vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
 
-            let domain_sort = Sort::int(&context);
-            let range_sort = Sort::int(&context);
+            let domain_sort = Sort::bitvector(&context, bit_width);
+            let range_sort = Sort::bitvector(&context, bit_width);
             let mut array_val = Array::fresh_const(context, "square_array_second:", &domain_sort, &range_sort);
 
             for j in 0 .. DIMSIZE[1] {
-                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                let value = Int::mul(&context, &[&in1_value_i_j, &in1_value_i_j]);
-                array_val = array_val.store(&Int::from_i64(context, j as i64), &value);
+                let in1_value_i_j = in1_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                let value = BV::bvmul(&in1_value_i_j, &in1_value_i_j);
+                array_val = array_val.store(&BV::from_i64(context, j as i64, bit_width), &value);
             }
 
-            array = array.store(&Int::from_i64(context, i as i64), &array_val);
+            array = array.store(&BV::from_i64(context, i as i64, bit_width), &array_val);
         }
 
-        let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let array_size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let mut array_val = Array::fresh_const(&context, "array_size:", &domain_sort, &range_sort);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_X), &result_size_x);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_Y), &result_size_y);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_X, bit_width), &result_size_x);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_Y, bit_width), &result_size_y);
         array = array.store(&array_size_index, &array_val);
 
         let result = Vecs::new(operands[0].dims, array);
@@ -2622,53 +2622,53 @@ impl Component for TfWhere {
         let const0 = zero(context, bit_width);
         let const1 = one(context, bit_width);
 
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let array_sort = Sort::array(context, &domain_sort, &range_sort);
 
-        let first_dim_sort = Sort::int(&context);
+        let first_dim_sort = Sort::bitvector(&context, bit_width);
         let mut array = Array::fresh_const(&context,  "where_array_without_2_3", &first_dim_sort, &array_sort);
 
-        let domain_sort_1 = Sort::int(&context);
-        let range_sort_1 = Sort::int(&context);
+        let domain_sort_1 = Sort::bitvector(&context, bit_width);
+        let range_sort_1 = Sort::bitvector(&context, bit_width);
         let array_sort_1 = Sort::array(context, &domain_sort_1, &range_sort_1);
 
-        let first_dim_sort_1 = Sort::int(&context);
+        let first_dim_sort_1 = Sort::bitvector(&context, bit_width);
         let mut array_1 = Array::fresh_const(&context,  "where_array_with_2_3", &first_dim_sort_1, &array_sort_1);
 
-        let domain_sort_1_ = Sort::int(&context);
-        let range_sort_1_ = Sort::int(&context);
+        let domain_sort_1_ = Sort::bitvector(&context, bit_width);
+        let range_sort_1_ = Sort::bitvector(&context, bit_width);
         let mut array_val_1_ = Array::fresh_const(context, "where_array_second_without_2_3:", &domain_sort_1_, &range_sort_1_);
 
-        let size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+        let size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
         let in1_size =  operands[0].vecs.select(&size_index).as_array().unwrap();
         let in2_size =  operands[1].vecs.select(&size_index).as_array().unwrap();
         let in3_size =  operands[2].vecs.select(&size_index).as_array().unwrap();
-        let in1_size_x = in1_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
-        let in1_size_y = in1_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
-        let in2_size_x = in2_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
-        let in2_size_y = in2_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
-        let in3_size_x = in3_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
-        let in3_size_y = in3_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
+        let in1_size_x = in1_size.select(&BV::from_i64(&context, SIZE_X, bit_width)).as_bv().unwrap();
+        let in1_size_y = in1_size.select(&BV::from_i64(&context, SIZE_Y, bit_width)).as_bv().unwrap();
+        let in2_size_x = in2_size.select(&BV::from_i64(&context, SIZE_X, bit_width)).as_bv().unwrap();
+        let in2_size_y = in2_size.select(&BV::from_i64(&context, SIZE_Y, bit_width)).as_bv().unwrap();
+        let in3_size_x = in3_size.select(&BV::from_i64(&context, SIZE_X, bit_width)).as_bv().unwrap();
+        let in3_size_y = in3_size.select(&BV::from_i64(&context, SIZE_Y, bit_width)).as_bv().unwrap();
         // 记录下第一种情况中行的个数，由于行的个数由非0的个数来计算，因此需要一个变量
         let mut count_result_size_x = zero(context, bit_width);
         // 和boolean_mask一样，需要一个变量放下多余的变量用来处理
-        let zhanweifu = Int::from_i64(&context, 114514);
+        let zhanweifu = BV::from_i64(&context, 114514, bit_width);
         // 由于第二个和第三个输入都是0和不都是0是不一样的功能，因此得先处理是不是都是0
         let mut is_all_zero = Bool::from_bool(&context, true);
 
         for i in 0 .. DIMSIZE[0] {
-            let in2_value = operands[1].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
-            let in3_value = operands[2].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            let in2_value = operands[1].vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
+            let in3_value = operands[2].vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
             for j in 0 .. DIMSIZE[1] {
-                let in2_value_i_j = in2_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                let in3_value_i_j = in3_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                let row_index = Int::from_i64(context, i as i64);
-                let col_index = Int::from_i64(context, j as i64);
-                let is_in2_in_row = Int::lt(&row_index, &in2_size_x);
-                let is_in2_in_col = Int::lt(&col_index, &in2_size_y);
-                let is_in3_in_row = Int::lt(&row_index, &in3_size_x);
-                let is_in3_in_col = Int::lt(&col_index, &in3_size_y);
+                let in2_value_i_j = in2_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                let in3_value_i_j = in3_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                let row_index = BV::from_i64(context, i as i64, bit_width);
+                let col_index = BV::from_i64(context, j as i64, bit_width);
+                let is_in2_in_row = BV::bvslt(&row_index, &in2_size_x);
+                let is_in2_in_col = BV::bvslt(&col_index, &in2_size_y);
+                let is_in3_in_row = BV::bvslt(&row_index, &in3_size_x);
+                let is_in3_in_col = BV::bvslt(&col_index, &in3_size_y);
                 let in2_is_zero = in2_value_i_j._eq(&const0);
                 let in3_is_zero = in3_value_i_j._eq(&const0);
                 let false_value = Bool::from_bool(&context, false);
@@ -2688,21 +2688,21 @@ impl Component for TfWhere {
         // 如果第二个和第三个都没输入（也就是都是0）那就统计非0的下标，一维数组就只有行，二维数组有行有列
         for i in 0 .. DIMSIZE[0] {
 
-            let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            let in1_value = operands[0].vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
 
             for j in 0 .. DIMSIZE[1] {
-                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                let row_index = Int::from_i64(context, i as i64);
-                let col_index = Int::from_i64(context, j as i64);
-                let is_in_row = Int::lt(&row_index, &in1_size_x);
-                let is_in_col = Int::lt(&col_index, &in1_size_y);
+                let in1_value_i_j = in1_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                let row_index = BV::from_i64(context, i as i64, bit_width);
+                let col_index = BV::from_i64(context, j as i64, bit_width);
+                let is_in_row = BV::bvslt(&row_index, &in1_size_x);
+                let is_in_col = BV::bvslt(&col_index, &in1_size_y);
                 let false_value = Bool::from_bool(&context, false);
                 let is_zero = is_in_row.ite(&is_in_col.ite(&in1_value_i_j._eq(&const0), &false_value), &false_value);
                 // 一维数组只存一个维度，也就是纵坐标，二维数组要存两个维度，第一个是纵坐标，第二个是横坐标
                 let one_dim_array = array_val_1_.store(&is_zero.ite(&zhanweifu, &const0), &col_index);
                 let two_dim_array = array_val_1_.store(&is_zero.ite(&zhanweifu, &const0), &row_index)
                                                         .store(&is_zero.ite(&zhanweifu, &const1), &col_index);
-                count_result_size_x = is_zero.ite(&count_result_size_x, &Int::add(&context, &[&count_result_size_x, &const1]));
+                count_result_size_x = is_zero.ite(&count_result_size_x, &BV::bvadd(&count_result_size_x, &const1));
                 array_val_1_ = in1_size_x._eq(&const1).ite(&one_dim_array, &two_dim_array);
             }
         }
@@ -2711,27 +2711,27 @@ impl Component for TfWhere {
         //否则就比较，如果第一个数组的位置的值为真则返回第二的数组位置的值，否则是第三个数组位置的值
         for i in 0 .. DIMSIZE[0] {
 
-            let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
-            let in2_value = operands[1].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
-            let in3_value = operands[2].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            let in1_value = operands[0].vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
+            let in2_value = operands[1].vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
+            let in3_value = operands[2].vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
 
-            let domain_sort = Sort::int(&context);
-            let range_sort = Sort::int(&context);
+            let domain_sort = Sort::bitvector(&context, bit_width);
+            let range_sort = Sort::bitvector(&context, bit_width);
             let mut array_val = Array::fresh_const(context, "where_array_second_with_2_3:", &domain_sort, &range_sort);
 
             for j in 0 .. DIMSIZE[1] {
-                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                let in2_value_i_j = in2_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                let in3_value_i_j = in3_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
-                let row_index = Int::from_i64(context, i as i64);
-                let col_index = Int::from_i64(context, j as i64);
-                let is_in_row = Int::lt(&row_index, &in2_size_x);
-                let is_in_col = Int::lt(&col_index, &in2_size_y);
+                let in1_value_i_j = in1_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                let in2_value_i_j = in2_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                let in3_value_i_j = in3_value.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                let row_index = BV::from_i64(context, i as i64, bit_width);
+                let col_index = BV::from_i64(context, j as i64, bit_width);
+                let is_in_row = BV::bvslt(&row_index, &in2_size_x);
+                let is_in_col = BV::bvslt(&col_index, &in2_size_y);
                 let value = is_in_row.ite(&is_in_col.ite(&in1_value_i_j._eq(&const0).ite(&in2_value_i_j, &in3_value_i_j), &const0), &const0);
-                array_val = array_val.store(&Int::from_i64(context, j as i64), &value);
+                array_val = array_val.store(&BV::from_i64(context, j as i64, bit_width), &value);
             }
 
-            array_1 = array_1.store(&Int::from_i64(context, i as i64), &array_val);
+            array_1 = array_1.store(&BV::from_i64(context, i as i64, bit_width), &array_val);
         }
 
         array = is_all_zero.ite(&array, &array_1);
@@ -2739,17 +2739,17 @@ impl Component for TfWhere {
         // 第二种情况形状不变
         let result_size_x_without_2_3 = count_result_size_x.clone();
         let result_size_y_without_2_3 = in1_size_x.clone();
-        let result_size_x_with_2_3 = in2_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
-        let result_size_y_with_2_3 = in2_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
+        let result_size_x_with_2_3 = in2_size.select(&BV::from_i64(&context, SIZE_X, bit_width)).as_bv().unwrap();
+        let result_size_y_with_2_3 = in2_size.select(&BV::from_i64(&context, SIZE_Y, bit_width)).as_bv().unwrap();
         let result_size_x = is_all_zero.ite(&result_size_x_without_2_3, &result_size_x_with_2_3);
         let result_size_y = is_all_zero.ite(&result_size_y_without_2_3, &result_size_y_with_2_3);
 
-        let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
-        let domain_sort = Sort::int(&context);
-        let range_sort = Sort::int(&context);
+        let array_size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
+        let domain_sort = Sort::bitvector(&context, bit_width);
+        let range_sort = Sort::bitvector(&context, bit_width);
         let mut array_val = Array::fresh_const(&context, "array_size:", &domain_sort, &range_sort);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_X), &result_size_x);
-        array_val = array_val.store(&Int::from_i64(&context, SIZE_Y), &result_size_y);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_X, bit_width), &result_size_x);
+        array_val = array_val.store(&BV::from_i64(&context, SIZE_Y, bit_width), &result_size_y);
         array = array.store(&array_size_index, &array_val);
 
         let result = Vecs::new(operands[0].dims, array);
