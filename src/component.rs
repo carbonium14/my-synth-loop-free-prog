@@ -414,11 +414,11 @@ struct TfArgMax;
 
 impl Component for TfArgMax {
     fn operand_arity(&self) -> usize {
-        1
+        2
     }
 
     fn make_operator(&self, _immediates: &Vec<Vecs<Vec<Vec<i64>>>>, operands: &[Id]) -> Operator {
-        Operator::TfArgMax(operands[0])
+        Operator::TfArgMax(operands[0], operands[1])
     }
 
     fn make_expression<'a>(
@@ -428,22 +428,39 @@ impl Component for TfArgMax {
         operands: &[Vecs<Array<'a>>],
         bit_width: u32,
     ) -> Vecs<Array<'a>> {
+        let const0 = zero(context, bit_width);
         let domain_sort = Sort::int(&context);
         let range_sort = Sort::int(&context);
         let array_sort = Sort::array(context, &domain_sort, &range_sort);
 
         let first_dim_sort = Sort::int(&context);
-        let mut array = Array::fresh_const(&context,  "argmax_array", &first_dim_sort, &array_sort);
+        let mut array = Array::fresh_const(&context,  "argmax_array_axis_1", &first_dim_sort, &array_sort);
+
+        let domain_sort_ = Sort::int(&context);
+        let range_sort_ = Sort::int(&context);
+        let array_sort_ = Sort::array(context, &domain_sort_, &range_sort_);
+
+        let first_dim_sort_ = Sort::int(&context);
+        let mut array_ = Array::fresh_const(&context,  "argmax_array_axis_0", &first_dim_sort_, &array_sort_);
 
         let size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
         let in1_size =  operands[0].vecs.select(&size_index).as_array().unwrap();
+        let in1_size_x = in1_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
+        let in1_size_y = in1_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
+        let axis = operands[1].vecs.select(&const0).as_array().unwrap().select(&const0).as_int().unwrap();
         // 注意维度是一个一维数组，长度是数入数组的第一维度
         let result_size_x = Int::from_i64(&context, 1);
-        let result_size_y = in1_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
+        let result_size_y_0 = in1_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
+        let result_size_y_1 = in1_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
+        let result_size_y = axis._eq(&const0).ite(&result_size_y_0, &result_size_y_1);
 
         let domain_sort_1 = Sort::int(&context);
         let range_sort_1 = Sort::int(&context);
-        let mut array_val_1 = Array::fresh_const(context, "argmax_array_second:", &domain_sort_1, &range_sort_1);
+        let mut array_val_1 = Array::fresh_const(context, "argmax_array_second_axis_1:", &domain_sort_1, &range_sort_1);
+
+        let domain_sort_1_ = Sort::int(&context);
+        let range_sort_1_ = Sort::int(&context);
+        let mut array_val_1_ = Array::fresh_const(context, "argmax_array_second_axis_0:", &domain_sort_1_, &range_sort_1_);
 
         for i in 0 .. DIMSIZE[0] {
             let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
@@ -454,8 +471,8 @@ impl Component for TfArgMax {
                 let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
                 let row_index = Int::from_i64(context, i as i64);
                 let col_index = Int::from_i64(context, j as i64);
-                let is_in_row = Int::lt(&row_index, &result_size_x);
-                let is_in_col = Int::lt(&col_index, &result_size_y);
+                let is_in_row = Int::lt(&row_index, &in1_size_x);
+                let is_in_col = Int::lt(&col_index, &in1_size_y);
                 // 在范围内则依次比较，找到最大值
                 value = is_in_row.ite(&is_in_col.ite(&Int::gt(&in1_value_i_j, &value).ite(&in1_value_i_j, &value), &value), &value);
             }
@@ -473,7 +490,41 @@ impl Component for TfArgMax {
             // 找到最终结果之后再放入
             array_val_1 = array_val_1.store(&Int::from_i64(context, i as i64), &res);
         }
+
         array = array.store(&Int::from_i64(context, 0), &array_val_1);
+
+        for i in 0 .. DIMSIZE[1] {
+            let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            // 记录最大值
+            let mut value = zero(context, bit_width);
+
+            for j in 0 .. DIMSIZE[0] {
+                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
+                let row_index = Int::from_i64(context, j as i64);
+                let col_index = Int::from_i64(context, i as i64);
+                let is_in_row = Int::lt(&row_index, &in1_size_x);
+                let is_in_col = Int::lt(&col_index, &in1_size_y);
+                // 在范围内则依次比较，找到最大值
+                value = is_in_row.ite(&is_in_col.ite(&Int::gt(&in1_value_i_j, &value).ite(&in1_value_i_j, &value), &value), &value);
+            }
+            // 记录最大值对应的下标
+            let mut res = zero(context, bit_width);
+            for j in 0 .. DIMSIZE[1] {
+                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
+                let row_index = Int::from_i64(context, i as i64);
+                let col_index = Int::from_i64(context, j as i64);
+                let is_in_row = Int::lt(&row_index, &result_size_x);
+                let is_in_col = Int::lt(&col_index, &result_size_y);
+                // 在范围内则找到最大值对应的下标
+                res = is_in_row.ite(&is_in_col.ite(&Int::_eq(&value, &in1_value_i_j).ite(&col_index, &res), &res), &res);
+            }
+            // 找到最终结果之后再放入
+            array_val_1_ = array_val_1_.store(&Int::from_i64(context, i as i64), &res);
+        }
+
+        array_ = array_.store(&Int::from_i64(context, 0), &array_val_1_);
+
+        array = axis._eq(&const0).ite(&array_, &array);
 
         let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
         let domain_sort = Sort::int(&context);
@@ -497,11 +548,11 @@ struct TfArgMin;
 
 impl Component for TfArgMin {
     fn operand_arity(&self) -> usize {
-        1
+        2
     }
 
     fn make_operator(&self, _immediates: &Vec<Vecs<Vec<Vec<i64>>>>, operands: &[Id]) -> Operator {
-        Operator::TfArgMin(operands[0])
+        Operator::TfArgMin(operands[0], operands[1])
     }
 
     fn make_expression<'a>(
@@ -511,22 +562,39 @@ impl Component for TfArgMin {
         operands: &[Vecs<Array<'a>>],
         bit_width: u32,
     ) -> Vecs<Array<'a>> {
+        let const0 = zero(context, bit_width);
         let domain_sort = Sort::int(&context);
         let range_sort = Sort::int(&context);
         let array_sort = Sort::array(context, &domain_sort, &range_sort);
 
         let first_dim_sort = Sort::int(&context);
-        let mut array = Array::fresh_const(&context,  "argmin_array", &first_dim_sort, &array_sort);
+        let mut array = Array::fresh_const(&context,  "argmax_array_axis_1", &first_dim_sort, &array_sort);
+
+        let domain_sort_ = Sort::int(&context);
+        let range_sort_ = Sort::int(&context);
+        let array_sort_ = Sort::array(context, &domain_sort_, &range_sort_);
+
+        let first_dim_sort_ = Sort::int(&context);
+        let mut array_ = Array::fresh_const(&context,  "argmax_array_axis_0", &first_dim_sort_, &array_sort_);
 
         let size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
         let in1_size =  operands[0].vecs.select(&size_index).as_array().unwrap();
+        let in1_size_x = in1_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
+        let in1_size_y = in1_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
+        let axis = operands[1].vecs.select(&const0).as_array().unwrap().select(&const0).as_int().unwrap();
         // 注意维度是一个一维数组，长度是数入数组的第一维度
         let result_size_x = Int::from_i64(&context, 1);
-        let result_size_y = in1_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
+        let result_size_y_0 = in1_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
+        let result_size_y_1 = in1_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
+        let result_size_y = axis._eq(&const0).ite(&result_size_y_0, &result_size_y_1);
 
         let domain_sort_1 = Sort::int(&context);
         let range_sort_1 = Sort::int(&context);
-        let mut array_val_1 = Array::fresh_const(context, "argmin_array_second:", &domain_sort_1, &range_sort_1);
+        let mut array_val_1 = Array::fresh_const(context, "argmax_array_second_axis_1:", &domain_sort_1, &range_sort_1);
+
+        let domain_sort_1_ = Sort::int(&context);
+        let range_sort_1_ = Sort::int(&context);
+        let mut array_val_1_ = Array::fresh_const(context, "argmax_array_second_axis_0:", &domain_sort_1_, &range_sort_1_);
 
         for i in 0 .. DIMSIZE[0] {
             let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
@@ -537,12 +605,12 @@ impl Component for TfArgMin {
                 let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
                 let row_index = Int::from_i64(context, i as i64);
                 let col_index = Int::from_i64(context, j as i64);
-                let is_in_row = Int::lt(&row_index, &result_size_x);
-                let is_in_col = Int::lt(&col_index, &result_size_y);
+                let is_in_row = Int::lt(&row_index, &in1_size_x);
+                let is_in_col = Int::lt(&col_index, &in1_size_y);
                 // 在范围内则依次比较，找到最小值
                 value = is_in_row.ite(&is_in_col.ite(&Int::lt(&in1_value_i_j, &value).ite(&in1_value_i_j, &value), &value), &value);
             }
-            // 记录最大值对应的下标
+            // 记录最小值对应的下标
             let mut res = zero(context, bit_width);
             for j in 0 .. DIMSIZE[1] {
                 let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
@@ -550,13 +618,47 @@ impl Component for TfArgMin {
                 let col_index = Int::from_i64(context, j as i64);
                 let is_in_row = Int::lt(&row_index, &result_size_x);
                 let is_in_col = Int::lt(&col_index, &result_size_y);
-                // 在范围内则找到最大值对应的下标
+                // 在范围内则找到最小值对应的下标
                 res = is_in_row.ite(&is_in_col.ite(&Int::_eq(&value, &in1_value_i_j).ite(&col_index, &res), &res), &res);
             }
             // 找到最终结果之后再放入
             array_val_1 = array_val_1.store(&Int::from_i64(context, i as i64), &res);
         }
+
         array = array.store(&Int::from_i64(context, 0), &array_val_1);
+
+        for i in 0 .. DIMSIZE[1] {
+            let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            // 记录最小值
+            let mut value = zero(context, bit_width);
+
+            for j in 0 .. DIMSIZE[0] {
+                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
+                let row_index = Int::from_i64(context, j as i64);
+                let col_index = Int::from_i64(context, i as i64);
+                let is_in_row = Int::lt(&row_index, &in1_size_x);
+                let is_in_col = Int::lt(&col_index, &in1_size_y);
+                // 在范围内则依次比较，找到最小值
+                value = is_in_row.ite(&is_in_col.ite(&Int::gt(&in1_value_i_j, &value).ite(&in1_value_i_j, &value), &value), &value);
+            }
+            // 记录最小值对应的下标
+            let mut res = zero(context, bit_width);
+            for j in 0 .. DIMSIZE[1] {
+                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
+                let row_index = Int::from_i64(context, i as i64);
+                let col_index = Int::from_i64(context, j as i64);
+                let is_in_row = Int::lt(&row_index, &result_size_x);
+                let is_in_col = Int::lt(&col_index, &result_size_y);
+                // 在范围内则找到最小值对应的下标
+                res = is_in_row.ite(&is_in_col.ite(&Int::_eq(&value, &in1_value_i_j).ite(&col_index, &res), &res), &res);
+            }
+            // 找到最终结果之后再放入
+            array_val_1_ = array_val_1_.store(&Int::from_i64(context, i as i64), &res);
+        }
+
+        array_ = array_.store(&Int::from_i64(context, 0), &array_val_1_);
+
+        array = axis._eq(&const0).ite(&array_, &array);
 
         let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
         let domain_sort = Sort::int(&context);
@@ -746,11 +848,11 @@ struct TfConcat;
 
 impl Component for TfConcat {
     fn operand_arity(&self) -> usize {
-        2
+        3
     }
 
     fn make_operator(&self, _immediates: &Vec<Vecs<Vec<Vec<i64>>>>, operands: &[Id]) -> Operator {
-        Operator::TfConcat(operands[0], operands[1])
+        Operator::TfConcat(operands[0], operands[1], operands[2])
     }
 
     fn make_expression<'a>(
@@ -767,15 +869,29 @@ impl Component for TfConcat {
         let array_sort = Sort::array(context, &domain_sort, &range_sort);
 
         let first_dim_sort = Sort::int(&context);
-        let mut array = Array::fresh_const(&context,  "concat_array", &first_dim_sort, &array_sort);
+        let mut array = Array::fresh_const(&context,  "concat_array_axis_1", &first_dim_sort, &array_sort);
+
+        let domain_sort_ = Sort::int(&context);
+        let range_sort_ = Sort::int(&context);
+        let array_sort_ = Sort::array(context, &domain_sort_, &range_sort_);
+
+        let first_dim_sort_ = Sort::int(&context);
+        let mut array_ = Array::fresh_const(&context,  "concat_array_axis_0", &first_dim_sort_, &array_sort_);
 
         let size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
         let in1_size =  operands[0].vecs.select(&size_index).as_array().unwrap();
         let in2_size =  operands[1].vecs.select(&size_index).as_array().unwrap();
-        let result_size_x = in1_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
-        let result_size_y_1 = in1_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
-        let result_size_y_2 = in2_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
-        let result_size_y = Int::add(context, &[&result_size_y_1, &result_size_y_2]);
+        let axis = operands[2].vecs.select(&const0).as_array().unwrap().select(&const0).as_int().unwrap();
+        let result_size_x_1 = in1_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
+        let result_size_y_1_1 = in1_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
+        let result_size_y_2_1 = in2_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
+        let result_size_y_1 = Int::add(context, &[&result_size_y_1_1, &result_size_y_2_1]);
+        let result_size_y_0 = in1_size.select(&Int::from_i64(&context, SIZE_Y)).as_int().unwrap();
+        let result_size_x_1_0 = in1_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
+        let result_size_x_2_0 = in2_size.select(&Int::from_i64(&context, SIZE_X)).as_int().unwrap();
+        let result_size_x_0 = Int::add(context, &[&result_size_x_1_0, &result_size_x_2_0]);
+        let result_size_x = axis._eq(&const0).ite(&result_size_x_0, &result_size_x_1);
+        let result_size_y = axis._eq(&const0).ite(&result_size_y_0, &result_size_y_1);
 
         for i in 0 .. DIMSIZE[0] {
 
@@ -784,16 +900,16 @@ impl Component for TfConcat {
 
             let domain_sort = Sort::int(&context);
             let range_sort = Sort::int(&context);
-            let mut array_val = Array::fresh_const(context, "concat_array_second:", &domain_sort, &range_sort);
+            let mut array_val = Array::fresh_const(context, "concat_array_second_axis_1:", &domain_sort, &range_sort);
 
             for j in 0 .. DIMSIZE[1] {
                 let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
                 let in2_value_i_j = in2_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
                 let row_index = Int::from_i64(context, i as i64);
                 let col_index = Int::from_i64(context, j as i64);
-                let is_in_row = Int::lt(&row_index, &result_size_x);
-                let in1_is_in_col = Int::lt(&col_index, &result_size_y_1);
-                let in2_is_in_col = Int::lt(&col_index, &result_size_y);
+                let is_in_row = Int::lt(&row_index, &result_size_x_1);
+                let in1_is_in_col = Int::lt(&col_index, &result_size_y_1_1);
+                let in2_is_in_col = Int::lt(&col_index, &result_size_y_1);
                 // result_size_y_1是第一个输入的纵坐标，result_size_y_1到result_size_y是第二个输入的纵坐标
                 // 如果在第一个输入纵坐标内就用第一个数，如果不在第一个输入纵坐标内但是在第二个输入纵坐标内就用第二个数，否则就不动
                 let value = is_in_row.ite(&in1_is_in_col.ite(&in1_value_i_j, &in2_is_in_col.ite(&in2_value_i_j, &const0)), &const0);
@@ -802,6 +918,40 @@ impl Component for TfConcat {
 
             array = array.store(&Int::from_i64(context, i as i64), &array_val);
         }
+
+        for i in 0 .. DIMSIZE[0] {
+
+            let in1_value = operands[0].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            let in2_value = operands[1].vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+
+            let domain_sort = Sort::int(&context);
+            let range_sort = Sort::int(&context);
+            let mut array_val = Array::fresh_const(context, "concat_array_second_axis_0_1:", &domain_sort, &range_sort);
+
+            let domain_sort_ = Sort::int(&context);
+            let range_sort_ = Sort::int(&context);
+            let mut array_val_ = Array::fresh_const(context, "concat_array_second_axis_0_2:", &domain_sort_, &range_sort_);
+
+            for j in 0 .. DIMSIZE[1] {
+                let in1_value_i_j = in1_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
+                let in2_value_i_j = in2_value.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
+                let row_index = Int::from_i64(context, i as i64);
+                let col_index = Int::from_i64(context, j as i64);
+                let is_in_row = Int::lt(&row_index, &result_size_x_1_0);
+                let is_in_row_ = Int::lt(&row_index, &result_size_x_2_0);
+                let is_in_col = Int::lt(&col_index, &result_size_y_0);
+                // 按照原来的顺序取出来，然后第二个放进去的时候横坐标偏移量是第一个数组的第一维度
+                let value = is_in_row.ite(&is_in_col.ite(&in1_value_i_j, &const0), &const0);
+                let value_ = is_in_row_.ite(&is_in_col.ite(&in2_value_i_j, &const0), &const0);
+                array_val = array_val.store(&Int::from_i64(context, j as i64), &value);
+                array_val_ = array_val_.store(&Int::from_i64(context, j as i64), &value_);
+            }
+
+            array_ = array_.store(&Int::from_i64(context, i as i64), &array_val);
+            array_ = array_.store(&Int::add(&context, &[&Int::from_i64(context, i as i64), &result_size_x_1_0]), &array_val_);
+        }
+
+        array = axis._eq(&const0).ite(&array_, &array);
 
         let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
         let domain_sort = Sort::int(&context);
@@ -2640,11 +2790,11 @@ macro_rules! with_operator_component {
                 let $c = TfDiv;
                 $body
             }
-            Operator::TfArgMax(_) => {
+            Operator::TfArgMax(_, _) => {
                 let $c = TfArgMax;
                 $body
             }
-            Operator::TfArgMin(_) => {
+            Operator::TfArgMin(_, _) => {
                 let $c = TfArgMin;
                 $body
             }
@@ -2660,7 +2810,7 @@ macro_rules! with_operator_component {
                 let $c = TfClipByValue;
                 $body
             }
-            Operator::TfConcat(_, _) => {
+            Operator::TfConcat(_, _, _) => {
                 let $c = TfConcat;
                 $body
             }
