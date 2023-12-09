@@ -15,22 +15,24 @@ mod operator;
 pub use builder::ProgramBuilder;
 pub use component::Component;
 pub use operator::Operator;
-use z3::Sort;
+use z3::{Sort, Params};
 
 use std::collections::{HashMap, HashSet};
 use std::fmt::{self, Display};
 use std::iter::FromIterator;
 use std::ops::Range;
 use std::time;
-use z3::ast::{Ast, Bool, Array, BV};
+use std::io::Write;
+use z3::ast::{Ast, Bool, Int, Array};
 
 // const FULL_BIT_WIDTH: u32 = 32;
 
-const DIMSIZE : [usize ; 2] = [4, 10];
+const DIMSIZE : [usize ; 2] = [4,10];
 const SIZE_STORE_INDEX : i64 = -2;
 const SIZE_X : i64 = 0;
 const SIZE_Y : i64 = 1;
-const BIT_WITH : u32 = 8;
+
+
 
 // enum Type<'a> {
 //     intVar(Int<'a>),
@@ -78,52 +80,60 @@ impl<T> Vecs<T>{
     }   
 }
 
-//修改数组的变量类型是BitVec
-fn fresh_array(context: &z3::Context, bit_width: u32, dims:[usize; 2], pre_str : String) -> Vecs<Array<'_>> {
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct FreshResult<'a, T> {
+    result_vecs : Vecs<T>,
+    control : Bool<'a>
+}
+
+fn fresh_array(context: &z3::Context, _bit_width: u32, dims:[usize; 2], pre_str : String) -> FreshResult<'_, Array<'_>>
+//Vecs<Array<'_>> 
+{
     //因为z3的array更像是一个map,An array in Z3 is a mapping from indices to values,所以我们手动实现indices从0开始往后，模拟一个数组
 
-    //key为bitvec，val为bitvec
-    let domain_sort = Sort::bitvector(&context, bit_width);
-    let range_sort = Sort::bitvector(&context, bit_width);
+    //设立了一个index为int，val为array的array，模拟了一个二维数组
+
+    let mut control_num_range = Bool::from_bool(&context, true);
+    let max_range = Int::from_i64(&context, 32);
+    let min_range = Int::from_i64(&context, -32);
+
+    let domain_sort = Sort::int(&context);
+    let range_sort = Sort::int(&context);
     let array_sort = Sort::array(context, &domain_sort, &range_sort);
-    //设立了一个index为bitvec，val为array的array，模拟了一个二维数组
-    let first_dim_sort = Sort::bitvector(&context, bit_width);
+
+    let first_dim_sort = Sort::int(&context);
     let mut array = Array::fresh_const(&context,  (pre_str.clone() +  "_array") .as_str(), &first_dim_sort, &array_sort);
     
 
     let x = dims[0];
     let y = dims[1];
     for i in 0 .. x {
-        let index_first_dim = BV::from_i64(context, i as i64, bit_width);
+        let index_first_dim = Int::from_i64(context, i as i64);
 
-        let domain_sort = Sort::bitvector(&context, bit_width);
-        let range_sort = Sort::bitvector(&context, bit_width);
+        let domain_sort = Sort::int(&context);
+        let range_sort = Sort::int(&context);
         let mut array_val = Array::fresh_const(context, (pre_str.clone() +  "_array_second:") .as_str(), &domain_sort, &range_sort);
 
         for j in 0 .. y {
-            let index_second_dim = BV::from_i64(context, j as i64, bit_width);
-            let value =  BV::fresh_const(context, (pre_str.clone() +  "_array_second_value") .as_str(), bit_width);
+            let index_second_dim = Int::from_i64(context, j as i64);
+            let value = Int::fresh_const(context, (pre_str.clone() +  "_array_second_value") .as_str());
+            let le_control = value.le(&max_range);
+            let ge_control = value.ge(&min_range);
+            control_num_range = Bool::and(context, &[&control_num_range, &le_control, &ge_control]);
+
             array_val = array_val.store(&index_second_dim, &value);
         }
 
-
-        // println!("---------------");
-        // println!("array_val_chilren : {:?}", array_val.children());
-        // println!("---------------");
-
         array = array.store(&index_first_dim, &array_val);
-        //let m = array.children().len();
-        //println!("children : {} {} {}", m, x , y);
-        // println!("array_chilren : {:?}", array.children());
     }
 
     //将真实size存入
-    let array_size_index = BV::from_i64(&context, SIZE_STORE_INDEX, bit_width);
-    let domain_sort = Sort::bitvector(&context, bit_width);
-    let range_sort = Sort::bitvector(&context, bit_width);
+    let array_size_index = Int::from_i64(&context, SIZE_STORE_INDEX);
+    let domain_sort = Sort::int(&context);
+    let range_sort = Sort::int(&context);
     let mut array_val = Array::fresh_const(&context, "array_size:", &domain_sort, &range_sort);
-    array_val = array_val.store(&BV::from_i64(&context, SIZE_X, bit_width), &BV::from_i64(&context, dims[0] as i64, bit_width));
-    array_val = array_val.store(&BV::from_i64(&context, SIZE_Y, bit_width), &BV::from_i64(&context, dims[1] as i64, bit_width));
+    array_val = array_val.store(&Int::from_i64(&context, SIZE_X), &Int::from_i64(&context, dims[0] as i64));
+    array_val = array_val.store(&Int::from_i64(&context, SIZE_Y), &Int::from_i64(&context, dims[1] as i64));
     array = array.store(&array_size_index, &array_val);
 
 
@@ -131,45 +141,46 @@ fn fresh_array(context: &z3::Context, bit_width: u32, dims:[usize; 2], pre_str :
     //println!("select 0 {}", array.select(&Int::from_i64(context, 0)));
 
     let result : Vecs<Array<'_>> = Vecs::new(dims, array);
-    return result;
+    return FreshResult { result_vecs: result, control: control_num_range }
 
 }
 
 
 //TODO: 动态维度，不过目前只能实现二维
-fn fresh_immediate(context: &z3::Context, bit_width: u32, dims:[usize; 2] ) ->  Vecs<Array<'_>> {
+fn fresh_immediate(context: &z3::Context, bit_width: u32, dims:[usize; 2]) ->  FreshResult<'_, Array<'_>> {
     fresh_array(context, bit_width, dims, "immediate".to_string())
 }
 
 //TODO: 动态维度，不过目前只能实现二维
-fn fresh_param(context: &z3::Context, bit_width: u32, dims: [usize ; 2]) ->  Vecs<Array<'_>> {
+fn fresh_param(context: &z3::Context, bit_width: u32, dims: [usize ; 2]) ->  FreshResult<'_, Array<'_>> {
     fresh_array(context, bit_width, dims, "param".to_string())
 }
 
 //TODO: 动态维度，不过目前只能实现二维
-fn fresh_result(context: &z3::Context, bit_width: u32, dims: [usize ; 2]) ->  Vecs<Array<'_>> {
+fn fresh_result(context: &z3::Context, bit_width: u32, dims: [usize ; 2]) ->  FreshResult<'_, Array<'_>> {
     fresh_array(context, bit_width, dims, "result".to_string())
 }
 
 //TODO: 动态维度，不过目前只能实现二维
-fn _fresh_input(context: &z3::Context, bit_width: u32, dims: [usize ; 2]) ->  Vecs<Array<'_>> {
+fn _fresh_input(context: &z3::Context, bit_width: u32, dims: [usize ; 2]) ->  FreshResult<'_, Array<'_>> {
     fresh_array(context, bit_width, dims, "input".to_string())
 }
 
 //TODO: 动态维度，不过目前只能实现二维
-fn fresh_output(context: &z3::Context, bit_width: u32, dims: [usize ; 2]) ->  Vecs<Array<'_>> {
+fn fresh_output(context: &z3::Context, bit_width: u32, dims: [usize ; 2]) ->  FreshResult<'_, Array<'_>> {
     fresh_array(context, bit_width, dims, "output".to_string())
 }
 
-fn eval_bitvec(model: &z3::Model, bv: &BV) -> i64 {
+fn eval_int(model: &z3::Model, bv: &Int) -> i64 {
     model.eval(bv)
     .unwrap()
     .as_i64()
     .unwrap()
 }
 
+
 //将array转化为i64的二维数组类型
-fn eval_bitvecs<'a, I>(context: &z3::Context, model: &'a z3::Model, arrs:I, bit_width: u32) -> Vec<Vecs<Vec<Vec<i64>>>>
+fn eval_bitvecs<'a, I>(context: &z3::Context, model: &'a z3::Model, arrs:I) -> Vec<Vecs<Vec<Vec<i64>>>>
 where
     I: IntoIterator<Item = &'a Vecs< Array<'a>>>,
 {
@@ -181,11 +192,11 @@ where
         for i in 0 .. DIMSIZE[0] {
             let mut v_in : Vec<i64> = Vec::new();
 
-            let index_first = BV::from_i64(&context, i as i64, bit_width);
+            let index_first = Int::from_i64(&context, i as i64);
             let array_val = v.vecs.select(&index_first).as_array().unwrap();
 
             for j in 0 .. DIMSIZE[1] {
-                v_in.push(eval_bitvec(model, &array_val.select(&BV::from_i64(&context, j as i64, bit_width)).as_bv().unwrap()));
+                v_in.push(eval_int(model, &array_val.select(&Int::from_i64(&context, j as i64)).as_int().unwrap()));
             }
             vs.push(v_in);
         }
@@ -196,7 +207,7 @@ where
 }
 
 fn eval_line(model: &z3::Model, line: &Line) -> u32 {
-    eval_bitvec(model, line) as u32
+    eval_int(model, line) as u32
 }
 
 fn eval_lines<'a, I>(model: &'a z3::Model, lines: I) -> Vec<u32>
@@ -354,7 +365,6 @@ impl Library {
                 component::tf_clip_by_value(),
                 component::tf_concat(),
                 component::tf_equal(),
-                component::tf_expand_dims(),
                 component::tf_eye(),
                 component::tf_ones(),
                 component::tf_zeros(),
@@ -366,31 +376,31 @@ impl Library {
                 component::tf_not_equal(),
                 component::tf_negative(),
                 component::tf_reciprocal(),
-                component::tf_cast(),
+                //component::tf_cast(),
                 component::tf_argmax(),
                 component::tf_argmin(),
                 component::tf_bincount(),
                 component::tf_count_nonzero(),
-                component::tf_cumsum(),
+                // component::tf_cumsum(),
                 component::tf_maximum(),
                 component::tf_minimum(),
                 component::tf_reverse(),
                 component::tf_sign(),
                 component::tf_square(),
-                component::tf_where()
+                // component::tf_where()
             ],
         }
     }
 }
 
-type Line<'a> = BV<'a>;
+type Line<'a> = Int<'a>;
 
 fn line_lt<'a>(lhs: &Line<'a>, rhs: &Line<'a>) -> Bool<'a> {
-    lhs.bvslt(rhs)
+    lhs.lt(rhs)
 }
 
 fn line_le<'a>(lhs: &Line<'a>, rhs: &Line<'a>) -> Bool<'a> {
-    lhs.bvsle(rhs)
+    lhs.le(rhs)
 }
 
 #[derive(Debug)]
@@ -445,13 +455,13 @@ impl<'a> LocationVars<'a> {
         }
     }
 
-    fn fresh_line(context: &'a z3::Context, name: &str, line_bit_width: u32) -> Line<'a> {
-        BV::fresh_const(context, name, line_bit_width)
+    fn fresh_line(context: &'a z3::Context, name: &str, _line_bit_width: u32) -> Line<'a> {
+        Int::fresh_const(context, name)
     }
 
     fn line_from_u32(&self, context: &'a z3::Context, line: u32) -> Line<'a> {
         assert!(line < (1 << self.line_bit_width));
-        BV::from_i64(context, line as i64, self.line_bit_width)
+        Int::from_i64(context, line as i64)
     }
 
     fn inputs_range(&self) -> Range<u32> {
@@ -771,7 +781,10 @@ impl<'a> Synthesizer<'a> {
 
     //要为每个部件都生成这样一个bitvec的数组，但是在运行的过程中数组的dims会有变化，因此该怎样
     // 目前想法，产生一个很大的bitvec二维数组，此处默认是30*30，通过dims来控制，然后新添加一个变量dims[2]，用来表示这个数组中的哪些元素是有用的
-    fn fresh_immediates(&self, bit_width: u32, dims : [usize; 2]) -> Vec<Vecs<Array<'a>>> {
+    fn fresh_immediates(&self, bit_width: u32, dims : [usize; 2]) -> 
+    Vec<FreshResult<'a, Array<'a>>>
+    //Vec<Vecs<Array<'a>>> 
+    {
         self.library
             .components
             .iter()
@@ -781,7 +794,10 @@ impl<'a> Synthesizer<'a> {
             .collect()
     }
 
-    fn fresh_param_vars(&self, bit_width: u32, dims : [usize; 2]) -> Vec<Vecs<Array<'a>>> {
+    fn fresh_param_vars(&self, bit_width: u32, dims : [usize; 2]) -> 
+    Vec<FreshResult<'a, Array<'a>>>
+    //Vec<Vecs<Array<'a>>> 
+    {
         self.library
             .components
             .iter()
@@ -790,7 +806,10 @@ impl<'a> Synthesizer<'a> {
     }
 
 
-    fn fresh_result_vars(&self, bit_width: u32, dims : [usize; 2]) -> Vec<Vecs<Array<'a>>> {
+    fn fresh_result_vars(&self, bit_width: u32, dims : [usize; 2]) -> 
+    Vec<FreshResult<'a, Array<'a>>>
+    //Vec<Vecs<Array<'a>>> 
+    {
         self.library
             .components
             .iter()
@@ -860,43 +879,36 @@ impl<'a> Synthesizer<'a> {
 
 
         let dims = [DIMSIZE[0], DIMSIZE[1]];
-
-        let immediates = self.fresh_immediates(bit_width, dims);
         
         //let mut works_for_inputs = Vec::with_capacity(inputs.len() * 4);
         //现在就一组输入直接就是4，用来存储bool们
         let mut works_for_inputs = Vec::with_capacity(4);
 
-        
-        let params = self.fresh_param_vars(bit_width, dims);
-        let results = self.fresh_result_vars(bit_width, dims);
-
-        
         //将Vec<Vecs<Vec<Vec<i64>>>>类型的inputs转化为Vec<Vecs<Array<'_>>>,
         let input_iter = input.iter();
 
         let mut inputs : Vec<Vecs<Array<'_>>> = Vec::new();
         for v in input_iter {
-            let domain_sort = Sort::bitvector(&self.context, bit_width);
-            let range_sort = Sort::bitvector(&self.context, bit_width);
+            let domain_sort = Sort::int(&self.context);
+            let range_sort = Sort::int(&self.context);
             let array_sort = Sort::array(self.context, &domain_sort, &range_sort);
     
-            let first_dim_sort = Sort::bitvector(&self.context, bit_width);
+            let first_dim_sort = Sort::int(&self.context);
             let mut array = Array::new_const(&self.context,  "input_array", &first_dim_sort, &array_sort);
         
     
             let x = DIMSIZE[0];
             let y = DIMSIZE[1];
             for i in 0 .. x {
-                let index_first_dim = BV::from_i64(self.context, i as i64, bit_width);
+                let index_first_dim = Int::from_i64(self.context, i as i64);
     
-                let domain_sort = Sort::bitvector(&self.context, bit_width);
-                let range_sort = Sort::bitvector(&self.context, bit_width);
+                let domain_sort = Sort::int(&self.context);
+                let range_sort = Sort::int(&self.context);
                 let mut array_val = Array::new_const(self.context, "input_array_second:", &domain_sort, &range_sort);
     
                 for j in 0 .. y {
-                    let index_second_dim = BV::from_i64(self.context, j as i64, bit_width);
-                    let value = BV::from_i64(&self.context, v.vecs[i][j] as i64, bit_width);
+                    let index_second_dim = Int::from_i64(self.context, j as i64);
+                    let value = Int::from_i64(&self.context, v.vecs[i][j] as i64);
                     array_val = array_val.store(&index_second_dim, &value);
                 }
     
@@ -904,12 +916,12 @@ impl<'a> Synthesizer<'a> {
             }
 
             //将真实size存入
-            let array_size_index = BV::from_i64(&self.context, SIZE_STORE_INDEX, bit_width);
-            let domain_sort = Sort::bitvector(&self.context, bit_width);
-            let range_sort = Sort::bitvector(&self.context, bit_width);
+            let array_size_index = Int::from_i64(&self.context, SIZE_STORE_INDEX);
+            let domain_sort = Sort::int(&self.context);
+            let range_sort = Sort::int(&self.context);
             let mut array_val = Array::fresh_const(&self.context, "array_size:", &domain_sort, &range_sort);
-            array_val = array_val.store(&BV::from_i64(&self.context, SIZE_X, bit_width), &BV::from_i64(&self.context, dims[0] as i64, bit_width));
-            array_val = array_val.store(&BV::from_i64(&self.context, SIZE_Y, bit_width), &BV::from_i64(&self.context, dims[1] as i64, bit_width));
+            array_val = array_val.store(&Int::from_i64(&self.context, SIZE_X), &Int::from_i64(&self.context, dims[0] as i64));
+            array_val = array_val.store(&Int::from_i64(&self.context, SIZE_Y), &Int::from_i64(&self.context, dims[1] as i64));
             array = array.store(&array_size_index, &array_val);
 
             let temp : Vecs<Array<'_>> = Vecs::new(v.dims, array);
@@ -917,18 +929,57 @@ impl<'a> Synthesizer<'a> {
             inputs.push(temp);
         }
             
-        //i[0] ?
+        
         let output = fresh_output(self.context, bit_width, dims);
+        let params_struct = self.fresh_param_vars(bit_width, dims);
+        let results_struct = self.fresh_result_vars(bit_width, dims);
+        let immediates_struct = self.fresh_immediates(bit_width, dims);
+
+        //提取出需要的bool和vecs的变量
+        let mut control_num_rang = Bool::from_bool(&self.context, true);
+        //output
+        control_num_rang = Bool::and(&self.context, &[&control_num_rang, &output.control]);
+        let output = output.result_vecs;
+        //params
+        let params_iter = params_struct.iter();
+        let mut params = Vec::new();
+        for p in params_iter {
+            control_num_rang = Bool::and(&self.context, &[&control_num_rang, &p.control]);
+            params.push(p.result_vecs.clone());
+        }
+        //results
+        let results_iter = results_struct.iter();
+        let mut results = Vec::new();
+        for r in results_iter {
+            control_num_rang = Bool::and(&self.context, &[&control_num_rang, &r.control]);
+            results.push(r.result_vecs.clone());
+        }
+        //immediates
+        let immediates_iter = immediates_struct.iter();
+        let mut immediates = Vec::new();
+        for i in immediates_iter {
+            control_num_rang = Bool::and(&self.context, &[&control_num_rang, &i.control]);
+            immediates.push(i.result_vecs.clone());
+        }
+
+
+        
+        let mut file_conn = std::fs::File::create("conn.txt").expect("create failed");
+        let mut file_spec = std::fs::File::create("spec.txt").expect("create failed");
+        let mut file_lib = std::fs::File::create("lib.txt").expect("create failed");
 
         ////用library中components按顺序构造出语句
         let lib = self.library(&immediates, &params, &results, bit_width);
         //println!("lib done");
         //55555
+        file_lib.write_all(lib.to_string().as_bytes()).expect("lib write failed");
         works_for_inputs.push(lib);
+        
 
         //建立行数和值之间的关系
-        let conn = self.connectivity(&inputs, &output, &params, &results, bit_width);
-        //println!("conn done");
+        let conn = self.connectivity(&inputs, &output, &params, &results);
+
+        file_conn.write_all(conn.to_string().as_bytes()).expect("lib write failed");
         works_for_inputs.push(conn);
         
 
@@ -936,6 +987,7 @@ impl<'a> Synthesizer<'a> {
             .spec
             .make_expression(self.context, &inputs, &output, bit_width);
         //println!("spec done");
+        file_spec.write_all(spec.to_string().as_bytes()).expect("lib write failed");
         works_for_inputs.push(spec);
         
 
@@ -964,22 +1016,23 @@ impl<'a> Synthesizer<'a> {
         let solver = self.solver();
         solver.assert(&query);
 
+        let then = std::time::Instant::now();
+        
         match solver.check() {
             z3::SatResult::Unknown => Err(Error::SynthesisUnknown),
             z3::SatResult::Unsat => Err(Error::SynthesisUnsatisfiable),
             z3::SatResult::Sat => {
                 let model = solver.get_model();
 
+                let elapsed = then.elapsed();
 
-                // let x : i64 = -10;
-                // let x_bv = Int::from_i64(self.context, x);
-                // println!(" bitvec :{}", bit_width);
-                // println!("bv : {}", x_bv);
-                // let y =  eval_bitvec(&Option::as_ref(&model).unwrap(), &x_bv);
-                // println!(" y :{}", y);
-                
+                println!(
+                    "\nElapsed: {}.{:03}s\n",
+                    elapsed.as_secs(),
+                    elapsed.subsec_millis()
+                );                
 
-                let immediates = eval_bitvecs(&self.context ,&Option::as_ref(&model).unwrap(), &immediates, bit_width);
+                let immediates = eval_bitvecs(&self.context ,&Option::as_ref(&model).unwrap(), &immediates);
 
                 let params = eval_lines(&Option::as_ref(&model).unwrap(), &self.locations.params);
 
@@ -1051,7 +1104,6 @@ impl<'a> Synthesizer<'a> {
         output: &Vecs<Array<'a>>,
         params: &Vec<Vecs<Array<'a>>>,
         results: &Vec<Vecs<Array<'a>>>,
-        bit_width: u32
     ) -> Bool<'a> {
         let locs_to_vars: Vec<_> = self
             .locations
@@ -1063,7 +1115,11 @@ impl<'a> Synthesizer<'a> {
             .chain(Some((&self.locations.output, output)))
             .collect();
 
-        //println!("location_len : {:?}", locs_to_vars);
+        // println!("inputs : {}", self.locations.inputs.len());
+        // println!("params : {}", self.locations.params.len());
+        // println!("results : {}", self.locations.results.len());
+        // println!("location_len : {}", locs_to_vars.len());
+
 
         let mut conn =
             Vec::with_capacity(locs_to_vars.len() * locs_to_vars.len() + locs_to_vars.len());
@@ -1086,11 +1142,13 @@ impl<'a> Synthesizer<'a> {
                 //判断类型为Vecs<Array<'_>>的x和y中的元素相等关系
                 let mut temp = Bool::from_bool(&self.context, true);
                 for i in 0..DIMSIZE[0] {
-                    let now_x = x.vecs.select(&BV::from_i64(self.context, i as i64, bit_width)).as_array().unwrap();
-                    let now_y = y.vecs.select(&BV::from_i64(self.context, i as i64, bit_width)).as_array().unwrap();
+                    //这里很可能会有问题
+                    //可能可以直接比较array?
+                    let now_x = x.vecs.select(&Int::from_i64(self.context, i as i64)).as_array().unwrap();
+                    let now_y = y.vecs.select(&Int::from_i64(self.context, i as i64)).as_array().unwrap();
                     for j in 0..DIMSIZE[1] {
-                        let x_value = now_x.select(&BV::from_i64(self.context, j as i64, bit_width)).as_bv().unwrap();
-                        let y_value = now_y.select(&BV::from_i64(self.context, j as i64, bit_width)).as_bv().unwrap();
+                        let x_value = now_x.select(&Int::from_i64(self.context, j as i64)).as_int().unwrap();
+                        let y_value = now_y.select(&Int::from_i64(self.context, j as i64)).as_int().unwrap();
                         //let temp2 = x_value.unwrap()._eq(&y_value.unwrap());
                         let temp2 = x_value._eq(&y_value);
                         temp = z3::ast::Bool::<'_>::and(self.context, &[&temp, &temp2]);
@@ -1151,6 +1209,8 @@ impl<'a> Synthesizer<'a> {
         results: &[Vecs<Array<'a>>],
         bit_width: u32,
     ) -> Bool<'a> {
+        let mut file_lib = std::fs::File::create("lib.txt").expect("create failed");
+
         let mut exprs = Vec::with_capacity(self.library.components.len());
         let mut immediates = immediates;
         let mut params = params;
@@ -1171,11 +1231,13 @@ impl<'a> Synthesizer<'a> {
             let sz2 = DIMSIZE[1];
 
             for i in 0..sz1 {
-                let now_x = expression.vecs.select(&BV::from_i64(self.context, i as i64, bit_width)).as_array().unwrap();
-                let now_y = result.vecs.select(&BV::from_i64(self.context, i as i64, bit_width)).as_array().unwrap();
+                let now_x = expression.vecs.select(&Int::from_i64(self.context, i as i64)).as_array().unwrap();
+                let now_y = result.vecs.select(&Int::from_i64(self.context, i as i64)).as_array().unwrap();
                 for j in 0 .. sz2 {
-                    let x_value = now_x.select(&BV::from_i64(self.context, j as i64, bit_width)).as_bv().unwrap();
-                    let y_value = now_y.select(&BV::from_i64(self.context, j as i64, bit_width)).as_bv().unwrap();
+                    let x_value = now_x.select(&Int::from_i64(self.context, j as i64)).as_int().unwrap();
+                    let y_value = now_y.select(&Int::from_i64(self.context, j as i64)).as_int().unwrap();
+                    file_lib.write_all(x_value._eq(&y_value).to_string().clone().as_bytes()).expect("lib write failed");
+                    file_lib.write_all("\n\n\n".as_bytes()).expect("huan hang fu shibai");
 
                     exprs.push(x_value._eq(&y_value));
                 }
@@ -1186,7 +1248,7 @@ impl<'a> Synthesizer<'a> {
             // );
         }
 
-        //println!("exprs : {:?}", exprs);
+        //println!("{}", exprs.len());
         and(self.context, &exprs)
     }
 
@@ -1341,7 +1403,7 @@ impl<'a> Synthesizer<'a> {
     ) -> Result<Program> {
         debug!("synthesizing a program of length = {}", program_length);
 
-        let bit_width = BIT_WITH;
+        let bit_width = 64;
 
         //只有一组输入，所以也没有cegis的循环了
         let assignments = self.finite_synthesis(input, program_length - 1, bit_width)?;
@@ -1498,11 +1560,11 @@ impl Specification for Program {
         for i in 0..DIMSIZE[0] {
             //这里很可能会有问题
             //可能可以直接比较array?
-            let now_x = vars.vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
-            let now_y = output.vecs.select(&BV::from_i64(context, i as i64, bit_width)).as_array().unwrap();
+            let now_x = vars.vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            let now_y = output.vecs.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
             for j in 0..DIMSIZE[1] {
-                let x_value = now_x.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
-                let y_value = now_y.select(&BV::from_i64(context, j as i64, bit_width)).as_bv().unwrap();
+                let x_value = now_x.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
+                let y_value = now_y.select(&Int::from_i64(context, j as i64)).as_int().unwrap();
                 //let temp2 = x_value.unwrap()._eq(&y_value.unwrap());
                 let temp2 = x_value._eq(&y_value);
                 temp = z3::ast::Bool::<'_>::and(context, &[&temp, &temp2]);
