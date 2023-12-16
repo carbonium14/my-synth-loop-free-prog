@@ -41,13 +41,13 @@ fn main() {
         fn(&z3::Context, &Options) -> SynthResult<Program>,
     )> = benchmarks! { 
         test_add,
-        test_cast,
-        duplicate_test_add,
-        simple_cast,
-        simple_using_output_shape,
-        simple_using_output_shape_tuple,
-        simple_using_primitive_input,
-        google_10,
+        // test_cast,
+        // duplicate_test_add,
+        // //simple_cast,
+        // simple_using_output_shape,
+        // simple_using_output_shape_tuple,
+        // simple_using_primitive_input,
+        // google_10,
     };
 
     for (name, p) in problems {
