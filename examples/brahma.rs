@@ -41,12 +41,12 @@ fn main() {
         fn(&z3::Context, &Options) -> SynthResult<Program>,
     )> = benchmarks! { 
         test_add,
-        // test_cast,
-        // duplicate_test_add,
-        // //simple_cast,
+        test_cast,
+        duplicate_test_add,
+        simple_cast,
         // simple_using_output_shape,
         // simple_using_output_shape_tuple,
-        // simple_using_primitive_input,
+        simple_using_primitive_input,
         // google_10,
     };
 
@@ -237,43 +237,43 @@ fn simple_cast(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
 // }
 
 // simple_using_output_shape
-fn simple_using_output_shape(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
-    let library = Library::brahma_std();
-    let mut builder = ProgramBuilder::new();
+// fn simple_using_output_shape(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+//     let library = Library::brahma_std();
+//     let mut builder = ProgramBuilder::new();
 
-    let mut input1 : Vec<Vec<i64>> = Vec::new();   
-    input1.push(vec![7]);
+//     let mut input1 : Vec<Vec<i64>> = Vec::new();   
+//     input1.push(vec![7]);
 
-    let mut input2 : Vec<Vec<i64>> = Vec::new();   
-    input2.push(vec![5]);
+//     let mut input2 : Vec<Vec<i64>> = Vec::new();   
+//     input2.push(vec![5]);
 
-    let in1 = builder.var(input1);
-    let in2 = builder.var(input2);
+//     let in1 = builder.var(input1);
+//     let in2 = builder.var(input2);
 
-    let a = builder.tf_eye(in2, in2);
-    let _ = builder.tf_mul(in1, a);
+//     let a = builder.tf_eye(in2, in2);
+//     let _ = builder.tf_mul(in1, a);
 
-    let spec = builder.finish();
+//     let spec = builder.finish();
 
-    return synthesize(opts, context, &spec, &library); 
-}
+//     return synthesize(opts, context, &spec, &library); 
+// }
 
 //todo simple_using_output_shape_tuple 
-fn simple_using_output_shape_tuple(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+// fn simple_using_output_shape_tuple(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
 
-    let library = Library::brahma_std();
-    let mut builder = ProgramBuilder::new();
+//     let library = Library::brahma_std();
+//     let mut builder = ProgramBuilder::new();
      
-    let mut input1 : Vec<Vec<i64>> = Vec::new();   
-    input1.push(vec![2,3,4,5]);
+//     let mut input1 : Vec<Vec<i64>> = Vec::new();   
+//     input1.push(vec![2,3,4,5]);
 
-    let in1 = builder.var(input1);
+//     let in1 = builder.var(input1);
 
-    let _ = builder.tf_zeros(in1);
-    let spec = builder.finish();
+//     let _ = builder.tf_zeros(in1);
+//     let spec = builder.finish();
 
-    return synthesize(opts, context, &spec, &library); 
-}
+//     return synthesize(opts, context, &spec, &library); 
+// }
 
 //todo simple_using_boolean_constant tf.SparseTensor
 
@@ -329,24 +329,24 @@ fn simple_using_primitive_input(context: &z3::Context, opts: &Options) -> SynthR
 //todo google_09 tf.gather tf.argsort
 
 //google_10
-fn google_10(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
-    let library = Library::brahma_std();
-    let mut builder = ProgramBuilder::new();
+// fn google_10(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+//     let library = Library::brahma_std();
+//     let mut builder = ProgramBuilder::new();
 
-    let mut input1 : Vec<Vec<i64>> = Vec::new();
-    input1.push(vec![10, 20, 0, 40, 0, 30]);
+//     let mut input1 : Vec<Vec<i64>> = Vec::new();
+//     input1.push(vec![10, 20, 0, 40, 0, 30]);
 
  
-    let mut input2 : Vec<Vec<i64>> = Vec::new();
-    input2.push(vec![1, 1, 0, 1, 0, 1]);
+//     let mut input2 : Vec<Vec<i64>> = Vec::new();
+//     input2.push(vec![1, 1, 0, 1, 0, 1]);
 
-    let in1 = builder.var(input1);
-    let in2 = builder.var(input2);
-    let _ = builder.tf_boolean_mask(in1, in2);
-    let spec = builder.finish();
+//     let in1 = builder.var(input1);
+//     let in2 = builder.var(input2);
+//     let _ = builder.tf_boolean_mask(in1, in2);
+//     let spec = builder.finish();
 
-    synthesize(opts, context, &spec, &library)
-}
+//     synthesize(opts, context, &spec, &library)
+// }
 
 //todo google_11 tf.reduce_sum tf.cast
 

@@ -18,14 +18,12 @@ pub use operator::Operator;
 
 use std::collections::{HashMap, HashSet};
 use std::fmt::{self, Display};
-use std::fs::File;
 use std::iter::FromIterator;
 use std::ops::Range;
 use std::time;
-use std::io::Write;
-use z3::ast::{Ast, Bool, Float, Int};
+use z3::ast::{Ast, Bool, Int};
 
-const FULL_BIT_WIDTH: u32 = 32;
+const _FULL_BIT_WIDTH: u32 = 32;
 
 const DIMS : [usize; 2] = [4, 10];
 
@@ -47,7 +45,7 @@ where
     &(z3::ast::Bool::<'a>::and(&context, &exprs))]);
 }
 
-fn or<'a, 'b>(context: &'a z3::Context, exprs: impl IntoIterator<Item = &'b Bool<'a>>) -> Bool<'a>
+fn _or<'a, 'b>(context: &'a z3::Context, exprs: impl IntoIterator<Item = &'b Bool<'a>>) -> Bool<'a>
 where
     'a: 'b,
 {
@@ -68,7 +66,7 @@ pub struct Vecs<T>{
 
 impl<T> Vecs<T>{
     pub fn new(dims: [T ; 2]) -> Self {
-        let sz = dims.len();
+        let _sz = dims.len();
         let mut vecs : Vec<Vec<T>> = Vec::new();
         for _ in 0 .. DIMS[0] {
             let temp : Vec<T> = Vec::new();
@@ -79,12 +77,12 @@ impl<T> Vecs<T>{
 }
 
 //TODO: 动态维度，不过目前只能实现二维
-fn fresh_immediate(context: &z3::Context, bit_width: u32, dims:[usize; 2] ) ->  Vecs<Int<'_>> {
+fn fresh_immediate(context: &z3::Context, _bit_width: u32, dims:[usize; 2] ) ->  Vecs<Int<'_>> {
     let mut result: Vecs<Int<'_>> = Vecs::new([Int::from_i64(&context, dims[0] as i64), Int::from_i64(&context, dims[1] as i64)]);
     let x = dims[0];
     let y = dims[1];
     for i in 0 .. x {
-        for j in 0 .. y {
+        for _j in 0 .. y {
             result.vecs[i].push(Int::fresh_const(context, "immediate"));
         }
     }
@@ -92,12 +90,12 @@ fn fresh_immediate(context: &z3::Context, bit_width: u32, dims:[usize; 2] ) ->  
 }
 
 //TODO: 动态维度，不过目前只能实现二维
-fn fresh_param(context: &z3::Context, bit_width: u32, dims: [usize ; 2]) ->  Vecs<Int<'_>> {
+fn fresh_param(context: &z3::Context, _bit_width: u32, dims: [usize ; 2]) ->  Vecs<Int<'_>> {
     let mut result = Vecs::new([Int::from_i64(&context, dims[0] as i64), Int::from_i64(&context, dims[1] as i64)]);
     let x = dims[0];
     let y = dims[1];
     for i in 0 .. x {
-        for j in 0 .. y {
+        for _j in 0 .. y {
             result.vecs[i].push(Int::fresh_const(context, "param"));
         }
     }
@@ -105,12 +103,12 @@ fn fresh_param(context: &z3::Context, bit_width: u32, dims: [usize ; 2]) ->  Vec
 }
 
 //TODO: 动态维度，不过目前只能实现二维
-fn fresh_result(context: &z3::Context, bit_width: u32, dims: [usize ; 2]) ->  Vecs<Int<'_>> {
+fn fresh_result(context: &z3::Context, _bit_width: u32, dims: [usize ; 2]) ->  Vecs<Int<'_>> {
     let mut result = Vecs::new([Int::from_i64(&context, dims[0] as i64), Int::from_i64(&context, dims[1] as i64)]);
     let x = dims[0];
     let y = dims[1];
     for i in 0 .. x {
-        for j in 0 .. y {
+        for _j in 0 .. y {
             result.vecs[i].push(Int::fresh_const(context, "result"));
         }
     }
@@ -118,12 +116,12 @@ fn fresh_result(context: &z3::Context, bit_width: u32, dims: [usize ; 2]) ->  Ve
 }
 
 //TODO: 动态维度，不过目前只能实现二维
-fn fresh_input(context: &z3::Context, bit_width: u32, dims: [usize ; 2]) ->  Vecs<Int<'_>> {
+fn _fresh_input(context: &z3::Context, _bit_width: u32, dims: [usize ; 2]) ->  Vecs<Int<'_>> {
     let mut result = Vecs::new([Int::from_i64(&context, dims[0] as i64), Int::from_i64(&context, dims[1] as i64)]);
     let x = dims[0];
     let y = dims[1];
     for i in 0 .. x {
-        for j in 0 .. y {
+        for _j in 0 .. y {
             result.vecs[i].push(Int::fresh_const(context, "input"));
         }
     }
@@ -131,12 +129,12 @@ fn fresh_input(context: &z3::Context, bit_width: u32, dims: [usize ; 2]) ->  Vec
 }
 
 //TODO: 动态维度，不过目前只能实现二维
-fn fresh_output(context: &z3::Context, bit_width: u32, dims: [usize ; 2]) ->  Vecs<Int<'_>> {
+fn fresh_output(context: &z3::Context, _bit_width: u32, dims: [usize ; 2]) ->  Vecs<Int<'_>> {
     let mut result = Vecs::new([Int::from_i64(&context, dims[0] as i64), Int::from_i64(&context, dims[1] as i64)]);
     let x = dims[0];
     let y = dims[1];
     for i in 0 .. x {
-        for j in 0 .. y {
+        for _j in 0 .. y {
             result.vecs[i].push(Int::fresh_const(context, "output"));
         }
     }
@@ -168,8 +166,7 @@ fn eval_bitvecs<'a, I>(model: &'a z3::Model, bvs:I) -> Vec<Vecs<i64>>
 where
     I: IntoIterator<Item = &'a Vecs< Int<'a>>>,
 {
-    let mut result : Vec<Vecs<i64>> = Vec::new();
-
+    let result : Vec<Vecs<i64>> = Vec::new();
     for v in bvs.into_iter() {
         let size_x = v.dims[0].as_i64().unwrap();
         let size_y = v.dims[1].as_i64().unwrap();
@@ -350,29 +347,13 @@ impl Library {
                 // component::le_u(),
                 // // 12.
                 // component::xor(),
-                // component::tf_abs(),
                 component::tf_add(),
-                // component::tf_mul(),
-                // component::tf_div(),
-                // component::tf_boolean_mask(),
-                // component::tf_clip_by_value(),
-                // component::tf_equal(),
-                // component::tf_fill(),
-                // component::tf_greater(),
-                // component::tf_greater_equal(),
-                // component::tf_not_equal(),
-                // component::tf_negative(),
-                // component::tf_reciprocal(),
-                // component::tf_cast(),
-                // component::tf_argmax(),
-                // component::tf_argmin(),
-                // component::tf_count_nonzero(),
-                // component::tf_cumsum(),
-                // component::tf_maximum(),
-                // component::tf_minimum(),
-                // component::tf_reverse(),
-                // component::tf_sign(),
-                // component::tf_square(),
+                component::tf_cast(),
+                component::tf_constant(),
+                component::tf_equal(),
+                component::tf_multiply(),
+                component::tf_square(),
+                component::tf_subtract(),
             ],
         }
     }
@@ -440,7 +421,7 @@ impl<'a> LocationVars<'a> {
         }
     }
 
-    fn fresh_line(context: &'a z3::Context, name: &str, line_bit_width: u32) -> Line<'a> {
+    fn fresh_line(context: &'a z3::Context, name: &str, _line_bit_width: u32) -> Line<'a> {
         Int::fresh_const(context, name)
     }
 
@@ -649,7 +630,7 @@ impl Display for Program {
     }
 }
 
-enum Verification {
+enum _Verification {
     WorksForAllInputs,
     Counterexample(Vec<Vecs<u64>>),
 }
@@ -793,7 +774,7 @@ impl<'a> Synthesizer<'a> {
             .collect()
     }
 
-    fn add_invalid_assignment(&mut self, assignments: &Assignments) {
+    fn _add_invalid_assignment(&mut self, assignments: &Assignments) {
         // TODO: like souper, we should have multiple cases here for if we're
         // trying to synthesize any constants or not. When we're synthesizing
         // constants, allow reusing the same location assignments N times with
@@ -881,7 +862,7 @@ impl<'a> Synthesizer<'a> {
                     temp.vecs[i].push(Int::from_i64(self.context, v[i][j] as i64));
                 }
             }
-            //println!("{:?}", temp);
+            // println!("{:?}", temp);
             inputs.push(temp);
         }
             
@@ -895,13 +876,9 @@ impl<'a> Synthesizer<'a> {
             
         //i[0] ?
         let output = fresh_output(self.context, bit_width, dims);
-
-        let mut file_lib = std::fs::File::create("lib.txt").expect("create failed");
         ////用library中components按顺序构造出语句
         let lib = self.library(&immediates, &params, &results, bit_width);
         //println!("lib : {}", lib);
-        //55555
-        file_lib.write_all(lib.to_string().as_bytes()).expect("write failed");
         works_for_inputs.push(lib);
 
         //建立行数和值之间的关系
@@ -1301,7 +1278,7 @@ impl<'a> Synthesizer<'a> {
     ) -> Result<Program> {
         debug!("synthesizing a program of length = {}", program_length);
 
-        let mut bit_width = 64;
+        let bit_width = 64;
 
         //只有一组输入，所以也没有cegis的循环了
         let assignments = self.finite_synthesis(input, program_length - 1, bit_width)?;
@@ -1347,7 +1324,7 @@ impl Program {
         context: &'a z3::Context,
         spec: &impl Specification,
         library: &Library,
-        arr_dims : Vec<usize>
+        _arr_dims : Vec<usize>
     ) -> Result<Program> {
         let mut synthesizer = Synthesizer::new(context, library, spec)?;
         synthesizer.synthesize()
