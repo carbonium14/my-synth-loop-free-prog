@@ -348,12 +348,23 @@ impl Library {
                 // // 12.
                 // component::xor(),
                 component::tf_add(),
+                component::tf_argmax(),
                 component::tf_cast(),
                 component::tf_constant(),
+                // component::tf_divide(),
                 component::tf_equal(),
+                component::tf_greater(),
                 component::tf_multiply(),
                 component::tf_square(),
                 component::tf_subtract(),
+
+                component::tf_eye(),
+                component::tf_fill(),
+                component::tf_maximum(),
+                component::tf_minimum(),
+                component::tf_not_equal(),
+                component::tf_ones(),
+                component::tf_zeros(),
             ],
         }
     }
@@ -835,7 +846,7 @@ impl<'a> Synthesizer<'a> {
         // 控制dims大于所有可能的size
 
 
-        let dims = [4, 10];
+        let dims = DIMS;
 
         let immediates = self.fresh_immediates(bit_width, dims);
         
@@ -1118,8 +1129,7 @@ impl<'a> Synthesizer<'a> {
 
             let sz1 = DIMS[0];
             let sz2 = DIMS[1];
-
-            for i in 0..sz1 {
+            for i in 0 .. sz1 {
                 for j in 0 .. sz2 {
                     exprs.push(expression.vecs[i][j]._eq(&result.vecs[i][j]));
                 }

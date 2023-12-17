@@ -64,6 +64,15 @@ impl ProgramBuilder {
         result
     }
 
+    pub fn tf_argmax(&mut self, a: Id, b: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfArgmax(a, b),
+        });
+        result
+    }
+
     pub fn tf_cast(&mut self, a: Id) -> Id {
         let result = self.next_id();
         self.program.instructions.push(Instruction {
@@ -82,11 +91,29 @@ impl ProgramBuilder {
         result
     }
 
+    pub fn tf_divide(&mut self, a: Id, b: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfDivide(a, b),
+        });
+        result
+    }
+
     pub fn tf_equal(&mut self, a: Id, b: Id) -> Id {
         let result = self.next_id();
         self.program.instructions.push(Instruction {
             result,
             operator: Operator::TfEqual(a, b),
+        });
+        result
+    }
+
+    pub fn tf_greater(&mut self, a: Id, b: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfGreater(a, b),
         });
         result
     }
@@ -114,6 +141,70 @@ impl ProgramBuilder {
         self.program.instructions.push(Instruction {
             result,
             operator: Operator::TfSubtract(a, b),
+        });
+        result
+    }
+
+
+    pub fn tf_eye(&mut self, a: Id, b: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfEye(a, b),
+        });
+        result
+    }
+
+    pub fn tf_fill(&mut self, a: Id, b: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfFill(a, b),
+        });
+        result
+    }
+
+    pub fn tf_maximum(&mut self, a: Id, b: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfMaximum(a, b),
+        });
+        result
+    }
+
+    pub fn tf_minimum(&mut self, a: Id, b: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfMinimum(a, b),
+        });
+        result
+    }
+
+    pub fn tf_not_equal(&mut self, a: Id, b: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfNotEqual(a, b),
+        });
+        result
+    }
+
+    pub fn tf_ones(&mut self, a: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfOnes(a),
+        });
+        result
+    }
+
+    pub fn tf_zeros(&mut self, a: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfZeros(a),
         });
         result
     }
