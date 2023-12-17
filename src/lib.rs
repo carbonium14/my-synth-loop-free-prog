@@ -857,9 +857,18 @@ impl<'a> Synthesizer<'a> {
             let sy = v[0].len();
 
             let mut temp : Vecs<Int<'_>> = Vecs::new([Int::from_i64(&self.context, sx as i64), Int::from_i64(&self.context, sy as i64)]);
-            for i in 0..sx {
-                for j in 0..sy {
-                    temp.vecs[i].push(Int::from_i64(self.context, v[i][j] as i64));
+            for i in 0..DIMS[0] {
+                if i < sx {
+                    for j in 0..sy {
+                        temp.vecs[i].push(Int::from_i64(self.context, v[i][j] as i64));
+                    }
+                    for _j in sy .. DIMS[1] {
+                        temp.vecs[i].push(Int::from_i64(self.context, 0));
+                    }
+                } else {
+                    for _j in 0 .. DIMS[1] {
+                        temp.vecs[i].push(Int::from_i64(self.context, 0));
+                    }
                 }
             }
             // println!("{:?}", temp);
