@@ -64,11 +64,11 @@ impl ProgramBuilder {
         result
     }
 
-    pub fn tf_argmax(&mut self, a: Id, b: Id) -> Id {
+    pub fn tf_argmax(&mut self, a: Id) -> Id {
         let result = self.next_id();
         self.program.instructions.push(Instruction {
             result,
-            operator: Operator::TfArgmax(a, b),
+            operator: Operator::TfArgmax(a),
         });
         result
     }
@@ -109,11 +109,29 @@ impl ProgramBuilder {
         result
     }
 
+    pub fn tf_expand_dims(&mut self, a: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfExpandDims(a),
+        });
+        result
+    }
+
     pub fn tf_greater(&mut self, a: Id, b: Id) -> Id {
         let result = self.next_id();
         self.program.instructions.push(Instruction {
             result,
             operator: Operator::TfGreater(a, b),
+        });
+        result
+    }
+
+    pub fn tf_bincount(&mut self, a: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfBincount(a),
         });
         result
     }

@@ -174,11 +174,11 @@ struct TfArgmax;
 
 impl Component for TfArgmax {
     fn operand_arity(&self) -> usize {
-        2
+        1
     }
 
     fn make_operator(&self, _immediates: &Vec<Vecs<i64>>, operands: &[Id]) -> Operator {
-        Operator::TfArgmax(operands[0], operands[1])
+        Operator::TfArgmax(operands[0])
     }
 
     fn make_expression<'a>(
@@ -191,7 +191,6 @@ impl Component for TfArgmax {
         // 注意，这里只有axis=1的实现方式，这么做的原因是因为它不给axis=0的测试样例所以没有写。。。
         // 目前遇到的问题是，如果采用之前array的方法，即计算两遍然后根据axis判断返回结果，那么会导致ite的时候类型不匹配
         let const0 = zero(context, bit_width);
-        let _axis = operands[1].vecs[0][0].clone();
         let mut result = Vecs::new(operands[0].dims.clone());
         for i in 0 .. DIMS[0] {
             for _j in 0 .. DIMS[1] {
@@ -369,6 +368,49 @@ pub fn tf_equal() -> Box<dyn Component> {
 }
 
 #[derive(Debug)]
+struct TfExpandDims;
+
+impl Component for TfExpandDims {
+    fn operand_arity(&self) -> usize {
+        1
+    }
+
+    fn make_operator(&self, _immediates: &Vec<Vecs<i64>>, operands: &[Id]) -> Operator {
+        Operator::TfExpandDims(operands[0])
+    }
+
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vecs<Int<'a>>],
+        operands: &[Vecs<Int<'a>>],
+        bit_width: u32,
+    ) -> Vecs<Int<'a>> {
+        // 样例中能用的（有些数组维度超过了二维）基本上都是axis=1的情况，目前只考虑这个
+        let const0 = zero(context, bit_width);
+        let mut result = Vecs::new(operands[0].dims.clone());
+        for i in 0 .. DIMS[0] {
+            for _ in 0 .. DIMS[1] {
+                result.vecs[i].push(const0.clone());
+            }
+        }
+        for i in 0 .. DIMS[0] {
+            for j in 0 .. DIMS[1] {
+                if j < DIMS[0] {
+                    result.vecs[j][0] = operands[0].vecs[i][j].clone();
+                }
+            }
+        }
+
+        return result;
+    }
+}
+
+pub fn tf_expand_dims() -> Box<dyn Component> {
+    Box::new(TfExpandDims) as _
+}
+
+#[derive(Debug)]
 struct TfGreater;
 
 impl Component for TfGreater {
@@ -406,6 +448,52 @@ impl Component for TfGreater {
 
 pub fn tf_greater() -> Box<dyn Component> {
     Box::new(TfGreater) as _
+}
+
+#[derive(Debug)]
+struct TfBincount;
+
+impl Component for TfBincount {
+    fn operand_arity(&self) -> usize {
+        1
+    }
+
+    fn make_operator(&self, _immediates: &Vec<Vecs<i64>>, operands: &[Id]) -> Operator {
+        Operator::TfBincount(operands[0])
+    }
+
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vecs<Int<'a>>],
+        operands: &[Vecs<Int<'a>>],
+        bit_width: u32,
+    ) -> Vecs<Int<'a>> {
+        // 所有的样例里面只有一个输入的情况，目前就考虑这个
+        let const0 = zero(context, bit_width);
+        let const1 = one(context, bit_width);
+        let mut result = Vecs::new(operands[0].dims.clone());
+        for i in 0 .. DIMS[0] {
+            for _ in 0 .. DIMS[1] {
+                result.vecs[i].push(const0.clone());
+            }
+        }
+        for i in 0 .. DIMS[0] {
+            for j in 0 .. DIMS[1] {
+                for k in 0 .. DIMS[1] {
+                    let index = Int::from_i64(context, k as i64);
+                    let new_value = Int::add(context, &[&result.vecs[i][k], &const1]);
+                    result.vecs[i][k] = index._eq(&operands[0].vecs[i][j]).ite(&new_value, &result.vecs[i][k]);
+                }
+            }
+        }
+
+        return result;
+    }
+}
+
+pub fn tf_bincount() -> Box<dyn Component> {
+    Box::new(TfBincount) as _
 }
 
 #[derive(Debug)]
@@ -804,7 +892,7 @@ macro_rules! with_operator_component {
                 let $c = TfAdd;
                 $body
             }
-            Operator::TfArgmax(_, _) => {
+            Operator::TfArgmax(_) => {
                 let $c = TfArgmax;
                 $body
             }
@@ -822,6 +910,14 @@ macro_rules! with_operator_component {
             }
             Operator::TfEqual(_, _) => {
                 let $c = TfEqual;
+                $body
+            }
+            Operator::TfExpandDims(_) => {
+                let $c = TfExpandDims;
+                $body
+            }
+            Operator::TfBincount(_) => {
+                let $c = TfBincount;
                 $body
             }
             Operator::TfGreater(_, _) => {

@@ -11,12 +11,14 @@ pub enum Operator {
 
     // 我自己的操作符号
     TfAdd(Id, Id),
-    TfArgmax(Id, Id),
+    TfArgmax(Id),
     TfCast(Id),
     TfConstant(Id),
     TfDivide(Id, Id),
     TfEqual(Id, Id),
+    TfExpandDims(Id),
     TfGreater(Id, Id),
+    TfBincount(Id),
     TfMultiply(Id, Id),
     TfSquare(Id),
     TfSubtract(Id, Id),
@@ -35,15 +37,18 @@ impl Operator {
         match self {
             Operator::Var => 0,
             // | Operator::Const(_) => 0,
-            Operator::TfCast(_)
+
+            Operator::TfArgmax(_)
+            | Operator::TfCast(_)
             | Operator::TfConstant(_)
+            | Operator::TfExpandDims(_)
+            | Operator::TfBincount(_)
             | Operator::TfSquare(_)
 
             | Operator::TfOnes(_)
             | Operator::TfZeros(_)
             => 1,
             Operator::TfAdd(_, _)
-            | Operator::TfArgmax(_, _)
             | Operator::TfDivide(_, _)
             | Operator::TfEqual(_, _)
             | Operator::TfGreater(_, _)
@@ -70,8 +75,11 @@ impl Operator {
             Operator::Var 
             // | Operator::Const(_) 
             => {},
-            Operator::TfCast(a)
+            Operator::TfArgmax(a)
+            | Operator::TfCast(a)
             | Operator::TfConstant(a)
+            | Operator::TfExpandDims(a)
+            | Operator::TfBincount(a)
             | Operator::TfSquare(a)
 
             | Operator::TfOnes(a)
@@ -80,7 +88,6 @@ impl Operator {
                 f(a);
             },
             Operator::TfAdd(a, b)
-            | Operator::TfArgmax(a, b)
             | Operator::TfDivide(a, b)
             | Operator::TfEqual(a, b)
             | Operator::TfGreater(a, b)
@@ -105,8 +112,11 @@ impl Operator {
             Operator::Var 
             // | Operator::Const(_) 
             => {},
-            Operator::TfCast(a)
+            Operator::TfArgmax(a)
+            | Operator::TfCast(a)
             | Operator::TfConstant(a)
+            | Operator::TfExpandDims(a)
+            | Operator::TfBincount(a)
             | Operator::TfSquare(a)
 
             | Operator::TfOnes(a)
@@ -115,7 +125,6 @@ impl Operator {
                 f(a);
             },
             Operator::TfAdd(a, b)
-            | Operator::TfArgmax(a, b)
             | Operator::TfDivide(a, b)
             | Operator::TfEqual(a, b)
             | Operator::TfGreater(a, b)
@@ -141,12 +150,14 @@ impl Display for Operator {
             Operator::Var => write!(f, "var: vec"),
             //Operator::Const(c) => write!(f, "const: {:?}", c),
             Operator::TfAdd(a, b) => write!(f, "TfAdd: {}, {}", a, b),
-            Operator::TfArgmax(a, b) => write!(f, "TfArgmin: {}, {}", a, b),
+            Operator::TfArgmax(a) => write!(f, "TfArgmax: {}, axis = 1", a),
             Operator::TfCast(a) => write!(f, "TfCast: {}", a),
             Operator::TfConstant(a) => write!(f, "TfConstant: {}", a),
             Operator::TfDivide(a, b) => write!(f, "TfDivide: {}, {}", a, b),
             Operator::TfEqual(a, b) => write!(f, "TfEqual: {}, {}", a, b),
+            Operator::TfExpandDims(a) => write!(f, "TfExpandDims: {}, axis = 1", a),
             Operator::TfGreater(a, b) => write!(f, "TfGreater: {}, {}", a, b),
+            Operator::TfBincount(a) => write!(f, "TfBincount: {}", a),
             Operator::TfMultiply(a, b) => write!(f, "TfMultiply: {}, {}", a, b),
             Operator::TfSquare(a) => write!(f, "TfSquare: {}", a),
             Operator::TfSubtract(a, b) => write!(f, "TfSubtract: {}, {}", a, b),
