@@ -531,6 +531,90 @@ pub fn tf_multiply() -> Box<dyn Component> {
 }
 
 #[derive(Debug)]
+struct TfRange;
+
+impl Component for TfRange {
+    fn operand_arity(&self) -> usize {
+        2
+    }
+
+    fn make_operator(&self, _immediates: &Vec<Vecs<i64>>, operands: &[Id]) -> Operator {
+        Operator::TfRange(operands[0], operands[1])
+    }
+
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vecs<Int<'a>>],
+        operands: &[Vecs<Int<'a>>],
+        bit_width: u32,
+    ) -> Vecs<Int<'a>> {
+        // 所有样例只有两个参数，起始和结束，第三个参数delta按照1处理
+        let const0 = zero(context, bit_width);
+        let const1 = one(context, bit_width);
+        let mut result = Vecs::new(operands[0].dims.clone());
+        let start = operands[0].vecs[0][0].clone();
+        let limit = operands[1].vecs[0][0].clone();
+        let mut value = start.clone();
+        for i in 0 .. DIMS[0] {
+            for _j in 0 .. DIMS[1] {
+                result.vecs[i].push(const0.clone());
+            }
+        }
+        for j in 0 .. DIMS[1] {
+            result.vecs[0][j] = value.lt(&limit).ite(&value, &const0);
+            value = Int::add(context, &[&value, &const1]);
+        }
+
+        return result;
+    }
+}
+
+pub fn tf_range() -> Box<dyn Component> {
+    Box::new(TfRange) as _
+}
+
+#[derive(Debug)]
+struct TfSequenceMask;
+
+impl Component for TfSequenceMask {
+    fn operand_arity(&self) -> usize {
+        2
+    }
+
+    fn make_operator(&self, _immediates: &Vec<Vecs<i64>>, operands: &[Id]) -> Operator {
+        Operator::TfSequenceMask(operands[0])
+    }
+
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vecs<Int<'a>>],
+        operands: &[Vecs<Int<'a>>],
+        bit_width: u32,
+    ) -> Vecs<Int<'a>> {
+        let const0 = zero(context, bit_width);
+        let const1 = one(context, bit_width);
+        let mut result = Vecs::new(operands[0].dims.clone());
+        for i in 0 .. DIMS[0] {
+            for j in 0 .. DIMS[1] {
+                let row = Int::from_i64(context, i as i64);
+                let col = Int::from_i64(context, j as i64);
+                let is_in_row = row.lt(&operands[0].dims[0]);
+                let is_in_col = Bool::and(context, &[&col.lt(&operands[0].dims[1]), &col.lt(&operands[0].vecs[0][i])]);
+                result.vecs[i].push(Bool::and(context, &[&is_in_row, &is_in_col]).ite(&const1, &const0));
+            }
+        }
+
+        return result;
+    }
+}
+
+pub fn tf_sequence_mask() -> Box<dyn Component> {
+    Box::new(TfSequenceMask) as _
+}
+
+#[derive(Debug)]
 struct TfSquare;
 
 impl Component for TfSquare {
@@ -598,7 +682,89 @@ pub fn tf_subtract() -> Box<dyn Component> {
     Box::new(TfSubtract) as _
 }
 
+#[derive(Debug)]
+struct TfTensordot;
 
+impl Component for TfTensordot {
+    fn operand_arity(&self) -> usize {
+        2
+    }
+
+    fn make_operator(&self, _immediates: &Vec<Vecs<i64>>, operands: &[Id]) -> Operator {
+        Operator::TfTensordot(operands[0], operands[1])
+    }
+
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vecs<Int<'a>>],
+        operands: &[Vecs<Int<'a>>],
+        bit_width: u32,
+    ) -> Vecs<Int<'a>> {
+        // 第三个参数axes所有的测试样例里面都是1，其他形式的可以自己转换
+        let const0 = zero(context, bit_width);
+        let mut result = Vecs::new(operands[0].dims.clone());
+        for i in 0 .. DIMS[0] {
+            for _j in 0 .. DIMS[1] {
+                result.vecs[i].push(const0.clone());
+            }
+        }
+        for i in 0 .. DIMS[0] {
+            for j in 0 .. DIMS[0] {
+                for k in 0 .. DIMS[0] {
+                    let temp = Int::mul(context, &[&operands[0].vecs[i][k], &operands[1].vecs[k][j]]);
+                    result.vecs[i][j] = Int::add(context, &[&result.vecs[i][j], &temp]);
+                }
+            }
+        }
+
+        return result;
+    }
+}
+
+pub fn tf_tensordot() -> Box<dyn Component> {
+    Box::new(TfTensordot) as _
+}
+
+#[derive(Debug)]
+struct TfTranspose;
+
+impl Component for TfTranspose {
+    fn operand_arity(&self) -> usize {
+        1
+    }
+
+    fn make_operator(&self, _immediates: &Vec<Vecs<i64>>, operands: &[Id]) -> Operator {
+        Operator::TfTranspose(operands[0])
+    }
+
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vecs<Int<'a>>],
+        operands: &[Vecs<Int<'a>>],
+        bit_width: u32,
+    ) -> Vecs<Int<'a>> {
+        let const0 = zero(context, bit_width);
+        let mut result = Vecs::new(operands[0].dims.clone());
+        for i in 0 .. DIMS[0] {
+            for _j in 0 .. DIMS[1] {
+                result.vecs[i].push(const0.clone());
+            }
+        }
+        for i in 0 .. DIMS[0] {
+            for j in 0 .. DIMS[0] {
+                result.vecs[i][j] = operands[0].vecs[j][i].clone();
+            }
+        }
+
+        return result;
+    }
+}
+
+pub fn tf_transpose() -> Box<dyn Component> {
+    Box::new(TfTranspose) as _
+}
 
 #[derive(Debug)]
 struct TfEye;
@@ -683,6 +849,50 @@ impl Component for TfFill {
 
 pub fn tf_fill() -> Box<dyn Component> {
     Box::new(TfFill) as _
+}
+
+#[derive(Debug)]
+struct TfMatmul;
+
+impl Component for TfMatmul {
+    fn operand_arity(&self) -> usize {
+        2
+    }
+
+    fn make_operator(&self, _immediates: &Vec<Vecs<i64>>, operands: &[Id]) -> Operator {
+        Operator::TfMatmul(operands[0], operands[1])
+    }
+
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vecs<Int<'a>>],
+        operands: &[Vecs<Int<'a>>],
+        bit_width: u32,
+    ) -> Vecs<Int<'a>> {
+        // 所有的测试样例里面只有两个参数的形式
+        let const0 = zero(context, bit_width);
+        let mut result = Vecs::new(operands[0].dims.clone());
+        for i in 0 .. DIMS[0] {
+            for _j in 0 .. DIMS[1] {
+                result.vecs[i].push(const0.clone());
+            }
+        }
+        for i in 0 .. DIMS[0] {
+            for j in 0 .. DIMS[0] {
+                for k in 0 .. DIMS[0] {
+                    let temp = Int::mul(context, &[&operands[0].vecs[i][k], &operands[1].vecs[k][j]]);
+                    result.vecs[i][j] = Int::add(context, &[&result.vecs[i][j], &temp]);
+                }
+            }
+        }
+
+        return result;
+    }
+}
+
+pub fn tf_matmul() -> Box<dyn Component> {
+    Box::new(TfMatmul) as _
 }
 
 #[derive(Debug)]
@@ -928,12 +1138,28 @@ macro_rules! with_operator_component {
                 let $c = TfMultiply;
                 $body
             }
+            Operator::TfRange(_, _) => {
+                let $c = TfRange;
+                $body
+            }
+            Operator::TfSequenceMask(_) => {
+                let $c = TfSequenceMask;
+                $body
+            }
             Operator::TfSquare(_) => {
                 let $c = TfSquare;
                 $body
             }
             Operator::TfSubtract(_, _) => {
                 let $c = TfSubtract;
+                $body
+            }
+            Operator::TfTensordot(_, _) => {
+                let $c = TfTensordot;
+                $body
+            }
+            Operator::TfTranspose(_) => {
+                let $c = TfTranspose;
                 $body
             }
 
@@ -943,6 +1169,10 @@ macro_rules! with_operator_component {
             }
             Operator::TfFill(_, _) => {
                 let $c = TfFill;
+                $body
+            }
+            Operator::TfMatmul(_, _) => {
+                let $c = TfMatmul;
                 $body
             }
             Operator::TfMaximum(_, _) => {

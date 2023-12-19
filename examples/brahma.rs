@@ -31,12 +31,21 @@ fn main() {
             "simple_using_output_shape".to_string(),
             "simple_using_output_shape_tuple".to_string(),
             "simple_using_primitive_input".to_string(),
+            "google_08".to_string(),
+            "stackoverflow_01".to_string(),
             "stackoverflow_02".to_string(),
+            "stackoverflow_05".to_string(),
             "stackoverflow_06".to_string(),
             "stackoverflow_11".to_string(),
+            "stackoverflow_13".to_string(),
             "stackoverflow_15".to_string(),
             "stackoverflow_16".to_string(),
+            "stackoverflow_22".to_string(),
+            "stackoverflow_32".to_string(),
+            "stackoverflow_34".to_string(),
             "stackoverflow_35".to_string(),
+            "stackoverflow_36".to_string(),
+            "stackoverflow_37".to_string(),
             "stackoverflow_39".to_string(),
             "stackoverflow_48".to_string(),
         ];
@@ -64,12 +73,21 @@ fn main() {
         simple_using_output_shape,
         simple_using_output_shape_tuple,
         simple_using_primitive_input,
+        google_08,
+        stackoverflow_01,
         stackoverflow_02,
+        stackoverflow_05,
         stackoverflow_06,
         stackoverflow_11,
+        stackoverflow_13,
         stackoverflow_15,
         stackoverflow_16,
+        stackoverflow_22,
+        stackoverflow_32,
+        stackoverflow_34,
         stackoverflow_35,
+        stackoverflow_36,
+        stackoverflow_37,
         stackoverflow_39,
         stackoverflow_48,
     };
@@ -426,7 +444,7 @@ fn simple_using_primitive_input(context: &z3::Context, opts: &Options) -> SynthR
 
 //todo google_03 tf.sparse.slice
 
-//todo google_04 tf.reshape
+// google_04 无法实现，维度已经超过二维
 
 //todo google_05 tf.tile
 
@@ -434,7 +452,33 @@ fn simple_using_primitive_input(context: &z3::Context, opts: &Options) -> SynthR
 
 //todo google_07 tf.sequence_mask tf.cumsum
 
-//todo google_08 tf.range
+// google_08
+fn google_08(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+     
+    let mut input1 : Vec<Vec<i64>> = Vec::new();   
+    input1.push(vec![3, 4, 2, 1]);
+
+    let mut input2 : Vec<Vec<i64>> = Vec::new();   
+    input2.push(vec![0]);
+
+    let mut input3 : Vec<Vec<i64>> = Vec::new();   
+    input3.push(vec![5]);
+
+    let in1 = builder.var(input1);
+    let in2 = builder.var(input2);
+    let in3 = builder.var(input3);
+
+    let o1 = builder.tf_expand_dims(in1);
+    let o2 = builder.tf_range(in2, in3);
+    let o3 = builder.tf_greater(o1, o2);
+    let _ = builder.tf_cast(o3);
+    let spec = builder.finish();
+
+    return synthesize(opts, context, &spec, &library); 
+}
 
 //todo google_09 tf.gather tf.argsort
 
@@ -484,7 +528,25 @@ fn simple_using_primitive_input(context: &z3::Context, opts: &Options) -> SynthR
 
 // stackoverflow_benchmarks
 
-//todo stackoverflow_01 tf.transpose
+// stackoverflow_01
+// 原本的测试样例是矩阵翻转之后又复制了一遍，现在就不复制了，原本的小数改为整数
+fn stackoverflow_01(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+
+    let mut input1 : Vec<Vec<i64>> = Vec::new();
+    input1.push(vec![5, 2]);
+    input1.push(vec![1, 3]);
+    input1.push(vec![0, -1]);
+
+    let in1 = builder.var(input1);
+
+    let o1 = builder.tf_cast(in1);
+    let _ = builder.tf_transpose(o1);
+    let spec = builder.finish();
+
+    synthesize(opts, context, &spec, &library)
+}
 
 // stackoverflow_02
 fn stackoverflow_02(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
@@ -511,7 +573,29 @@ fn stackoverflow_02(context: &z3::Context, opts: &Options) -> SynthResult<Progra
 
 //todo stackoverflow_04 tf.gather_nd tf.stack
 
-//todo stackoverflow_05 tf.tensordot
+// stackoverflow_05
+// 原来的第二个输入需要按照列进行遍历，手动改为列遍历后的结果
+fn stackoverflow_05(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+
+    let mut input1 : Vec<Vec<i64>> = Vec::new();
+    input1.push(vec![4, 3, 1]);
+    input1.push(vec![6, 5, 2]);
+
+    let mut input2 : Vec<Vec<i64>> = Vec::new();
+    input2.push(vec![5, 5]);
+    input2.push(vec![1, 5]);
+    input2.push(vec![6, 0]);
+
+    let in1 = builder.var(input1);
+    let in2 = builder.var(input2);
+
+    let _ = builder.tf_tensordot(in1, in2);
+    let spec = builder.finish();
+
+    synthesize(opts, context, &spec, &library)
+}
 
 // stackoverflow_06
 // 我们的数组是4*10的，所以把3, 5, 0, 2, 3, 3, 0改成3, 5, 0, 2
@@ -538,7 +622,7 @@ fn stackoverflow_06(context: &z3::Context, opts: &Options) -> SynthResult<Progra
 
 //todo stackoverflow_09 tf.unique_with_counts
 
-//todo stackoverflow_10 tf.matmul
+// stackoverflow_10 无法实现，维度已经超过二维
 
 // stackoverflow_11
 // 我们的数组是4*10的，所以把4, 0, 1, 1, 0, 4, 0, 0, 3, 4, 1改成4, 0, 1, 1, 0, 4, 0, 0, 3, 4
@@ -559,7 +643,28 @@ fn stackoverflow_11(context: &z3::Context, opts: &Options) -> SynthResult<Progra
 
 //todo stackoverflow_12 tf.gather
 
-//todo stackoverflow_13 tf.tensordot
+// stackoverflow_13
+// 原本的输入维度高于二维，手动改为二维 [[[1, 0], [5, 4]], [[3, 10], [2, -2]]]改为[[1, 0], [5, 4]]
+fn stackoverflow_13(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+
+    let mut input1 : Vec<Vec<i64>> = Vec::new();
+    input1.push(vec![3, 5]);
+    input1.push(vec![10, 2]);
+
+    let mut input2 : Vec<Vec<i64>> = Vec::new();
+    input2.push(vec![1, 0]);
+    input2.push(vec![5, 4]);
+
+    let in1 = builder.var(input1);
+    let in2 = builder.var(input2);
+
+    let _ = builder.tf_tensordot(in1, in2);
+    let spec = builder.finish();
+
+    synthesize(opts, context, &spec, &library)
+}
 
 //todo stackoverflow_14 tf.reduce_any
 
@@ -611,7 +716,7 @@ fn stackoverflow_16(context: &z3::Context, opts: &Options) -> SynthResult<Progra
 
 //todo stackoverflow_17 tf.stack
 
-//todo stackoverflow_18 tf.matmul
+// stackoverflow_18 无法实现，维度已经超过二维
 
 //todo stackoverflow_19 tf.gather tf.argsort
 
@@ -619,7 +724,29 @@ fn stackoverflow_16(context: &z3::Context, opts: &Options) -> SynthResult<Progra
 
 //todo stackoverflow_21 tf.gather
 
-//todo stackoverflow_22 tf.tensordot
+// stackoverflow_22
+// 原本第二个输入是小数，手动改成整数
+fn stackoverflow_22(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+
+    let mut input1 : Vec<Vec<i64>> = Vec::new();
+    input1.push(vec![3, 1, 0]);
+
+    let mut input2 : Vec<Vec<i64>> = Vec::new();
+    input2.push(vec![6, 4]);
+    input2.push(vec![5, 10]);
+    input2.push(vec![3, 4]);
+
+    let in1 = builder.var(input1);
+    let in2 = builder.var(input2);
+
+    let o1 = builder.tf_cast(in1);
+    let _ = builder.tf_tensordot(o1, in2);
+    let spec = builder.finish();
+
+    synthesize(opts, context, &spec, &library)
+}
 
 //todo stackoverflow_23 tf.reduce_max tf.one_hot
 
@@ -639,11 +766,60 @@ fn stackoverflow_16(context: &z3::Context, opts: &Options) -> SynthResult<Progra
 
 //todo stackoverflow_31 tf.reduce_sum tf.sparse.to_dense
 
-//todo stackoverflow_32 tf.tensordot tf.range
+// stackoverflow_32
+// 由于tensordot第二个参数方向是纵轴方向，所以自己手动用expand_dims调整，由于是小数，调整为整数
+fn stackoverflow_32(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+
+    let mut input1 : Vec<Vec<i64>> = Vec::new();
+    input1.push(vec![1, 6, 2, 1]);
+    input1.push(vec![3, 1, 4, 2]);
+    input1.push(vec![2, 1, 2, 5]);
+
+    let mut input2 : Vec<Vec<i64>> = Vec::new();
+    input2.push(vec![0]);
+
+    let mut input3 : Vec<Vec<i64>> = Vec::new();
+    input3.push(vec![4]);
+
+    let in1 = builder.var(input1);
+    let in2 = builder.var(input2);
+    let in3 = builder.var(input3);
+
+    let o1 = builder.tf_range(in2, in3);
+    let o2 = builder.tf_cast(o1);
+    let o3 = builder.tf_expand_dims(o2);
+    let _ = builder.tf_tensordot(in1, o3);
+    let spec = builder.finish();
+
+    synthesize(opts, context, &spec, &library)
+}
 
 //todo stackoverflow_33 tf.reduce_min tf.reduce_sum
 
-//todo stackoverflow_34 tf.tensordot
+// stackoverflow_34
+// 原本第一个输入不是二维数组，手动选取二维数组，[[[1, 2], [3, 4]], [[5, 6], [7, 8]], [[10, 20], [30, 40]]]为[[1, 2]], [[5, 6]], [[10, 20]]
+fn stackoverflow_34(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+
+    let mut input1 : Vec<Vec<i64>> = Vec::new();
+    input1.push(vec![1, 2]);
+    input1.push(vec![5, 6]);
+    input1.push(vec![10, 20]);
+
+    let mut input2 : Vec<Vec<i64>> = Vec::new();
+    input2.push(vec![3, 5, 10]);
+
+    let in1 = builder.var(input1);
+    let in2 = builder.var(input2);
+
+    let _ = builder.tf_tensordot(in2, in1);
+    let spec = builder.finish();
+
+    synthesize(opts, context, &spec, &library)
+}
 
 // stackoverflow_35
 // 我们的数组是4*10的，所以把[[[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]], [[10., 20.], [30., 40.], [50., 60.]]], 
@@ -681,9 +857,59 @@ fn stackoverflow_35(context: &z3::Context, opts: &Options) -> SynthResult<Progra
     synthesize(opts, context, &spec, &library)
 }
 
-//todo stackoverflow_36 tf.range
+// stackoverflow_36
+fn stackoverflow_36(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
 
-//todo stackoverflow_37 tf.tensordot
+    let mut input1 : Vec<Vec<i64>> = Vec::new();
+    input1.push(vec![1, 0, 1, 1, 0, 1, 0, 1]);
+
+    let mut input2 : Vec<Vec<i64>> = Vec::new();
+    input2.push(vec![0]);
+
+    let mut input3 : Vec<Vec<i64>> = Vec::new();
+    input3.push(vec![8]);
+
+    let in1 = builder.var(input1);
+    let in2 = builder.var(input2);
+    let in3 = builder.var(input3);
+
+    let o1 = builder.tf_range(in2, in3);
+    let o2 = builder.tf_add(in1, o1);
+    let o3 = builder.tf_divide(in1, o2);
+    let _ = builder.tf_cast(o3);
+    let spec = builder.finish();
+
+    synthesize(opts, context, &spec, &library)
+}
+
+// stackoverflow_37
+// 第一个输入不是二维的，手动修改[[[[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], [[1.2, 3.4, 5.6], [7.8, 9.8, 7.6]]]],为[[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]，[1.2, 3.4, 5.6], [7.8, 9.8, 7.6]]
+// 输入是小数，手动修改为整数
+// 由于tensordot第二个参数方向是纵轴方向，所以自己手动用expand_dims调整，由于是小数，调整为整数
+fn stackoverflow_37(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+
+    let mut input1 : Vec<Vec<i64>> = Vec::new();
+    input1.push(vec![1, 2, 3]);
+    input1.push(vec![4, 5, 6]);
+    input1.push(vec![12, 34, 56]);
+    input1.push(vec![78, 98, 76]);
+
+    let mut input2 : Vec<Vec<i64>> = Vec::new();
+    input2.push(vec![5, 10, 20]);
+
+    let in1 = builder.var(input1);
+    let in2 = builder.var(input2);
+
+    let o1 = builder.tf_expand_dims(in2);
+    let _ = builder.tf_tensordot(in1, o1);
+    let spec = builder.finish();
+
+    synthesize(opts, context, &spec, &library)
+}
 
 //todo stackoverflow_38 tf.reduce_prod tf.reduce_max
 
@@ -748,6 +974,40 @@ fn stackoverflow_48(context: &z3::Context, opts: &Options) -> SynthResult<Progra
     synthesize(opts, context, &spec, &library)
 }
 
-//todo stackoverflow_49 tf.transpose
+//todo stackoverflow_49 无法实现，首先是形状不对，其次是无法同时用一个方法两次
 
 //todo stackoverflow_50 tf.one_hot
+
+// autopandas_benchmarks
+
+//todo autopandas1 tf.gather
+
+//todo autopandas2 数组下标取元素
+
+//todo autopandas3 tf.transpose tf.reshape
+
+//todo autopandas4 tf.boolean_mask
+
+//todo autopandas5 tf.gather tf.argsort
+
+//todo autopandas6 tf.reshape
+
+//todo autopandas7 tf.gather tf.argsort
+
+//todo autopandas8 tf.boolean_mask
+
+//todo autopandas9 tf.gather tf.argsort
+
+//todo autopandas10 tf.boolean_mask tf.math.logical_not tf.math.is_nan
+
+//todo autopandas11 tf.concat tf.range tf.transpose
+
+//todo autopandas12 tf.reduce_sum
+
+//todo autopandas13 tf.boolean_mask tf.reduce_any
+
+//todo autopandas14 tf.concat
+
+//todo autopandas15 tf.cumsum
+
+//todo autopandas16 tf.reduce_mean

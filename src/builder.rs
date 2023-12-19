@@ -145,6 +145,24 @@ impl ProgramBuilder {
         result
     }
 
+    pub fn tf_range(&mut self, a: Id, b: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfRange(a, b),
+        });
+        result
+    }
+
+    pub fn tf_sequence_mask(&mut self, a: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfSequenceMask(a),
+        });
+        result
+    }
+
     pub fn tf_square(&mut self, a: Id) -> Id {
         let result = self.next_id();
         self.program.instructions.push(Instruction {
@@ -159,6 +177,24 @@ impl ProgramBuilder {
         self.program.instructions.push(Instruction {
             result,
             operator: Operator::TfSubtract(a, b),
+        });
+        result
+    }
+
+    pub fn tf_tensordot(&mut self, a: Id, b: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfTensordot(a, b),
+        });
+        result
+    }
+
+    pub fn tf_transpose(&mut self, a: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfTranspose(a),
         });
         result
     }
@@ -178,6 +214,15 @@ impl ProgramBuilder {
         self.program.instructions.push(Instruction {
             result,
             operator: Operator::TfFill(a, b),
+        });
+        result
+    }
+
+    pub fn tf_matmul(&mut self, a: Id, b: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfMatmul(a, b),
         });
         result
     }

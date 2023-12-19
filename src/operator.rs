@@ -20,11 +20,16 @@ pub enum Operator {
     TfGreater(Id, Id),
     TfBincount(Id),
     TfMultiply(Id, Id),
+    TfRange(Id, Id),
+    TfSequenceMask(Id),
     TfSquare(Id),
     TfSubtract(Id, Id),
+    TfTensordot(Id, Id),
+    TfTranspose(Id),
 
     TfEye(Id, Id),
     TfFill(Id, Id),
+    TfMatmul(Id, Id),
     TfMaximum(Id, Id),
     TfMinimum(Id, Id),
     TfNotEqual(Id, Id),
@@ -43,7 +48,9 @@ impl Operator {
             | Operator::TfConstant(_)
             | Operator::TfExpandDims(_)
             | Operator::TfBincount(_)
+            | Operator::TfSequenceMask(_)
             | Operator::TfSquare(_)
+            | Operator::TfTranspose(_)
 
             | Operator::TfOnes(_)
             | Operator::TfZeros(_)
@@ -53,10 +60,13 @@ impl Operator {
             | Operator::TfEqual(_, _)
             | Operator::TfGreater(_, _)
             | Operator::TfMultiply(_, _)
+            | Operator::TfRange(_, _)
             | Operator::TfSubtract(_, _)
+            | Operator::TfTensordot(_, _)
 
             | Operator::TfEye(_, _)
             | Operator::TfFill(_, _)
+            | Operator::TfMatmul(_, _)
             | Operator::TfMaximum(_, _)
             | Operator::TfMinimum(_, _)
             | Operator::TfNotEqual(_, _)
@@ -80,7 +90,9 @@ impl Operator {
             | Operator::TfConstant(a)
             | Operator::TfExpandDims(a)
             | Operator::TfBincount(a)
+            | Operator::TfSequenceMask(a)
             | Operator::TfSquare(a)
+            | Operator::TfTranspose(a)
 
             | Operator::TfOnes(a)
             | Operator::TfZeros(a)
@@ -92,10 +104,13 @@ impl Operator {
             | Operator::TfEqual(a, b)
             | Operator::TfGreater(a, b)
             | Operator::TfMultiply(a, b)
+            | Operator::TfRange(a, b)
             | Operator::TfSubtract(a, b)
+            | Operator::TfTensordot(a, b)
 
             | Operator::TfEye(a, b)
             | Operator::TfFill(a, b)
+            | Operator::TfMatmul(a, b)
             | Operator::TfMaximum(a, b)
             | Operator::TfMinimum(a, b)
             | Operator::TfNotEqual(a, b)
@@ -117,7 +132,9 @@ impl Operator {
             | Operator::TfConstant(a)
             | Operator::TfExpandDims(a)
             | Operator::TfBincount(a)
+            | Operator::TfSequenceMask(a)
             | Operator::TfSquare(a)
+            | Operator::TfTranspose(a)
 
             | Operator::TfOnes(a)
             | Operator::TfZeros(a)
@@ -129,10 +146,13 @@ impl Operator {
             | Operator::TfEqual(a, b)
             | Operator::TfGreater(a, b)
             | Operator::TfMultiply(a, b)
+            | Operator::TfRange(a, b)
             | Operator::TfSubtract(a, b)
+            | Operator::TfTensordot(a, b)
 
             | Operator::TfEye(a, b)
             | Operator::TfFill(a, b)
+            | Operator::TfMatmul(a, b)
             | Operator::TfMaximum(a, b)
             | Operator::TfMinimum(a, b)
             | Operator::TfNotEqual(a, b)
@@ -159,11 +179,16 @@ impl Display for Operator {
             Operator::TfGreater(a, b) => write!(f, "TfGreater: {}, {}", a, b),
             Operator::TfBincount(a) => write!(f, "TfBincount: {}", a),
             Operator::TfMultiply(a, b) => write!(f, "TfMultiply: {}, {}", a, b),
+            Operator::TfRange(a, b) => write!(f, "TfRange: {}, {}", a, b),
+            Operator::TfSequenceMask(a) => write!(f, "TfSequenceMask: {}", a),
             Operator::TfSquare(a) => write!(f, "TfSquare: {}", a),
             Operator::TfSubtract(a, b) => write!(f, "TfSubtract: {}, {}", a, b),
+            Operator::TfTensordot(a, b) => write!(f, "TfTensordot: {}, {}", a, b),
+            Operator::TfTranspose(a) => write!(f, "TfTranspose: {}", a),
 
             Operator::TfEye(a, b) => write!(f, "TfEye: {}, {}", a, b),
             Operator::TfFill(a, b) => write!(f, "TfFill: {}, {}", a, b),
+            Operator::TfMatmul(a, b) => write!(f, "TfMatmul: {}, {}", a, b),
             Operator::TfMaximum(a, b) => write!(f, "TfMaximum: {}, {}", a, b),
             Operator::TfMinimum(a, b) => write!(f, "TfMinimum: {}, {}", a, b),
             Operator::TfNotEqual(a, b) => write!(f, "TfNotEqual: {}, {}", a, b),
