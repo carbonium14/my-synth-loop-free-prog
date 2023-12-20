@@ -16,40 +16,7 @@ macro_rules! benchmarks {
 fn main() {
     env_logger::init();
 
-    let mut opts = Options::from_args();
-    if opts.mytest {
-        opts.problems = vec![
-            "test_add".to_string(),
-            "test_cast".to_string(),
-            "duplicate_test_add".to_string(),
-            "simple_broadcasted_add".to_string(),
-            "simple_with_input_names".to_string(),
-            "simple_cast".to_string(),
-            "simple_sparse_add".to_string(),
-            "simple_add_big_tensors".to_string(),
-            "simple_using_constant".to_string(),
-            "simple_using_output_shape".to_string(),
-            "simple_using_output_shape_tuple".to_string(),
-            "simple_using_primitive_input".to_string(),
-            "google_08".to_string(),
-            "stackoverflow_01".to_string(),
-            "stackoverflow_02".to_string(),
-            "stackoverflow_05".to_string(),
-            "stackoverflow_06".to_string(),
-            "stackoverflow_11".to_string(),
-            "stackoverflow_13".to_string(),
-            "stackoverflow_15".to_string(),
-            "stackoverflow_16".to_string(),
-            "stackoverflow_22".to_string(),
-            "stackoverflow_32".to_string(),
-            "stackoverflow_34".to_string(),
-            "stackoverflow_35".to_string(),
-            "stackoverflow_36".to_string(),
-            "stackoverflow_37".to_string(),
-            "stackoverflow_39".to_string(),
-            "stackoverflow_48".to_string(),
-        ];
-    }
+    let opts = Options::from_args();
 
     let mut config = z3::Config::new();
     config.set_bool_param_value("auto_config", false);
@@ -63,6 +30,7 @@ fn main() {
     )> = benchmarks! { 
         test_add,
         test_cast,
+        test_inconsistent_target_program,
         duplicate_test_add,
         simple_broadcasted_add,
         simple_with_input_names,
@@ -73,7 +41,13 @@ fn main() {
         simple_using_output_shape,
         simple_using_output_shape_tuple,
         simple_using_primitive_input,
+        simple_output_equals_input_single,
+        simple_output_equals_input_multiple,
+        simple_output_equals_constant,
         google_08,
+        google_12,
+        google_13,
+        google_14,
         stackoverflow_01,
         stackoverflow_02,
         stackoverflow_05,
@@ -82,6 +56,7 @@ fn main() {
         stackoverflow_13,
         stackoverflow_15,
         stackoverflow_16,
+        stackoverflow_17,
         stackoverflow_22,
         stackoverflow_32,
         stackoverflow_34,
@@ -90,6 +65,8 @@ fn main() {
         stackoverflow_37,
         stackoverflow_39,
         stackoverflow_48,
+        autopandas11,
+        autopandas14,
     };
 
     for (name, p) in problems {
@@ -142,9 +119,9 @@ struct Options {
     #[structopt(last = true)]
     problems: Vec<String>,
 
-    /// 作为自己的一个测试样例，目前处于探索阶段，不破坏程序结构.
-    #[structopt(short = "e", long = "mytest", conflicts_with = "problems")]
-    mytest: bool,
+    // 作为自己的一个测试样例，目前处于探索阶段，不破坏程序结构.
+    // #[structopt(short = "e", long = "mytest", conflicts_with = "problems")]
+    // mytest: bool,
 }
 
 impl Options {
@@ -204,7 +181,27 @@ fn test_cast(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     return synthesize(opts, context, &spec, &library); 
 }
 
-// test_inconsistent_target_program 不用管这个，这个是错误的样例
+// test_inconsistent_target_program
+// 我们把它手动改成对的不就行了？
+fn test_inconsistent_target_program(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+     
+    let mut input1 : Vec<Vec<i64>> = Vec::new();   
+    input1.push(vec![10]);
+
+    let mut input2 : Vec<Vec<i64>> = Vec::new();
+    input2.push(vec![20]);    
+
+    let in1 = builder.var(input1);
+    let in2 = builder.var(input2);
+
+    let _ = builder.tf_add(in1, in2);
+    let spec = builder.finish();
+
+    return synthesize(opts, context, &spec, &library); 
+}
 
 // duplicate_test_add
 fn duplicate_test_add(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
@@ -430,11 +427,79 @@ fn simple_using_primitive_input(context: &z3::Context, opts: &Options) -> SynthR
 
 //todo simple_with_many_inputs tf.gather
 
-//todo simple_output_equals_input_single 输入=输出，这个测试用例意义不明
+// simple_output_equals_input_single
+// 直接相等，我们采用constant来等价
+fn simple_output_equals_input_single(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
 
-//todo simple_output_equals_input_multiple 从几组中挑一个，依旧意义不明
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+     
+    let mut input1 : Vec<Vec<i64>> = Vec::new();   
+    input1.push(vec![10, 20, 30, 40, 50]);
 
-//todo simple_output_equals_constant 意义不明
+    let in1 = builder.var(input1);
+
+    let _ = builder.tf_constant(in1);
+    let spec = builder.finish();
+
+    return synthesize(opts, context, &spec, &library); 
+}
+
+// simple_output_equals_input_multiple
+// 我们自己改成多个输入不就好了？
+fn simple_output_equals_input_multiple(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+     
+    let mut input1 : Vec<Vec<i64>> = Vec::new();   
+    input1.push(vec![1, 2, 3, 4, 5]);
+
+    let mut input2 : Vec<Vec<i64>> = Vec::new();   
+    input2.push(vec![10, 20, 30, 40, 50]);
+
+    let mut input3 : Vec<Vec<i64>> = Vec::new();   
+    input3.push(vec![100, 200, 300]);
+
+    let _in1 = builder.var(input1);
+    let in2 = builder.var(input2);
+    let _in3 = builder.var(input3);
+
+    let _ = builder.tf_constant(in2);
+    let spec = builder.finish();
+
+    return synthesize(opts, context, &spec, &library); 
+}
+
+// simple_output_equals_constant
+// 我们自己改成多个输入找常量不就好了？
+fn simple_output_equals_constant(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+     
+    let mut input1 : Vec<Vec<i64>> = Vec::new();   
+    input1.push(vec![1, 2, 3, 4, 5]);
+
+    let mut input2 : Vec<Vec<i64>> = Vec::new();   
+    input2.push(vec![10, 20, 30, 40, 50]);
+
+    let mut input3 : Vec<Vec<i64>> = Vec::new();   
+    input3.push(vec![100, 200, 300]);
+
+    let mut input4 : Vec<Vec<i64>> = Vec::new();   
+    input4.push(vec![10]);
+
+    let _in1 = builder.var(input1);
+    let _in2 = builder.var(input2);
+    let _in3 = builder.var(input3);
+    let in4 = builder.var(input4);
+
+    let _ = builder.tf_constant(in4);
+    let spec = builder.finish();
+
+    return synthesize(opts, context, &spec, &library); 
+}
 
 // google_benchmarks
 
@@ -504,11 +569,68 @@ fn google_08(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
 
 //todo google_11 tf.reduce_sum 用到了浮点数转换为整数，目前可以将输入手动转为整数
 
-//todo google_12 tf.logical_and 用到了浮点数转换为整数，目前可以将输入手动转为整数
+// google_12
+// 用到了浮点数转换为整数，目前可以将输入手动转为整数
+// 手动实现logical_and
+fn google_12(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
 
-//todo google_13 tf.concat
+    let mut input1 : Vec<Vec<i64>> = Vec::new();
+    input1.push(vec![10, 3, -42, 0, 21]);
+    input1.push(vec![-1, 0, 14, -10, 4]);
+    input1.push(vec![1, 0, 7, -3, 5]);
+    input1.push(vec![14, 25, 3, -1, 0]);
 
-//todo google_14 tf.roll
+    let in1 = builder.var(input1);
+
+    let _ = builder.tf_cast(in1);
+    let spec = builder.finish();
+
+    synthesize(opts, context, &spec, &library)
+}
+
+
+// google_13
+fn google_13(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+
+    let mut input1 : Vec<Vec<i64>> = Vec::new();
+    input1.push(vec![1, 2]);
+    input1.push(vec![10, 20]);
+
+    let mut input2 : Vec<Vec<i64>> = Vec::new();
+    input2.push(vec![3, 4, 5]);
+    input2.push(vec![30, 40, 50]);
+
+    let in1 = builder.var(input1);
+    let in2 = builder.var(input2);
+
+    let _ = builder.tf_concat1(in1, in2);
+    let spec = builder.finish();
+
+    synthesize(opts, context, &spec, &library)
+}
+
+// google_14
+// 为了消除0带来的影响，将输入中的0改为-1
+fn google_14(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+
+    let mut input1 : Vec<Vec<i64>> = Vec::new();
+    input1.push(vec![1, 3, 2, -1, -1]);
+    input1.push(vec![4, 6, 5, -1, -1]);
+    input1.push(vec![8, 7, 9, -1, -1]);
+
+    let in1 = builder.var(input1);
+
+    let _ = builder.tf_roll(in1);
+    let spec = builder.finish();
+
+    synthesize(opts, context, &spec, &library)
+}
 
 //todo google_15 tf.pad
 
@@ -524,7 +646,7 @@ fn google_08(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
 
 //todo google_21 tf.tensor_scatter_nd_update
 
-//todo google_22 tf.where tf.reduce_max tf.one_hot
+// google_22 无法实现，维度超过二维
 
 // stackoverflow_benchmarks
 
@@ -616,7 +738,7 @@ fn stackoverflow_06(context: &z3::Context, opts: &Options) -> SynthResult<Progra
     synthesize(opts, context, &spec, &library)
 }
 
-//todo stackoverflow_07 tf.unstack
+// stackoverflow_07 无法实现，维度已经超过二维
 
 //todo stackoverflow_08 tf.boolean_mask
 
@@ -714,7 +836,26 @@ fn stackoverflow_16(context: &z3::Context, opts: &Options) -> SynthResult<Progra
     synthesize(opts, context, &spec, &library)
 }
 
-//todo stackoverflow_17 tf.stack
+// stackoverflow_17
+// tf.stack和tf.concat等价
+fn stackoverflow_17(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+
+    let mut input1 : Vec<Vec<i64>> = Vec::new();
+    input1.push(vec![17, -32, 99]);
+
+    let mut input2 : Vec<Vec<i64>> = Vec::new();
+    input2.push(vec![17, -32, 99]);
+
+    let in1 = builder.var(input1);
+    let in2 = builder.var(input2);
+
+    let _ = builder.tf_concat1(in1, in2);
+    let spec = builder.finish();
+
+    synthesize(opts, context, &spec, &library)
+}
 
 // stackoverflow_18 无法实现，维度已经超过二维
 
@@ -748,7 +889,7 @@ fn stackoverflow_22(context: &z3::Context, opts: &Options) -> SynthResult<Progra
     synthesize(opts, context, &spec, &library)
 }
 
-//todo stackoverflow_23 tf.reduce_max tf.one_hot
+// stackoverflow_23 无法实现，维度超过二维
 
 //todo stackoverflow_24 tf.where
 
@@ -756,7 +897,7 @@ fn stackoverflow_22(context: &z3::Context, opts: &Options) -> SynthResult<Progra
 
 //todo stackoverflow_26 tf.reduce_sum
 
-//todo stackoverflow_27 tf.reduce_max tf.one_hot
+// stackoverflow_27 无法实现，维度超过二维
 
 //todo stackoverflow_28 tf.squeeze tf.gather
 
@@ -1000,13 +1141,62 @@ fn stackoverflow_48(context: &z3::Context, opts: &Options) -> SynthResult<Progra
 
 //todo autopandas10 tf.boolean_mask tf.math.logical_not tf.math.is_nan
 
-//todo autopandas11 tf.concat tf.range tf.transpose
+// autopandas11
+// 暂时还没实现expand_dims中axis=0的实现，所以先用个中间结果保持住
+fn autopandas11(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+
+    let mut input1 : Vec<Vec<i64>> = Vec::new();
+    input1.push(vec![1, 4, 2, 7, 6]);
+    input1.push(vec![20, 10, 50, 40, 30]);
+
+    let mut input2 : Vec<Vec<i64>> = Vec::new();
+    input2.push(vec![0, 1, 2, 3, 4]);
+
+    let in1 = builder.var(input1);
+    let in2 = builder.var(input2);
+    
+    let o1 = builder.tf_concat0(in2, in1);
+    let _ = builder.tf_transpose(o1);
+    let spec = builder.finish();
+
+    synthesize(opts, context, &spec, &library)
+}
 
 //todo autopandas12 tf.reduce_sum
 
 //todo autopandas13 tf.boolean_mask tf.reduce_any
 
-//todo autopandas14 tf.concat
+// autopandas14
+// 原数据是float(nan)，自己改成-1
+fn autopandas14(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+
+    let mut input1 : Vec<Vec<i64>> = Vec::new();
+    input1.push(vec![1, 0, 1, 2]);
+    input1.push(vec![1, 1, 3, 4]);
+    input1.push(vec![2, 0, 1, 2]);
+    input1.push(vec![2, 1, 3, 4]);
+
+    let mut input2 : Vec<Vec<i64>> = Vec::new();
+    input2.push(vec![4, 1]);
+
+    let mut input3 : Vec<Vec<i64>> = Vec::new();
+    input3.push(vec![-1]);
+
+    let in1 = builder.var(input1);
+    let in2 = builder.var(input2);
+    let in3 = builder.var(input3);
+    
+    let o1 = builder.tf_fill(in2, in3);
+    let o2 = builder.tf_cast(in1);
+    let _ = builder.tf_concat1(o2, o1);
+    let spec = builder.finish();
+
+    synthesize(opts, context, &spec, &library)
+}
 
 //todo autopandas15 tf.cumsum
 

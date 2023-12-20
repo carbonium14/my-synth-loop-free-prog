@@ -13,6 +13,8 @@ pub enum Operator {
     TfAdd(Id, Id),
     TfArgmax(Id),
     TfCast(Id),
+    TfConcat0(Id, Id),
+    TfConcat1(Id, Id),
     TfConstant(Id),
     TfDivide(Id, Id),
     TfEqual(Id, Id),
@@ -34,6 +36,7 @@ pub enum Operator {
     TfMinimum(Id, Id),
     TfNotEqual(Id, Id),
     TfOnes(Id),
+    TfRoll(Id),
     TfZeros(Id),
 }
 
@@ -53,9 +56,12 @@ impl Operator {
             | Operator::TfTranspose(_)
 
             | Operator::TfOnes(_)
+            | Operator::TfRoll(_)
             | Operator::TfZeros(_)
             => 1,
             Operator::TfAdd(_, _)
+            | Operator::TfConcat0(_, _)
+            | Operator::TfConcat1(_, _)
             | Operator::TfDivide(_, _)
             | Operator::TfEqual(_, _)
             | Operator::TfGreater(_, _)
@@ -95,11 +101,14 @@ impl Operator {
             | Operator::TfTranspose(a)
 
             | Operator::TfOnes(a)
+            | Operator::TfRoll(a)
             | Operator::TfZeros(a)
             => {
                 f(a);
             },
             Operator::TfAdd(a, b)
+            | Operator::TfConcat0(a, b)
+            | Operator::TfConcat1(a, b)
             | Operator::TfDivide(a, b)
             | Operator::TfEqual(a, b)
             | Operator::TfGreater(a, b)
@@ -137,11 +146,14 @@ impl Operator {
             | Operator::TfTranspose(a)
 
             | Operator::TfOnes(a)
+            | Operator::TfRoll(a)
             | Operator::TfZeros(a)
             => {
                 f(a);
             },
             Operator::TfAdd(a, b)
+            | Operator::TfConcat0(a, b)
+            | Operator::TfConcat1(a, b)
             | Operator::TfDivide(a, b)
             | Operator::TfEqual(a, b)
             | Operator::TfGreater(a, b)
@@ -172,6 +184,8 @@ impl Display for Operator {
             Operator::TfAdd(a, b) => write!(f, "TfAdd: {}, {}", a, b),
             Operator::TfArgmax(a) => write!(f, "TfArgmax: {}, axis = 1", a),
             Operator::TfCast(a) => write!(f, "TfCast: {}", a),
+            Operator::TfConcat0(a, b) => write!(f, "TfConcat: {}, {}, axis = 0", a, b),
+            Operator::TfConcat1(a, b) => write!(f, "TfConcat: {}, {}, axis = 1", a, b),
             Operator::TfConstant(a) => write!(f, "TfConstant: {}", a),
             Operator::TfDivide(a, b) => write!(f, "TfDivide: {}, {}", a, b),
             Operator::TfEqual(a, b) => write!(f, "TfEqual: {}, {}", a, b),
@@ -193,6 +207,7 @@ impl Display for Operator {
             Operator::TfMinimum(a, b) => write!(f, "TfMinimum: {}, {}", a, b),
             Operator::TfNotEqual(a, b) => write!(f, "TfNotEqual: {}, {}", a, b),
             Operator::TfOnes(a) => write!(f, "TfOnes: {}", a),
+            Operator::TfRoll(a) => write!(f, "TfRoll: {}", a),
             Operator::TfZeros(a) => write!(f, "TfZeros: {}", a),
         }
     }

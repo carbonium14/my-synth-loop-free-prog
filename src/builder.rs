@@ -82,6 +82,24 @@ impl ProgramBuilder {
         result
     }
 
+    pub fn tf_concat0(&mut self, a: Id, b: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfConcat0(a, b),
+        });
+        result
+    }
+
+    pub fn tf_concat1(&mut self, a: Id, b: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfConcat1(a, b),
+        });
+        result
+    }
+
     pub fn tf_constant(&mut self, a: Id) -> Id {
         let result = self.next_id();
         self.program.instructions.push(Instruction {
@@ -259,6 +277,15 @@ impl ProgramBuilder {
         self.program.instructions.push(Instruction {
             result,
             operator: Operator::TfOnes(a),
+        });
+        result
+    }
+
+    pub fn tf_roll(&mut self, a: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfRoll(a),
         });
         result
     }

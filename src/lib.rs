@@ -350,6 +350,8 @@ impl Library {
                 component::tf_add(),
                 component::tf_argmax(),
                 component::tf_cast(),
+                component::tf_concat0(),
+                component::tf_concat1(),
                 component::tf_constant(),
                 // component::tf_divide(),
                 component::tf_equal(),
@@ -371,6 +373,7 @@ impl Library {
                 component::tf_minimum(),
                 component::tf_not_equal(),
                 component::tf_ones(),
+                component::tf_roll(),
                 component::tf_zeros(),
             ],
         }
