@@ -73,6 +73,24 @@ impl ProgramBuilder {
         result
     }
 
+    pub fn tf_boolean_mask(&mut self, a: Id, b: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfBooleanMask(a, b),
+        });
+        result
+    }
+
+    pub fn tf_boolean_mask_(&mut self, a: Id, b: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfBooleanMask_(a, b),
+        });
+        result
+    }
+
     pub fn tf_cast(&mut self, a: Id) -> Id {
         let result = self.next_id();
         self.program.instructions.push(Instruction {
@@ -154,6 +172,15 @@ impl ProgramBuilder {
         result
     }
 
+    pub fn tf_cumsum(&mut self, a: Id, b: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfCumsum(a, b),
+        });
+        result
+    }
+
     pub fn tf_multiply(&mut self, a: Id, b: Id) -> Id {
         let result = self.next_id();
         self.program.instructions.push(Instruction {
@@ -213,6 +240,24 @@ impl ProgramBuilder {
         self.program.instructions.push(Instruction {
             result,
             operator: Operator::TfTranspose(a),
+        });
+        result
+    }
+
+    pub fn tf_where1(&mut self, a: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfWhere1(a),
+        });
+        result
+    }
+
+    pub fn tf_where3(&mut self, a: Id, b: Id, c: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfWhere3(a, b, c),
         });
         result
     }

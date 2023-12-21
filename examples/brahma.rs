@@ -44,29 +44,41 @@ fn main() {
         simple_output_equals_input_single,
         simple_output_equals_input_multiple,
         simple_output_equals_constant,
+        google_01,
         google_08,
+        google_10,
         google_12,
         google_13,
         google_14,
+        google_17,
         stackoverflow_01,
         stackoverflow_02,
         stackoverflow_05,
         stackoverflow_06,
+        stackoverflow_08,
         stackoverflow_11,
         stackoverflow_13,
         stackoverflow_15,
         stackoverflow_16,
         stackoverflow_17,
         stackoverflow_22,
+        stackoverflow_24,
         stackoverflow_32,
         stackoverflow_34,
         stackoverflow_35,
         stackoverflow_36,
         stackoverflow_37,
         stackoverflow_39,
+        stackoverflow_41,
+        stackoverflow_45,
+        stackoverflow_46,
         stackoverflow_48,
+        autopandas4,
+        autopandas8,
+        autopandas10,
         autopandas11,
         autopandas14,
+        autopandas15,
     };
 
     for (name, p) in problems {
@@ -371,10 +383,14 @@ fn simple_using_output_shape(context: &z3::Context, opts: &Options) -> SynthResu
     let mut input2 : Vec<Vec<i64>> = Vec::new();   
     input2.push(vec![4]);
 
+    let mut input3 : Vec<Vec<i64>> = Vec::new();   
+    input3.push(vec![4]);
+
     let in1 = builder.var(input1);
     let in2 = builder.var(input2);
+    let in3 = builder.var(input3);
 
-    let a = builder.tf_eye(in2, in2);
+    let a = builder.tf_eye(in2, in3);
     let _ = builder.tf_multiply(in1, a);
 
     let spec = builder.finish();
@@ -503,7 +519,26 @@ fn simple_output_equals_constant(context: &z3::Context, opts: &Options) -> Synth
 
 // google_benchmarks
 
-//todo google_01 tf.sequence_mask tf.concat tf.where
+// google_01
+// 原来的样例超出4*10范围，将[0, 0, 0, 1, 3, 3]改成[0, 0, 0, 1]
+fn google_01(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+     
+    let mut input1 : Vec<Vec<i64>> = Vec::new();   
+    input1.push(vec![0, 0, 0, 1]);
+
+    let in1 = builder.var(input1);
+
+    let o1 = builder.tf_bincount(in1);
+    let o2 = builder.tf_sequence_mask(o1);
+    let o3 = builder.tf_where1(o2);
+    let _ = builder.tf_cast(o3);
+    let spec = builder.finish();
+
+    return synthesize(opts, context, &spec, &library); 
+}
 
 //todo google_02 tf.reduce_sum
 
@@ -547,25 +582,25 @@ fn google_08(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
 
 //todo google_09 tf.gather tf.argsort
 
-//google_10
-// fn google_10(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
-//     let library = Library::brahma_std();
-//     let mut builder = ProgramBuilder::new();
+// google_10
+fn google_10(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
 
-//     let mut input1 : Vec<Vec<i64>> = Vec::new();
-//     input1.push(vec![10, 20, 0, 40, 0, 30]);
+    let mut input1 : Vec<Vec<i64>> = Vec::new();
+    input1.push(vec![10, 20, 0, 40, 0, 30]);
 
- 
-//     let mut input2 : Vec<Vec<i64>> = Vec::new();
-//     input2.push(vec![1, 1, 0, 1, 0, 1]);
+    let mut input2 : Vec<Vec<i64>> = Vec::new();
+    input2.push(vec![1, 1, 0, 1, 0, 1]);
 
-//     let in1 = builder.var(input1);
-//     let in2 = builder.var(input2);
-//     let _ = builder.tf_boolean_mask(in1, in2);
-//     let spec = builder.finish();
+    let in1 = builder.var(input1);
+    let in2 = builder.var(input2);
 
-//     synthesize(opts, context, &spec, &library)
-// }
+    let _ = builder.tf_boolean_mask(in1, in2);
+    let spec = builder.finish();
+
+    synthesize(opts, context, &spec, &library)
+}
 
 //todo google_11 tf.reduce_sum 用到了浮点数转换为整数，目前可以将输入手动转为整数
 
@@ -636,7 +671,35 @@ fn google_14(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
 
 //todo google_16 tf.gather tf.sequence_mask tf.where
 
-//todo google_17 tf.where
+// google_17
+// 输入的布尔值手动改为整数
+fn google_17(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+
+    let mut input1 : Vec<Vec<i64>> = Vec::new();
+    input1.push(vec![1, 0, 0, 1, 0]);
+
+    let mut input2 : Vec<Vec<i64>> = Vec::new();
+    input2.push(vec![1, 2, 3, 4, 5]);
+
+    let mut input3 : Vec<Vec<i64>> = Vec::new();
+    input3.push(vec![-10, -10, -10, -10, -10]);
+
+    let mut input4 : Vec<Vec<i64>> = Vec::new();
+    input4.push(vec![1, 2, 3, 4, 5]);
+
+    let in1 = builder.var(input1);
+    let in2 = builder.var(input2);
+    let in3 = builder.var(input3);
+    let in4 = builder.var(input4);
+
+    let o1 = builder.tf_multiply(in2, in3);
+    let _ = builder.tf_where3(in1, in4, o1);
+    let spec = builder.finish();
+
+    synthesize(opts, context, &spec, &library)
+}
 
 //todo google_18 tf.linalg.matvec
 
@@ -728,10 +791,14 @@ fn stackoverflow_06(context: &z3::Context, opts: &Options) -> SynthResult<Progra
     let mut input1 : Vec<Vec<i64>> = Vec::new();
     input1.push(vec![3, 5, 0, 2]);
 
+    let mut input2 : Vec<Vec<i64>> = Vec::new();
+    input2.push(vec![3, 5, 0, 2]);
+
     let in1 = builder.var(input1);
+    let in2 = builder.var(input2);
 
     let o1 = builder.tf_expand_dims(in1);
-    let o2 = builder.tf_equal(in1, o1);
+    let o2 = builder.tf_equal(in2, o1);
     let _ = builder.tf_cast(o2);
     let spec = builder.finish();
 
@@ -740,7 +807,34 @@ fn stackoverflow_06(context: &z3::Context, opts: &Options) -> SynthResult<Progra
 
 // stackoverflow_07 无法实现，维度已经超过二维
 
-//todo stackoverflow_08 tf.boolean_mask
+// stackoverflow_08
+// 原输入超过十个，手动调整为十个以内,
+// [-1, 0, -3, 2, 1, 3, 5, -1, -9, 2, 10]为[-1, 0, -3, 2, 1, 3, 5, -1, -9, 2]
+// [12, 3, 45, 6, 7, 8, 9, 87, 65, 4, 32]为[12, 3, 45, 6, 7, 8, 9, 87, 65, 4]
+fn stackoverflow_08(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+
+    let mut input1 : Vec<Vec<i64>> = Vec::new();
+    input1.push(vec![-1, 0, -3, 2, 1, 3, 5, -1, -9, 2]);
+
+    let mut input2 : Vec<Vec<i64>> = Vec::new();
+    input2.push(vec![12, 3, 45, 6, 7, 8, 9, 87, 65, 4]);
+
+    let mut input3 : Vec<Vec<i64>> = Vec::new();
+    input3.push(vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1]);
+
+    let in1 = builder.var(input1);
+    let in2 = builder.var(input2);
+    let in3 = builder.var(input3);
+
+    let o1 = builder.tf_constant(in3);
+    let o2 = builder.tf_greater(in1, o1);
+    let _ = builder.tf_boolean_mask(in2, o2);
+    let spec = builder.finish();
+
+    synthesize(opts, context, &spec, &library)
+}
 
 //todo stackoverflow_09 tf.unique_with_counts
 
@@ -801,13 +895,17 @@ fn stackoverflow_15(context: &z3::Context, opts: &Options) -> SynthResult<Progra
     let mut input2 : Vec<Vec<i64>> = Vec::new();
     input2.push(vec![1, 1, 1, 1, 1, 1, 1, 1, 1]);
 
+    let mut input3 : Vec<Vec<i64>> = Vec::new();
+    input3.push(vec![3, 1, 2, 0, 1, -1, 10, 1, -10]);
+
     let in1 = builder.var(input1);
     let in2 = builder.var(input2);
+    let in3 = builder.var(input3);
 
     let o1 = builder.tf_constant(in2);
     let o2 = builder.tf_equal(in1, o1);
     let o3 = builder.tf_cast(o2);
-    let _ = builder.tf_subtract(in1, o3);
+    let _ = builder.tf_subtract(in3, o3);
     let spec = builder.finish();
 
     synthesize(opts, context, &spec, &library)
@@ -891,7 +989,36 @@ fn stackoverflow_22(context: &z3::Context, opts: &Options) -> SynthResult<Progra
 
 // stackoverflow_23 无法实现，维度超过二维
 
-//todo stackoverflow_24 tf.where
+// stackoverflow_24
+// 原本输入是小数，手动改成整数
+fn stackoverflow_24(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+
+    let mut input1 : Vec<Vec<i64>> = Vec::new();
+    input1.push(vec![30, 10, 40, 50, 20, 80, -60, -70]);
+
+    let mut input2 : Vec<Vec<i64>> = Vec::new();
+    input2.push(vec![5, 0, -20, 0, 10, -10, 0, 20]);
+
+    let mut input3 : Vec<Vec<i64>> = Vec::new();
+    input3.push(vec![30, 10, 40, 50, 20, 80, -60, -70]);
+
+    let mut input4 : Vec<Vec<i64>> = Vec::new();
+    input4.push(vec![5, 0, -20, 0, 10, -10, 0, 20]);
+
+    let in1 = builder.var(input1);
+    let in2 = builder.var(input2);
+    let in3 = builder.var(input3);
+    let in4 = builder.var(input4);
+
+    let o1 = builder.tf_cast(in2);
+    let o2 = builder.tf_divide(in1, in4);
+    let _ = builder.tf_where3(o1, o2, in3);
+    let spec = builder.finish();
+
+    synthesize(opts, context, &spec, &library)
+}
 
 //todo stackoverflow_25 tf.tile
 
@@ -985,14 +1112,21 @@ fn stackoverflow_35(context: &z3::Context, opts: &Options) -> SynthResult<Progra
     let mut input3 : Vec<Vec<i64>> = Vec::new();
     input3.push(vec![1, 4, 8]);
 
+    let mut input4 : Vec<Vec<i64>> = Vec::new();
+    input4.push(vec![9, 8]);
+    input4.push(vec![7, 6]);
+    input4.push(vec![5, 4]);
+    input4.push(vec![90, 80]);
+
     let in1 = builder.var(input1);
     let in2 = builder.var(input2);
     let in3 = builder.var(input3);
+    let in4 = builder.var(input4);
 
     let o1 = builder.tf_expand_dims(in3);
     let o2 = builder.tf_subtract(in1, in2);
     let o3 = builder.tf_multiply(o1, o2);
-    let _ = builder.tf_add(in2, o3);
+    let _ = builder.tf_add(in4, o3);
     let spec = builder.finish();
 
     synthesize(opts, context, &spec, &library)
@@ -1012,13 +1146,17 @@ fn stackoverflow_36(context: &z3::Context, opts: &Options) -> SynthResult<Progra
     let mut input3 : Vec<Vec<i64>> = Vec::new();
     input3.push(vec![8]);
 
+    let mut input4 : Vec<Vec<i64>> = Vec::new();
+    input4.push(vec![1, 0, 1, 1, 0, 1, 0, 1]);
+
     let in1 = builder.var(input1);
     let in2 = builder.var(input2);
     let in3 = builder.var(input3);
+    let in4 = builder.var(input4);
 
     let o1 = builder.tf_range(in2, in3);
     let o2 = builder.tf_add(in1, o1);
-    let o3 = builder.tf_divide(in1, o2);
+    let o3 = builder.tf_divide(in4, o2);
     let _ = builder.tf_cast(o3);
     let spec = builder.finish();
 
@@ -1066,11 +1204,17 @@ fn stackoverflow_39(context: &z3::Context, opts: &Options) -> SynthResult<Progra
     input1.push(vec![1, 0, 0, 0]);
     input1.push(vec![-1, 0, -11, 25]);
 
+    let mut input2 : Vec<Vec<i64>> = Vec::new();
+    input2.push(vec![-15, 1, 0, 2]);
+    input2.push(vec![1, 0, 0, 0]);
+    input2.push(vec![-1, 0, -11, 25]);
+
     let in1 = builder.var(input1);
+    let in2 = builder.var(input2);
 
     let o1 = builder.tf_cast(in1);
     let o2 = builder.tf_square(o1);
-    let _ = builder.tf_multiply(o2, o1);
+    let _ = builder.tf_multiply(o2, in2);
     let spec = builder.finish();
 
     synthesize(opts, context, &spec, &library)
@@ -1078,7 +1222,36 @@ fn stackoverflow_39(context: &z3::Context, opts: &Options) -> SynthResult<Progra
 
 //todo stackoverflow_40 tf.sparse.to_dense
 
-//todo stackoverflow_41 tf.boolean_mask tf.range
+// stackoverflow_41
+fn stackoverflow_41(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+
+    let mut input1 : Vec<Vec<i64>> = Vec::new();
+    input1.push(vec![5, 2, 8, 2, 4, 1, 1, 0, 2, 1]);
+
+    let mut input2 : Vec<Vec<i64>> = Vec::new();
+    input2.push(vec![3, 3, 3, 3, 3, 3, 3, 3, 3, 3]);
+
+    let mut input3 : Vec<Vec<i64>> = Vec::new();
+    input3.push(vec![0]);
+
+    let mut input4 : Vec<Vec<i64>> = Vec::new();
+    input4.push(vec![10]);
+
+    let in1 = builder.var(input1);
+    let in2 = builder.var(input2);
+    let in3 = builder.var(input3);
+    let in4 = builder.var(input4);
+
+    let o1 = builder.tf_constant(in2);
+    let o2 = builder.tf_range(in3, in4);
+    let o3 = builder.tf_not_equal(o1, o2);
+    let _ = builder.tf_boolean_mask(in1, o3);
+    let spec = builder.finish();
+
+    synthesize(opts, context, &spec, &library)
+}
 
 //todo stackoverflow_42 tf.reduce_max
 
@@ -1086,9 +1259,58 @@ fn stackoverflow_39(context: &z3::Context, opts: &Options) -> SynthResult<Progra
 
 //todo stackoverflow_44 tf.squeeze tf.reduce_sum tf.reshape
 
-//todo stackoverflow_45 tf.where tf.sequence_mask tf.roll
+// stackoverflow_45
+// 原本的输入是三维的，为了适应4*10的数组
+// [[[12, 34], [56, 78], [23, 54], [76, 78], [42, 24]]]改为[[12, 34], [56, 78], [23, 54], [76, 78]]， [1, 0, 1, 0, 1]改为[1, 0, 1, 0]
+fn stackoverflow_45(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
 
-//todo stackoverflow_46 tf.where tf.sequence_mask
+    let mut input1 : Vec<Vec<i64>> = Vec::new();
+    input1.push(vec![12, 34]);
+    input1.push(vec![56, 78]);
+    input1.push(vec![23, 54]);
+    input1.push(vec![76, 78]);
+
+    let mut input2 : Vec<Vec<i64>> = Vec::new();
+    input2.push(vec![1, 0, 1, 0]);
+
+    let mut input3 : Vec<Vec<i64>> = Vec::new();
+    input3.push(vec![12, 34]);
+    input3.push(vec![56, 78]);
+    input3.push(vec![23, 54]);
+    input3.push(vec![76, 78]);
+
+    let in1 = builder.var(input1);
+    let in2 = builder.var(input2);
+    let in3 = builder.var(input3);
+
+    let o1 = builder.tf_sequence_mask(in2);
+    let o2 = builder.tf_roll(in1);
+    let _ = builder.tf_where3(o1, o2, in3);
+    let spec = builder.finish();
+
+    synthesize(opts, context, &spec, &library)
+}
+
+// stackoverflow_46
+// 输入超出范围，[3, 4, 1]改成[1, 2]
+fn stackoverflow_46(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+
+    let mut input1 : Vec<Vec<i64>> = Vec::new();
+    input1.push(vec![1, 2]);
+
+    let in1 = builder.var(input1);
+
+    let o1 = builder.tf_sequence_mask(in1);
+    let o2 = builder.tf_where1(o1);
+    let _ = builder.tf_cast(o2);
+    let spec = builder.finish();
+
+    synthesize(opts, context, &spec, &library)
+}
 
 //todo stackoverflow_47 tf.reshape tf.gather tf.cumsum tf.reshape
 
@@ -1127,7 +1349,31 @@ fn stackoverflow_48(context: &z3::Context, opts: &Options) -> SynthResult<Progra
 
 //todo autopandas3 tf.transpose tf.reshape
 
-//todo autopandas4 tf.boolean_mask
+// autopandas4
+// 原输入超出4*10范围，[[1, 2, 3, 4, 5], [9, 8, 7, 6, 5], [3, 0, 2, 5, 8], [8, 8, 6, 3, 2], [2, 0, 7, 7, 3], [9, 0, 3, 2, 7], [1, 3, 8, 9, 4]]改为
+// [[1, 2, 3, 4, 5], [9, 8, 7, 6, 5], [3, 0, 2, 5, 8], [8, 8, 6, 3, 2]]，并手动实现其中的取下标
+fn autopandas4(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+
+    let mut input1 : Vec<Vec<i64>> = Vec::new();
+    input1.push(vec![1, 2, 3, 4, 5]);
+    input1.push(vec![9, 8, 7, 6, 5]);
+    input1.push(vec![3, 0, 2, 5, 8]);
+    input1.push(vec![8, 8, 6, 3, 2]);
+
+    let mut input2 : Vec<Vec<i64>> = Vec::new();
+    input2.push(vec![1, 1, 0, 1]);
+
+    let in1 = builder.var(input1);
+    let in2 = builder.var(input2);
+
+    let o1 = builder.tf_cast(in2);
+    let _ = builder.tf_boolean_mask_(in1, o1);
+    let spec = builder.finish();
+
+    synthesize(opts, context, &spec, &library)
+}
 
 //todo autopandas5 tf.gather tf.argsort
 
@@ -1135,11 +1381,59 @@ fn stackoverflow_48(context: &z3::Context, opts: &Options) -> SynthResult<Progra
 
 //todo autopandas7 tf.gather tf.argsort
 
-//todo autopandas8 tf.boolean_mask
+// autopandas8
+// 原输入超出4*10范围，[[5, 7], [6, 8], [-1, 9], [-2, 10], [2, 11], [1, 12], [3, -3]]改为[[5, 7], [6, 8], [-1, 9], [-2, 10]]，并手动实现其中的取下标
+fn autopandas8(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+
+    let mut input1 : Vec<Vec<i64>> = Vec::new();
+    input1.push(vec![5, 7]);
+    input1.push(vec![6, 8]);
+    input1.push(vec![-1, 9]);
+    input1.push(vec![-2, 10]);
+
+    let mut input2 : Vec<Vec<i64>> = Vec::new();
+    input2.push(vec![5, 6, -1, -2]);
+
+    let mut input3 : Vec<Vec<i64>> = Vec::new();
+    input3.push(vec![1, 1, 1, 1]);
+
+    let in1 = builder.var(input1);
+    let in2 = builder.var(input2);
+    let in3 = builder.var(input3);
+
+    let o1 = builder.tf_greater(in2, in3);
+    let _ = builder.tf_boolean_mask_(in1, o1);
+    let spec = builder.finish();
+
+    synthesize(opts, context, &spec, &library)
+}
 
 //todo autopandas9 tf.gather tf.argsort
 
-//todo autopandas10 tf.boolean_mask tf.math.logical_not tf.math.is_nan
+// autopandas10
+// 手动实现tf.math.logical_not(tf.math.is_nan(in1))，为[0, 1, 1, 0, 1, 1]
+// [float('nan'), 11, 12, float('nan'), 16, 18]改为[-1, 11, 12, -1, 16, 18]
+fn autopandas10(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+
+    let mut input1 : Vec<Vec<i64>> = Vec::new();
+    input1.push(vec![-1, 11, 12, -1, 16, 18]);
+
+    let mut input2 : Vec<Vec<i64>> = Vec::new();
+    input2.push(vec![0, 1, 1, 0, 1, 1]);
+
+    let in1 = builder.var(input1);
+    let in2 = builder.var(input2);
+
+    let o1 = builder.tf_boolean_mask(in1, in2);
+    let _ = builder.tf_cast(o1);
+    let spec = builder.finish();
+
+    synthesize(opts, context, &spec, &library)
+}
 
 // autopandas11
 // 暂时还没实现expand_dims中axis=0的实现，所以先用个中间结果保持住
@@ -1198,6 +1492,24 @@ fn autopandas14(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     synthesize(opts, context, &spec, &library)
 }
 
-//todo autopandas15 tf.cumsum
+// autopandas15
+fn autopandas15(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+
+    let mut input1 : Vec<Vec<i64>> = Vec::new();
+    input1.push(vec![1, 1, 2, 1, 3, 2]);
+
+    let mut input2 : Vec<Vec<i64>> = Vec::new();
+    input2.push(vec![0]);
+
+    let in1 = builder.var(input1);
+    let in2 = builder.var(input2);
+    
+    let _ = builder.tf_cumsum(in1, in2);
+    let spec = builder.finish();
+
+    synthesize(opts, context, &spec, &library)
+}
 
 //todo autopandas16 tf.reduce_mean

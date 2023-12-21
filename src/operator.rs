@@ -12,6 +12,8 @@ pub enum Operator {
     // 我自己的操作符号
     TfAdd(Id, Id),
     TfArgmax(Id),
+    TfBooleanMask(Id, Id),
+    TfBooleanMask_(Id, Id),
     TfCast(Id),
     TfConcat0(Id, Id),
     TfConcat1(Id, Id),
@@ -21,6 +23,7 @@ pub enum Operator {
     TfExpandDims(Id),
     TfGreater(Id, Id),
     TfBincount(Id),
+    TfCumsum(Id, Id),
     TfMultiply(Id, Id),
     TfRange(Id, Id),
     TfSequenceMask(Id),
@@ -28,6 +31,8 @@ pub enum Operator {
     TfSubtract(Id, Id),
     TfTensordot(Id, Id),
     TfTranspose(Id),
+    TfWhere1(Id),
+    TfWhere3(Id, Id, Id),
 
     TfEye(Id, Id),
     TfFill(Id, Id),
@@ -54,17 +59,21 @@ impl Operator {
             | Operator::TfSequenceMask(_)
             | Operator::TfSquare(_)
             | Operator::TfTranspose(_)
+            | Operator::TfWhere1(_)
 
             | Operator::TfOnes(_)
             | Operator::TfRoll(_)
             | Operator::TfZeros(_)
             => 1,
             Operator::TfAdd(_, _)
+            | Operator::TfBooleanMask(_, _)
+            | Operator::TfBooleanMask_(_, _)
             | Operator::TfConcat0(_, _)
             | Operator::TfConcat1(_, _)
             | Operator::TfDivide(_, _)
             | Operator::TfEqual(_, _)
             | Operator::TfGreater(_, _)
+            | Operator::TfCumsum(_, _)
             | Operator::TfMultiply(_, _)
             | Operator::TfRange(_, _)
             | Operator::TfSubtract(_, _)
@@ -77,6 +86,8 @@ impl Operator {
             | Operator::TfMinimum(_, _)
             | Operator::TfNotEqual(_, _)
             => 2,
+            | Operator::TfWhere3(_, _, _)
+            => 3,
         }
     }
 
@@ -99,6 +110,7 @@ impl Operator {
             | Operator::TfSequenceMask(a)
             | Operator::TfSquare(a)
             | Operator::TfTranspose(a)
+            | Operator::TfWhere1(a)
 
             | Operator::TfOnes(a)
             | Operator::TfRoll(a)
@@ -107,11 +119,14 @@ impl Operator {
                 f(a);
             },
             Operator::TfAdd(a, b)
+            | Operator::TfBooleanMask(a, b)
+            | Operator::TfBooleanMask_(a, b)
             | Operator::TfConcat0(a, b)
             | Operator::TfConcat1(a, b)
             | Operator::TfDivide(a, b)
             | Operator::TfEqual(a, b)
             | Operator::TfGreater(a, b)
+            | Operator::TfCumsum(a, b)
             | Operator::TfMultiply(a, b)
             | Operator::TfRange(a, b)
             | Operator::TfSubtract(a, b)
@@ -127,7 +142,12 @@ impl Operator {
                 f(a);
                 f(b);
             },
-            // },
+            | Operator::TfWhere3(a, b, c)
+            => {
+                f(a);
+                f(b);
+                f(c);
+            },
         }
     }
 
@@ -144,6 +164,7 @@ impl Operator {
             | Operator::TfSequenceMask(a)
             | Operator::TfSquare(a)
             | Operator::TfTranspose(a)
+            | Operator::TfWhere1(a)
 
             | Operator::TfOnes(a)
             | Operator::TfRoll(a)
@@ -152,11 +173,14 @@ impl Operator {
                 f(a);
             },
             Operator::TfAdd(a, b)
+            | Operator::TfBooleanMask(a, b)
+            | Operator::TfBooleanMask_(a, b)
             | Operator::TfConcat0(a, b)
             | Operator::TfConcat1(a, b)
             | Operator::TfDivide(a, b)
             | Operator::TfEqual(a, b)
             | Operator::TfGreater(a, b)
+            | Operator::TfCumsum(a, b)
             | Operator::TfMultiply(a, b)
             | Operator::TfRange(a, b)
             | Operator::TfSubtract(a, b)
@@ -172,6 +196,12 @@ impl Operator {
                 f(a);
                 f(b);
             },
+            | Operator::TfWhere3(a, b, c)
+            => {
+                f(a);
+                f(b);
+                f(c);
+            },
         }
     }
 }
@@ -183,6 +213,8 @@ impl Display for Operator {
             //Operator::Const(c) => write!(f, "const: {:?}", c),
             Operator::TfAdd(a, b) => write!(f, "TfAdd: {}, {}", a, b),
             Operator::TfArgmax(a) => write!(f, "TfArgmax: {}, axis = 1", a),
+            Operator::TfBooleanMask(a, b) => write!(f, "TfBooleanMask: {}, {}", a, b),
+            Operator::TfBooleanMask_(a, b) => write!(f, "TfBooleanMask: {}, {}", a, b),
             Operator::TfCast(a) => write!(f, "TfCast: {}", a),
             Operator::TfConcat0(a, b) => write!(f, "TfConcat: {}, {}, axis = 0", a, b),
             Operator::TfConcat1(a, b) => write!(f, "TfConcat: {}, {}, axis = 1", a, b),
@@ -192,6 +224,7 @@ impl Display for Operator {
             Operator::TfExpandDims(a) => write!(f, "TfExpandDims: {}, axis = 1", a),
             Operator::TfGreater(a, b) => write!(f, "TfGreater: {}, {}", a, b),
             Operator::TfBincount(a) => write!(f, "TfBincount: {}", a),
+            Operator::TfCumsum(a, b) => write!(f, "TfCumsum: {}, {}", a, b),
             Operator::TfMultiply(a, b) => write!(f, "TfMultiply: {}, {}", a, b),
             Operator::TfRange(a, b) => write!(f, "TfRange: {}, {}", a, b),
             Operator::TfSequenceMask(a) => write!(f, "TfSequenceMask: {}", a),
@@ -199,6 +232,8 @@ impl Display for Operator {
             Operator::TfSubtract(a, b) => write!(f, "TfSubtract: {}, {}", a, b),
             Operator::TfTensordot(a, b) => write!(f, "TfTensordot: {}, {}", a, b),
             Operator::TfTranspose(a) => write!(f, "TfTranspose: {}", a),
+            Operator::TfWhere1(a) => write!(f, "TfWhere: {}", a),
+            Operator::TfWhere3(a, b, c) => write!(f, "TfWhere: {}, {}, {}", a, b, c),
 
             Operator::TfEye(a, b) => write!(f, "TfEye: {}, {}", a, b),
             Operator::TfFill(a, b) => write!(f, "TfFill: {}, {}", a, b),

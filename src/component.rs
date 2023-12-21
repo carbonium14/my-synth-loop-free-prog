@@ -218,6 +218,110 @@ pub fn tf_argmax() -> Box<dyn Component> {
 }
 
 #[derive(Debug)]
+struct TfBooleanMask;
+
+impl Component for TfBooleanMask {
+    fn operand_arity(&self) -> usize {
+        2
+    }
+
+    fn make_operator(&self, _immediates: &Vec<Vecs<i64>>, operands: &[Id]) -> Operator {
+        Operator::TfBooleanMask(operands[0], operands[1])
+    }
+
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vecs<Int<'a>>],
+        operands: &[Vecs<Int<'a>>],
+        bit_width: u32,
+    ) -> Vecs<Int<'a>> {
+        let const0 = zero(context, bit_width);
+        let const1 = one(context, bit_width);
+        let mut result = Vecs::new(operands[0].dims.clone());
+        let domain_sort = Sort::int(&context);
+        let range_sort = Sort::int(&context);
+        let mut array = Array::fresh_const(context, "boolean_mask_array:", &domain_sort, &range_sort);
+        for i in 0 .. DIMS[0] {
+            let index = Int::from_i64(context, -1);
+            for j in 0 .. DIMS[1] {
+                let cur_index = operands[1].vecs[i][j]._eq(&const0).ite(&Int::from_i64(context, -1), &Int::add(context, &[&index, &const1]));
+                array = array.store(&cur_index, &operands[0].vecs[i][j]);
+            }
+            for j in 0 .. DIMS[1] {
+                result.vecs[i].push(array.select(&Int::from_i64(context, j as i64)).as_int().unwrap_or(const0.clone()));
+            }
+        }
+
+        return result;
+    }
+}
+
+pub fn tf_boolean_mask() -> Box<dyn Component> {
+    Box::new(TfBooleanMask) as _
+}
+
+#[derive(Debug)]
+struct TfBooleanMask_;
+
+impl Component for TfBooleanMask_ {
+    fn operand_arity(&self) -> usize {
+        2
+    }
+
+    fn make_operator(&self, _immediates: &Vec<Vecs<i64>>, operands: &[Id]) -> Operator {
+        Operator::TfBooleanMask_(operands[0], operands[1])
+    }
+
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vecs<Int<'a>>],
+        operands: &[Vecs<Int<'a>>],
+        bit_width: u32,
+    ) -> Vecs<Int<'a>> {
+        let const0 = zero(context, bit_width);
+        let const1 = one(context, bit_width);
+        let mut result = Vecs::new(operands[0].dims.clone());
+        let domain_sort = Sort::int(&context);
+        let range_sort = Sort::int(&context);
+        let domain_sort_ = Sort::int(&context);
+        let range_sort_ = Sort::int(&context);
+        let array_sort = Sort::array(context, &domain_sort_, &range_sort_);
+        let first_dim_sort = Sort::int(&context);
+        let mut array = Array::fresh_const(context, "boolean_mask_array_second:", &domain_sort, &range_sort);
+        let mut array_ = Array::fresh_const(context, "boolean_mask_array:", &first_dim_sort, &array_sort);
+        for i in 0 .. DIMS[0] {
+            for _j in 0 .. DIMS[1] {
+                result.vecs[i].push(const0.clone());
+            }
+        }
+        let index_ = Int::from_i64(context, -1);
+        for i in 0 .. DIMS[0] {
+            let index = Int::from_i64(context, -1);
+            for j in 0 .. DIMS[1] {
+                let cur_index = operands[1].vecs[0][i]._eq(&const0).ite(&Int::from_i64(context, -1), &Int::add(context, &[&index, &const1]));
+                array = array.store(&cur_index, &operands[0].vecs[i][j]);
+            }
+            let cur_index_ = operands[1].vecs[0][i]._eq(&const0).ite(&Int::from_i64(context, -1), &Int::add(context, &[&index_, &const1]));
+            array_ = array_.store(&cur_index_, &array);
+        }
+        for i in 0 .. DIMS[0] {
+            let row = array_.select(&Int::from_i64(context, i as i64)).as_array().unwrap();
+            for j in 0 .. DIMS[1] {
+                result.vecs[i][j] = row.select(&Int::from_i64(context, j as i64)).as_int().unwrap_or(const0.clone());
+            }
+        }
+
+        return result;
+    }
+}
+
+pub fn tf_boolean_mask_() -> Box<dyn Component> {
+    Box::new(TfBooleanMask_) as _
+}
+
+#[derive(Debug)]
 struct TfCast;
 
 impl Component for TfCast {
@@ -648,6 +752,62 @@ pub fn tf_bincount() -> Box<dyn Component> {
 }
 
 #[derive(Debug)]
+struct TfCumsum;
+
+impl Component for TfCumsum {
+    fn operand_arity(&self) -> usize {
+        2
+    }
+
+    fn make_operator(&self, _immediates: &Vec<Vecs<i64>>, operands: &[Id]) -> Operator {
+        Operator::TfCumsum(operands[0], operands[1])
+    }
+
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vecs<Int<'a>>],
+        operands: &[Vecs<Int<'a>>],
+        bit_width: u32,
+    ) -> Vecs<Int<'a>> {
+        // 所有样例只有输入数组和exclusive两个输入，只考虑这俩
+        let const0 = zero(context, bit_width);
+        let const1 = one(context, bit_width);
+        let mut result = Vecs::new(operands[0].dims.clone());
+        let mut rowlen = Int::from_i64(context, -1);
+        let mut collen = Int::from_i64(context, -1);
+        for i in (0 .. DIMS[0]).rev() {
+            let row_index = Int::from_i64(context, i as i64);
+            for j in (0 .. DIMS[1]).rev() {
+                let col_index = Int::from_i64(context, j as i64);
+                collen = Bool::and(context, &[&operands[0].vecs[i][j]._eq(&const0), &Int::sub(context, &[&collen, &const1])._eq(&col_index)]).ite(&col_index, &collen);
+            }
+            rowlen = collen._eq(&const0).ite(&row_index, &rowlen);
+        }
+        let is_exclusive = operands[1].vecs[0][0]._eq(&const0);
+        for i in 0 .. DIMS[0] {
+            result.vecs[i].push(is_exclusive.ite(&operands[0].vecs[i][0], &const0));
+            for j in 1 .. (DIMS[1] + 1) {
+                let col_index = Int::from_i64(context, j as i64);
+                let is_in_col = col_index.lt(&collen);
+                let mut temp = j;
+                if j == DIMS[1] {
+                    temp = DIMS[1] - 1;
+                }
+                let value = Int::add(context, &[&result.vecs[i][j - 1], &is_exclusive.ite(&operands[0].vecs[i][temp], &operands[0].vecs[i][j - 1])]);
+                result.vecs[i].push(is_in_col.ite(&value, &const0));
+            }
+        }
+
+        return result;
+    }
+}
+
+pub fn tf_cumsum() -> Box<dyn Component> {
+    Box::new(TfCumsum) as _
+}
+
+#[derive(Debug)]
 struct TfMultiply;
 
 impl Component for TfMultiply {
@@ -730,7 +890,7 @@ struct TfSequenceMask;
 
 impl Component for TfSequenceMask {
     fn operand_arity(&self) -> usize {
-        2
+        1
     }
 
     fn make_operator(&self, _immediates: &Vec<Vecs<i64>>, operands: &[Id]) -> Operator {
@@ -749,20 +909,17 @@ impl Component for TfSequenceMask {
         let mut result = Vecs::new(operands[0].dims.clone());
         let mut rowlen = Int::from_i64(context, -1);
         let mut collen = Int::from_i64(context, -1);
-        for i in (0 .. DIMS[0]).rev() {
-            let row_index = Int::from_i64(context, i as i64);
-            for j in (0 .. DIMS[1]).rev() {
-                let col_index = Int::from_i64(context, j as i64);
-                collen = Bool::and(context, &[&operands[0].vecs[i][j]._eq(&const0), &Int::sub(context, &[&collen, &const1])._eq(&col_index)]).ite(&col_index, &collen);
-            }
-            rowlen = collen._eq(&const0).ite(&row_index, &rowlen);
+        for j in (0 .. DIMS[1]).rev() {
+            let col_index = Int::from_i64(context, j as i64);
+            collen = collen.lt(&operands[0].vecs[0][j]).ite(&operands[0].vecs[0][j], &collen);
+            rowlen = Bool::and(context, &[&operands[0].vecs[0][j]._eq(&const0), &Int::sub(context, &[&rowlen, &const1])._eq(&col_index)]).ite(&col_index, &rowlen);
         }
         for i in 0 .. DIMS[0] {
             for j in 0 .. DIMS[1] {
                 let row = Int::from_i64(context, i as i64);
                 let col = Int::from_i64(context, j as i64);
                 let is_in_row = row.lt(&rowlen);
-                let is_in_col = Bool::and(context, &[&col.lt(&collen), &col.lt(&operands[0].vecs[0][i])]);
+                let is_in_col = col.lt(&collen);
                 result.vecs[i].push(Bool::and(context, &[&is_in_row, &is_in_col]).ite(&const1, &const0));
             }
         }
@@ -926,6 +1083,110 @@ impl Component for TfTranspose {
 pub fn tf_transpose() -> Box<dyn Component> {
     Box::new(TfTranspose) as _
 }
+
+#[derive(Debug)]
+struct TfWhere1;
+
+impl Component for TfWhere1 {
+    fn operand_arity(&self) -> usize {
+        1
+    }
+
+    fn make_operator(&self, _immediates: &Vec<Vecs<i64>>, operands: &[Id]) -> Operator {
+        Operator::TfWhere1(operands[0])
+    }
+
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vecs<Int<'a>>],
+        operands: &[Vecs<Int<'a>>],
+        bit_width: u32,
+    ) -> Vecs<Int<'a>> {
+        // 所有测试中均为二维下标，不考虑一维的情况
+        let const0 = zero(context, bit_width);
+        let const1 = zero(context, bit_width);
+        let const_minus_1 = Int::from_i64(context, -1);
+        let mut result = Vecs::new(operands[0].dims.clone());
+        let domain_sort = Sort::int(&context);
+        let range_sort = Sort::int(&context);
+        let domain_sort_ = Sort::int(&context);
+        let range_sort_ = Sort::int(&context);
+        let array_sort = Sort::array(context, &domain_sort_, &range_sort_);
+        let first_dim_sort = Sort::int(&context);
+        let mut array_total = Array::fresh_const(context, "where_1_array:", &first_dim_sort, &array_sort);
+        let array_temp = Array::fresh_const(context, "where_1_array_temp:", &domain_sort, &range_sort);
+        let index = Int::from_i64(context, -1);
+        for i in 0 .. DIMS[0] {
+            array_total = array_total.store(&Int::from_i64(context, i as i64), &array_temp);
+            for _j in 0 .. DIMS[1] {
+                result.vecs[i].push(const0.clone());
+            }
+        }
+        for i in 0 .. DIMS[0] {
+            for j in 0 .. DIMS[1] {
+                let domain_sort = Sort::int(&context);
+                let range_sort = Sort::int(&context);
+                let mut array = Array::fresh_const(context, "where_1_array_second:", &domain_sort, &range_sort);
+                let row_index = operands[0].vecs[i][j]._eq(&const0).ite(&const_minus_1, &Int::from_i64(context, i as i64));
+                let col_index = operands[0].vecs[i][j]._eq(&const0).ite(&const_minus_1, &Int::from_i64(context, j as i64));
+                array = array.store(&const0, &row_index);
+                array = array.store(&const1, &col_index);
+                let index_ = Bool::and(context, &[&row_index._eq(&const_minus_1), &col_index._eq(&const_minus_1)]).ite(&const_minus_1, &Int::add(context, &[&index, &const1]));
+                array_total = array_total.store(&index_, &array);
+            }
+        }
+        for i in 0 .. DIMS[0] {
+            for j in 0 .. 2 {
+                result.vecs[i][j] = array_total.select(&Int::from_i64(context, i as i64)).as_array().unwrap()
+                    .select(&Int::from_i64(context, j as i64)).as_int().unwrap_or(const0.clone());
+            }
+        }
+
+        return result;
+    }
+}
+
+pub fn tf_where1() -> Box<dyn Component> {
+    Box::new(TfWhere1) as _
+}
+
+#[derive(Debug)]
+struct TfWhere3;
+
+impl Component for TfWhere3 {
+    fn operand_arity(&self) -> usize {
+        3
+    }
+
+    fn make_operator(&self, _immediates: &Vec<Vecs<i64>>, operands: &[Id]) -> Operator {
+        Operator::TfWhere3(operands[0], operands[1], operands[2])
+    }
+
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vecs<Int<'a>>],
+        operands: &[Vecs<Int<'a>>],
+        bit_width: u32,
+    ) -> Vecs<Int<'a>> {
+        let const0 = zero(context, bit_width);
+        let mut result = Vecs::new(operands[0].dims.clone());
+        for i in 0 .. DIMS[0] {
+            for j in 0 .. DIMS[1] {
+                result.vecs[i].push(operands[0].vecs[i][j]._eq(&const0).ite(&operands[2].vecs[i][j], &operands[1].vecs[i][j]));
+            }
+        }
+
+        return result;
+    }
+}
+
+pub fn tf_where3() -> Box<dyn Component> {
+    Box::new(TfWhere3) as _
+}
+
+
 
 #[derive(Debug)]
 struct TfEye;
@@ -1357,6 +1618,14 @@ macro_rules! with_operator_component {
                 let $c = TfArgmax;
                 $body
             }
+            Operator::TfBooleanMask(_, _) => {
+                let $c = TfBooleanMask;
+                $body
+            }
+            Operator::TfBooleanMask_(_, _) => {
+                let $c = TfBooleanMask_;
+                $body
+            }
             Operator::TfCast(_) => {
                 let $c = TfCast;
                 $body
@@ -1389,6 +1658,10 @@ macro_rules! with_operator_component {
                 let $c = TfBincount;
                 $body
             }
+            Operator::TfCumsum(_, _) => {
+                let $c = TfCumsum;
+                $body
+            }
             Operator::TfGreater(_, _) => {
                 let $c = TfGreater;
                 $body
@@ -1419,6 +1692,14 @@ macro_rules! with_operator_component {
             }
             Operator::TfTranspose(_) => {
                 let $c = TfTranspose;
+                $body
+            }
+            Operator::TfWhere1(_) => {
+                let $c = TfWhere1;
+                $body
+            }
+            Operator::TfWhere3(_, _, _) => {
+                let $c = TfWhere3;
                 $body
             }
 
