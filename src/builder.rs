@@ -326,6 +326,42 @@ impl ProgramBuilder {
         result
     }
 
+    pub fn tf_reduce_any0(&mut self, a: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfReduceAny0(a),
+        });
+        result
+    }
+
+    pub fn tf_reduce_any1(&mut self, a: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfReduceAny1(a),
+        });
+        result
+    }
+
+    pub fn tf_reduce_mean(&mut self, a: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfReduceMean(a),
+        });
+        result
+    }
+
+    pub fn tf_reduce_prod(&mut self, a: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfReduceProd(a),
+        });
+        result
+    }
+
     pub fn tf_roll(&mut self, a: Id) -> Id {
         let result = self.next_id();
         self.program.instructions.push(Instruction {

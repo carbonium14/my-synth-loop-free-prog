@@ -243,9 +243,10 @@ impl Component for TfBooleanMask {
         let range_sort = Sort::int(&context);
         let mut array = Array::fresh_const(context, "boolean_mask_array:", &domain_sort, &range_sort);
         for i in 0 .. DIMS[0] {
-            let index = Int::from_i64(context, -1);
+            let mut index = Int::from_i64(context, -1);
             for j in 0 .. DIMS[1] {
                 let cur_index = operands[1].vecs[i][j]._eq(&const0).ite(&Int::from_i64(context, -1), &Int::add(context, &[&index, &const1]));
+                index = operands[1].vecs[i][j]._eq(&const0).ite(&index, &Int::add(context, &[&index, &const1]));
                 array = array.store(&cur_index, &operands[0].vecs[i][j]);
             }
             for j in 0 .. DIMS[1] {
@@ -296,14 +297,16 @@ impl Component for TfBooleanMask_ {
                 result.vecs[i].push(const0.clone());
             }
         }
-        let index_ = Int::from_i64(context, -1);
+        let mut index_ = Int::from_i64(context, -1);
         for i in 0 .. DIMS[0] {
-            let index = Int::from_i64(context, -1);
+            let mut index = Int::from_i64(context, -1);
             for j in 0 .. DIMS[1] {
                 let cur_index = operands[1].vecs[0][i]._eq(&const0).ite(&Int::from_i64(context, -1), &Int::add(context, &[&index, &const1]));
+                index = operands[1].vecs[0][i]._eq(&const0).ite(&index, &Int::add(context, &[&index, &const1]));
                 array = array.store(&cur_index, &operands[0].vecs[i][j]);
             }
             let cur_index_ = operands[1].vecs[0][i]._eq(&const0).ite(&Int::from_i64(context, -1), &Int::add(context, &[&index_, &const1]));
+            index_ = operands[1].vecs[0][i]._eq(&const0).ite(&index_, &Int::add(context, &[&index_, &const1]));
             array_ = array_.store(&cur_index_, &array);
         }
         for i in 0 .. DIMS[0] {
@@ -1510,6 +1513,223 @@ pub fn tf_ones() -> Box<dyn Component> {
 }
 
 #[derive(Debug)]
+struct TfReduceAny0;
+
+impl Component for TfReduceAny0 {
+    fn operand_arity(&self) -> usize {
+        1
+    }
+
+    fn make_operator(&self, _immediates: &Vec<Vecs<i64>>, operands: &[Id]) -> Operator {
+        Operator::TfReduceAny0(operands[0])
+    }
+
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vecs<Int<'a>>],
+        operands: &[Vecs<Int<'a>>],
+        bit_width: u32,
+    ) -> Vecs<Int<'a>> {
+        let const0 = zero(context, bit_width);
+        let const1 = one(context, bit_width);
+        let mut result = Vecs::new(operands[0].dims.clone());
+        let mut rowlen = Int::from_i64(context, -1);
+        let mut collen = Int::from_i64(context, -1);
+        for i in (0 .. DIMS[0]).rev() {
+            let row_index = Int::from_i64(context, i as i64);
+            for j in (0 .. DIMS[1]).rev() {
+                let col_index = Int::from_i64(context, j as i64);
+                collen = Bool::and(context, &[&operands[0].vecs[i][j]._eq(&const0), &Int::sub(context, &[&collen, &const1])._eq(&col_index)]).ite(&col_index, &collen);
+            }
+            rowlen = collen._eq(&const0).ite(&row_index, &rowlen);
+        }
+        for i in 0 .. DIMS[0] {
+            for _j in 0 .. DIMS[1] {
+                result.vecs[i].push(const0.clone());
+            }
+        }
+        for j in 0 .. DIMS[1] {
+            let mut sum = Bool::from_bool(context, false);
+            for i in 0 .. DIMS[0] {
+                let is_zero = operands[0].vecs[i][j]._eq(&const0).ite(&Bool::from_bool(context, false), &Bool::from_bool(context, true));
+                sum = Bool::or(context, &[&sum, &is_zero]);
+            }
+            result.vecs[0][j] = sum.ite(&const1, &const0);
+        }
+
+        return result;
+    }
+}
+
+pub fn tf_reduce_any0() -> Box<dyn Component> {
+    Box::new(TfReduceAny0) as _
+}
+
+#[derive(Debug)]
+struct TfReduceAny1;
+
+impl Component for TfReduceAny1 {
+    fn operand_arity(&self) -> usize {
+        1
+    }
+
+    fn make_operator(&self, _immediates: &Vec<Vecs<i64>>, operands: &[Id]) -> Operator {
+        Operator::TfReduceAny1(operands[0])
+    }
+
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vecs<Int<'a>>],
+        operands: &[Vecs<Int<'a>>],
+        bit_width: u32,
+    ) -> Vecs<Int<'a>> {
+        let const0 = zero(context, bit_width);
+        let const1 = one(context, bit_width);
+        let mut result = Vecs::new(operands[0].dims.clone());
+        let mut rowlen = Int::from_i64(context, -1);
+        let mut collen = Int::from_i64(context, -1);
+        for i in (0 .. DIMS[0]).rev() {
+            let row_index = Int::from_i64(context, i as i64);
+            for j in (0 .. DIMS[1]).rev() {
+                let col_index = Int::from_i64(context, j as i64);
+                collen = Bool::and(context, &[&operands[0].vecs[i][j]._eq(&const0), &Int::sub(context, &[&collen, &const1])._eq(&col_index)]).ite(&col_index, &collen);
+            }
+            rowlen = collen._eq(&const0).ite(&row_index, &rowlen);
+        }
+        for i in 0 .. DIMS[0] {
+            for _j in 0 .. DIMS[1] {
+                result.vecs[i].push(const0.clone());
+            }
+        }
+        for i in 0 .. DIMS[0] {
+            let mut sum = Bool::from_bool(context, false);
+            for j in 0 .. DIMS[1] {
+                let is_zero = operands[0].vecs[i][j]._eq(&const0).ite(&Bool::from_bool(context, false), &Bool::from_bool(context, true));
+                sum = Bool::or(context, &[&sum, &is_zero]);
+            }
+            result.vecs[0][i] = sum.ite(&const1, &const0);
+        }
+
+        return result;
+    }
+}
+
+pub fn tf_reduce_any1() -> Box<dyn Component> {
+    Box::new(TfReduceAny1) as _
+}
+
+#[derive(Debug)]
+struct TfReduceMean;
+
+impl Component for TfReduceMean {
+    fn operand_arity(&self) -> usize {
+        1
+    }
+
+    fn make_operator(&self, _immediates: &Vec<Vecs<i64>>, operands: &[Id]) -> Operator {
+        Operator::TfReduceMean(operands[0])
+    }
+
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vecs<Int<'a>>],
+        operands: &[Vecs<Int<'a>>],
+        bit_width: u32,
+    ) -> Vecs<Int<'a>> {
+        // 测试样例中只有axis = 0的情况
+        let const0 = zero(context, bit_width);
+        let const1 = one(context, bit_width);
+        let mut result = Vecs::new(operands[0].dims.clone());
+        let mut rowlen = Int::from_i64(context, -1);
+        let mut collen = Int::from_i64(context, -1);
+        for i in (0 .. DIMS[0]).rev() {
+            let row_index = Int::from_i64(context, i as i64);
+            for j in (0 .. DIMS[1]).rev() {
+                let col_index = Int::from_i64(context, j as i64);
+                collen = Bool::and(context, &[&operands[0].vecs[i][j]._eq(&const0), &Int::sub(context, &[&collen, &const1])._eq(&col_index)]).ite(&col_index, &collen);
+            }
+            rowlen = collen._eq(&const0).ite(&row_index, &rowlen);
+        }
+        for i in 0 .. DIMS[0] {
+            for _j in 0 .. DIMS[1] {
+                result.vecs[i].push(const0.clone());
+            }
+        }
+        for j in 0 .. DIMS[1] {
+            let mut sum = zero(context, bit_width);
+            for i in 0 .. DIMS[0] {
+                sum = Int::add(context, &[&sum, &operands[0].vecs[i][j]]);
+            }
+            result.vecs[0][j] = Int::div(&sum, &rowlen);
+        }
+
+        return result;
+    }
+}
+
+pub fn tf_reduce_mean() -> Box<dyn Component> {
+    Box::new(TfReduceMean) as _
+}
+
+#[derive(Debug)]
+struct TfReduceProd;
+
+impl Component for TfReduceProd {
+    fn operand_arity(&self) -> usize {
+        1
+    }
+
+    fn make_operator(&self, _immediates: &Vec<Vecs<i64>>, operands: &[Id]) -> Operator {
+        Operator::TfReduceProd(operands[0])
+    }
+
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vecs<Int<'a>>],
+        operands: &[Vecs<Int<'a>>],
+        bit_width: u32,
+    ) -> Vecs<Int<'a>> {
+        // 测试样例中只有axis = 1的情况
+        let const0 = zero(context, bit_width);
+        let const1 = one(context, bit_width);
+        let mut result = Vecs::new(operands[0].dims.clone());
+        let mut rowlen = Int::from_i64(context, -1);
+        let mut collen = Int::from_i64(context, -1);
+        for i in (0 .. DIMS[0]).rev() {
+            let row_index = Int::from_i64(context, i as i64);
+            for j in (0 .. DIMS[1]).rev() {
+                let col_index = Int::from_i64(context, j as i64);
+                collen = Bool::and(context, &[&operands[0].vecs[i][j]._eq(&const0), &Int::sub(context, &[&collen, &const1])._eq(&col_index)]).ite(&col_index, &collen);
+            }
+            rowlen = collen._eq(&const0).ite(&row_index, &rowlen);
+        }
+        for i in 0 .. DIMS[0] {
+            for _j in 0 .. DIMS[1] {
+                result.vecs[i].push(const0.clone());
+            }
+        }
+        for i in 0 .. DIMS[0] {
+            let mut sum = one(context, bit_width);
+            for j in 0 .. DIMS[1] {
+                let col_index = Int::from_i64(context, j as i64);
+                sum = col_index.lt(&collen).ite(&Int::mul(context, &[&sum, &operands[0].vecs[i][j]]), &sum);
+            }
+            result.vecs[0][i] = sum;
+        }
+
+        return result;
+    }
+}
+
+pub fn tf_reduce_prod() -> Box<dyn Component> {
+    Box::new(TfReduceProd) as _
+}
+
+#[derive(Debug)]
 struct TfRoll;
 
 impl Component for TfRoll {
@@ -1729,6 +1949,22 @@ macro_rules! with_operator_component {
             }
             Operator::TfOnes(_) => {
                 let $c = TfOnes;
+                $body
+            }
+            Operator::TfReduceAny0(_) => {
+                let $c = TfReduceAny0;
+                $body
+            }
+            Operator::TfReduceAny1(_) => {
+                let $c = TfReduceAny1;
+                $body
+            }
+            Operator::TfReduceMean(_) => {
+                let $c = TfReduceMean;
+                $body
+            }
+            Operator::TfReduceProd(_) => {
+                let $c = TfReduceProd;
                 $body
             }
             Operator::TfRoll(_) => {

@@ -51,6 +51,7 @@ fn main() {
         google_13,
         google_14,
         google_17,
+        google_18,
         stackoverflow_01,
         stackoverflow_02,
         stackoverflow_05,
@@ -58,6 +59,7 @@ fn main() {
         stackoverflow_08,
         stackoverflow_11,
         stackoverflow_13,
+        stackoverflow_14,
         stackoverflow_15,
         stackoverflow_16,
         stackoverflow_17,
@@ -77,8 +79,10 @@ fn main() {
         autopandas8,
         autopandas10,
         autopandas11,
+        autopandas13,
         autopandas14,
         autopandas15,
+        autopandas16,
     };
 
     for (name, p) in problems {
@@ -542,7 +546,7 @@ fn google_01(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
 
 //todo google_02 tf.reduce_sum
 
-//todo google_03 tf.sparse.slice
+// google_03 无法实现，维度已经超过二维
 
 // google_04 无法实现，维度已经超过二维
 
@@ -550,7 +554,7 @@ fn google_01(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
 
 //todo google_06 tf.math.segment_max
 
-//todo google_07 tf.sequence_mask tf.cumsum
+//todo google_07 考虑出现多次应该怎么办
 
 // google_08
 fn google_08(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
@@ -669,7 +673,7 @@ fn google_14(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
 
 //todo google_15 tf.pad
 
-//todo google_16 tf.gather tf.sequence_mask tf.where
+//todo google_16 tf.gather
 
 // google_17
 // 输入的布尔值手动改为整数
@@ -701,7 +705,34 @@ fn google_17(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     synthesize(opts, context, &spec, &library)
 }
 
-//todo google_18 tf.linalg.matvec
+// google_18
+// 采用等价的方式进行处理
+// 超出4*10范围，[5, 7, -12, 10, 20], [1, 2, 3, 1, 2]改为[5, 7, -12, 10], [1, 2, 3, 1]
+fn google_18(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+
+    let mut input1 : Vec<Vec<i64>> = Vec::new();
+    input1.push(vec![5, 7, -12, 10]);
+
+    let mut input2 : Vec<Vec<i64>> = Vec::new();
+    input2.push(vec![1, 2, 3, 1]);
+
+    let mut input3 : Vec<Vec<i64>> = Vec::new();
+    input3.push(vec![1, 2, 3, 1]);
+
+    let in1 = builder.var(input1);
+    let in2 = builder.var(input2);
+    let in3 = builder.var(input3);
+
+    let o1 = builder.tf_expand_dims(in2);
+    let o2 = builder.tf_equal(o1, in3);
+    let o3 = builder.tf_cast(o2);
+    let _ = builder.tf_matmul(o3, in1);
+    let spec = builder.finish();
+
+    synthesize(opts, context, &spec, &library)
+}
 
 //todo google_19 tf.gather th.argsort
 
@@ -882,7 +913,27 @@ fn stackoverflow_13(context: &z3::Context, opts: &Options) -> SynthResult<Progra
     synthesize(opts, context, &spec, &library)
 }
 
-//todo stackoverflow_14 tf.reduce_any
+// stackoverflow_14
+// 超出4*10范围，[[False, False, True], [False, False, False], [True, False, True], [False, True, False], [False, False, False],
+// [True, True, True], [True, True, False]]修改为[[False, False, True], [False, False, False], [True, False, True], [False, True, False]]
+// 用1 0代替true false
+fn stackoverflow_14(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+
+    let mut input1 : Vec<Vec<i64>> = Vec::new();
+    input1.push(vec![0, 0, 1]);
+    input1.push(vec![0, 0, 0]);
+    input1.push(vec![1, 0, 1]);
+    input1.push(vec![0, 1, 0]);
+
+    let in1 = builder.var(input1);
+
+    let _ = builder.tf_reduce_any1(in1);
+    let spec = builder.finish();
+
+    synthesize(opts, context, &spec, &library)
+}
 
 // stackoverflow_15
 fn stackoverflow_15(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
@@ -1064,7 +1115,7 @@ fn stackoverflow_32(context: &z3::Context, opts: &Options) -> SynthResult<Progra
     synthesize(opts, context, &spec, &library)
 }
 
-//todo stackoverflow_33 tf.reduce_min tf.reduce_sum
+// stackoverflow_33 无法实现，数组超过二维
 
 // stackoverflow_34
 // 原本第一个输入不是二维数组，手动选取二维数组，[[[1, 2], [3, 4]], [[5, 6], [7, 8]], [[10, 20], [30, 40]]]为[[1, 2]], [[5, 6]], [[10, 20]]
@@ -1190,7 +1241,7 @@ fn stackoverflow_37(context: &z3::Context, opts: &Options) -> SynthResult<Progra
     synthesize(opts, context, &spec, &library)
 }
 
-//todo stackoverflow_38 tf.reduce_prod tf.reduce_max
+//todo stackoverflow_38 tf.reduce_max
 
 // stackoverflow_39
 // 由于类型只有整数，并且不允许多次调用同一个表达式，因此自行优化[[-1.5, 1.0, 0.9, 2.0], [1.1, 0.0, -0.1, -0.9], [-1.0, 0.1, -1.1, 2.5]]为
@@ -1312,7 +1363,7 @@ fn stackoverflow_46(context: &z3::Context, opts: &Options) -> SynthResult<Progra
     synthesize(opts, context, &spec, &library)
 }
 
-//todo stackoverflow_47 tf.reshape tf.gather tf.cumsum tf.reshape
+//todo stackoverflow_47 tf.reshape tf.gather tf.reshape
 
 // stackoverflow_48
 fn stackoverflow_48(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
@@ -1460,7 +1511,39 @@ fn autopandas11(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
 
 //todo autopandas12 tf.reduce_sum
 
-//todo autopandas13 tf.boolean_mask tf.reduce_any
+// autopandas13
+// 输入超出4*10范围，[[101, 0, 11, 0], [102, 1, 12, 4], [103, 2, 13, 2], [104, 3, 14, 8], [105, 4, 15, 4],
+// [106, 5, 16, 5], [107, 6, 17, 4], [108, 7, 18, 7], [109, 8, 19, 7], [110, 9, 20, 4]]修改为
+// [[103, 2, 13, 2], [105, 4, 15, 4], [107, 6, 17, 4], [108, 7, 18, 7]]
+// 手动实现[:, 1]切片
+fn autopandas13(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+
+    let mut input1 : Vec<Vec<i64>> = Vec::new();
+    input1.push(vec![103, 2, 13, 2]);
+    input1.push(vec![105, 4, 15, 4]);
+    input1.push(vec![107, 6, 17, 4]);
+    input1.push(vec![108, 7, 18, 7]);
+
+    let mut input2 : Vec<Vec<i64>> = Vec::new();
+    input2.push(vec![2, 4, 6]);
+
+    let mut input3 : Vec<Vec<i64>> = Vec::new();
+    input3.push(vec![2, 4, 6, 7]);
+
+    let in1 = builder.var(input1);
+    let in2 = builder.var(input2);
+    let in3 = builder.var(input3);
+    
+    let o1 = builder.tf_expand_dims(in2);
+    let o2 = builder.tf_equal(in3, o1);
+    let o3 = builder.tf_reduce_any0(o2);
+    let _ = builder.tf_boolean_mask_(in1, o3);
+    let spec = builder.finish();
+
+    synthesize(opts, context, &spec, &library)
+}
 
 // autopandas14
 // 原数据是float(nan)，自己改成-1
@@ -1512,4 +1595,24 @@ fn autopandas15(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     synthesize(opts, context, &spec, &library)
 }
 
-//todo autopandas16 tf.reduce_mean
+// autopandas16
+// 不知道数组末尾的0是填充的还是自带的，将末尾的0改成1，输出不考虑数组的取下标
+// [[0, 6, 0], [3, 101, 14], [0, 91, 6], [5, 15, 0]]改成[[0, 6, 1], [3, 101, 14], [0, 91, 6], [5, 15, 1]]
+fn autopandas16(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+
+    let mut input1 : Vec<Vec<i64>> = Vec::new();
+    input1.push(vec![0, 6, 1]);
+    input1.push(vec![3, 101, 14]);
+    input1.push(vec![0, 91, 6]);
+    input1.push(vec![5, 15, 1]);
+
+    let in1 = builder.var(input1);
+    
+    let o1 = builder.tf_cast(in1);
+    let _ = builder.tf_reduce_mean(o1);
+    let spec = builder.finish();
+
+    synthesize(opts, context, &spec, &library)
+}

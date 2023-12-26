@@ -41,6 +41,10 @@ pub enum Operator {
     TfMinimum(Id, Id),
     TfNotEqual(Id, Id),
     TfOnes(Id),
+    TfReduceAny0(Id),
+    TfReduceAny1(Id),
+    TfReduceMean(Id),
+    TfReduceProd(Id),
     TfRoll(Id),
     TfZeros(Id),
 }
@@ -62,6 +66,10 @@ impl Operator {
             | Operator::TfWhere1(_)
 
             | Operator::TfOnes(_)
+            | Operator::TfReduceAny0(_)
+            | Operator::TfReduceAny1(_)
+            | Operator::TfReduceMean(_)
+            | Operator::TfReduceProd(_)
             | Operator::TfRoll(_)
             | Operator::TfZeros(_)
             => 1,
@@ -113,6 +121,10 @@ impl Operator {
             | Operator::TfWhere1(a)
 
             | Operator::TfOnes(a)
+            | Operator::TfReduceAny0(a)
+            | Operator::TfReduceAny1(a)
+            | Operator::TfReduceMean(a)
+            | Operator::TfReduceProd(a)
             | Operator::TfRoll(a)
             | Operator::TfZeros(a)
             => {
@@ -167,6 +179,10 @@ impl Operator {
             | Operator::TfWhere1(a)
 
             | Operator::TfOnes(a)
+            | Operator::TfReduceAny0(a)
+            | Operator::TfReduceAny1(a)
+            | Operator::TfReduceMean(a)
+            | Operator::TfReduceProd(a)
             | Operator::TfRoll(a)
             | Operator::TfZeros(a)
             => {
@@ -242,6 +258,10 @@ impl Display for Operator {
             Operator::TfMinimum(a, b) => write!(f, "TfMinimum: {}, {}", a, b),
             Operator::TfNotEqual(a, b) => write!(f, "TfNotEqual: {}, {}", a, b),
             Operator::TfOnes(a) => write!(f, "TfOnes: {}", a),
+            Operator::TfReduceAny0(a) => write!(f, "TfReduceAny: {}, axis = 0", a),
+            Operator::TfReduceAny1(a) => write!(f, "TfReduceAny: {}, axis = 1", a),
+            Operator::TfReduceMean(a) => write!(f, "TfReduceMean: {}, axis = 0", a),
+            Operator::TfReduceProd(a) => write!(f, "TfReduceProd: {}, axis = 1", a),
             Operator::TfRoll(a) => write!(f, "TfRoll: {}", a),
             Operator::TfZeros(a) => write!(f, "TfZeros: {}", a),
         }
