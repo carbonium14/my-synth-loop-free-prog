@@ -889,6 +889,288 @@ pub fn tf_range() -> Box<dyn Component> {
 }
 
 #[derive(Debug)]
+struct TfReduceMax;
+
+impl Component for TfReduceMax {
+    fn operand_arity(&self) -> usize {
+        1
+    }
+
+    fn make_operator(&self, _immediates: &Vec<Vecs<i64>>, operands: &[Id]) -> Operator {
+        Operator::TfReduceMax(operands[0])
+    }
+
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vecs<Int<'a>>],
+        operands: &[Vecs<Int<'a>>],
+        bit_width: u32,
+    ) -> Vecs<Int<'a>> {
+        let const0 = zero(context, bit_width);
+        let const1 = one(context, bit_width);
+        let mut result = Vecs::new(operands[0].dims.clone());
+        let mut rowlen = Int::from_i64(context, -1);
+        let mut collen = Int::from_i64(context, -1);
+        for i in (0 .. DIMS[0]).rev() {
+            let row_index = Int::from_i64(context, i as i64);
+            for j in (0 .. DIMS[1]).rev() {
+                let col_index = Int::from_i64(context, j as i64);
+                collen = Bool::and(context, &[&operands[0].vecs[i][j]._eq(&const0), &Int::sub(context, &[&collen, &const1])._eq(&col_index)]).ite(&col_index, &collen);
+            }
+            rowlen = collen._eq(&const0).ite(&row_index, &rowlen);
+        }
+        let mut sum = Int::from_i64(context, -9223372036854775808);
+        for i in 0 .. DIMS[0] {
+            for j in 0 .. DIMS[1] {
+                result.vecs[i].push(const0.clone());
+                let row_index = Int::from_i64(context, i as i64);
+                let col_index = Int::from_i64(context, i as i64);
+                let is_in_row = row_index.lt(&rowlen);
+                let is_in_col = col_index.lt(&collen);
+                let value = operands[0].vecs[i][j].gt(&sum).ite(&operands[0].vecs[i][j], &sum);
+                sum = Bool::and(context, &[&is_in_row, &is_in_col]).ite(&value, &sum);
+            }
+        }
+        result.vecs[0][0] = sum;
+
+        return result;
+    }
+}
+
+pub fn tf_reduce_max() -> Box<dyn Component> {
+    Box::new(TfReduceMax) as _
+}
+
+#[derive(Debug)]
+struct TfReduceMax0;
+
+impl Component for TfReduceMax0 {
+    fn operand_arity(&self) -> usize {
+        1
+    }
+
+    fn make_operator(&self, _immediates: &Vec<Vecs<i64>>, operands: &[Id]) -> Operator {
+        Operator::TfReduceMax0(operands[0])
+    }
+
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vecs<Int<'a>>],
+        operands: &[Vecs<Int<'a>>],
+        bit_width: u32,
+    ) -> Vecs<Int<'a>> {
+        let const0 = zero(context, bit_width);
+        let const1 = one(context, bit_width);
+        let mut result = Vecs::new(operands[0].dims.clone());
+        let mut rowlen = Int::from_i64(context, -1);
+        let mut collen = Int::from_i64(context, -1);
+        for i in (0 .. DIMS[0]).rev() {
+            let row_index = Int::from_i64(context, i as i64);
+            for j in (0 .. DIMS[1]).rev() {
+                let col_index = Int::from_i64(context, j as i64);
+                collen = Bool::and(context, &[&operands[0].vecs[i][j]._eq(&const0), &Int::sub(context, &[&collen, &const1])._eq(&col_index)]).ite(&col_index, &collen);
+            }
+            rowlen = collen._eq(&const0).ite(&row_index, &rowlen);
+        }
+        for j in 0 .. DIMS[1] {
+            let mut sum = Int::from_i64(context, -9223372036854775808);
+            for i in 0 .. DIMS[0] {
+                let row_index = Int::from_i64(context, i as i64);
+                let col_index = Int::from_i64(context, i as i64);
+                let is_in_row = row_index.lt(&rowlen);
+                let is_in_col = col_index.lt(&collen);
+                let value = operands[0].vecs[i][j].gt(&sum).ite(&operands[0].vecs[i][j], &sum);
+                sum = Bool::and(context, &[&is_in_row, &is_in_col]).ite(&value, &sum);
+            }
+            result.vecs[0][j] = sum;
+        }
+
+        return result;
+    }
+}
+
+pub fn tf_reduce_max0() -> Box<dyn Component> {
+    Box::new(TfReduceMax0) as _
+}
+
+#[derive(Debug)]
+struct TfReduceMax1;
+
+impl Component for TfReduceMax1 {
+    fn operand_arity(&self) -> usize {
+        1
+    }
+
+    fn make_operator(&self, _immediates: &Vec<Vecs<i64>>, operands: &[Id]) -> Operator {
+        Operator::TfReduceMax1(operands[0])
+    }
+
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vecs<Int<'a>>],
+        operands: &[Vecs<Int<'a>>],
+        bit_width: u32,
+    ) -> Vecs<Int<'a>> {
+        let const0 = zero(context, bit_width);
+        let const1 = one(context, bit_width);
+        let mut result = Vecs::new(operands[0].dims.clone());
+        let mut rowlen = Int::from_i64(context, -1);
+        let mut collen = Int::from_i64(context, -1);
+        for i in (0 .. DIMS[0]).rev() {
+            let row_index = Int::from_i64(context, i as i64);
+            for j in (0 .. DIMS[1]).rev() {
+                let col_index = Int::from_i64(context, j as i64);
+                collen = Bool::and(context, &[&operands[0].vecs[i][j]._eq(&const0), &Int::sub(context, &[&collen, &const1])._eq(&col_index)]).ite(&col_index, &collen);
+            }
+            rowlen = collen._eq(&const0).ite(&row_index, &rowlen);
+        }
+        for i in 0 .. DIMS[0] {
+            let mut sum = Int::from_i64(context, -9223372036854775808);
+            for j in 0 .. DIMS[1] {
+                let row_index = Int::from_i64(context, i as i64);
+                let col_index = Int::from_i64(context, i as i64);
+                let is_in_row = row_index.lt(&rowlen);
+                let is_in_col = col_index.lt(&collen);
+                let value = operands[0].vecs[i][j].gt(&sum).ite(&operands[0].vecs[i][j], &sum);
+                sum = Bool::and(context, &[&is_in_row, &is_in_col]).ite(&value, &sum);
+            }
+            result.vecs[0][i] = sum;
+        }
+
+        return result;
+    }
+}
+
+pub fn tf_reduce_max1() -> Box<dyn Component> {
+    Box::new(TfReduceMax1) as _
+}
+
+#[derive(Debug)]
+struct TfReduceSum;
+
+impl Component for TfReduceSum {
+    fn operand_arity(&self) -> usize {
+        1
+    }
+
+    fn make_operator(&self, _immediates: &Vec<Vecs<i64>>, operands: &[Id]) -> Operator {
+        Operator::TfReduceSum(operands[0])
+    }
+
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vecs<Int<'a>>],
+        operands: &[Vecs<Int<'a>>],
+        bit_width: u32,
+    ) -> Vecs<Int<'a>> {
+        let const0 = zero(context, bit_width);
+        let mut result = Vecs::new(operands[0].dims.clone());
+        let mut sum = zero(context, bit_width);
+        for i in 0 .. DIMS[0] {
+            for j in 0 .. DIMS[1] {
+                result.vecs[i].push(const0.clone());
+                sum = Int::add(context, &[&sum, &operands[0].vecs[i][j]]);
+            }
+        }
+        result.vecs[0][0] = sum;
+
+        return result;
+    }
+}
+
+pub fn tf_reduce_sum() -> Box<dyn Component> {
+    Box::new(TfReduceSum) as _
+}
+
+#[derive(Debug)]
+struct TfReduceSum0;
+
+impl Component for TfReduceSum0 {
+    fn operand_arity(&self) -> usize {
+        1
+    }
+
+    fn make_operator(&self, _immediates: &Vec<Vecs<i64>>, operands: &[Id]) -> Operator {
+        Operator::TfReduceSum0(operands[0])
+    }
+
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vecs<Int<'a>>],
+        operands: &[Vecs<Int<'a>>],
+        bit_width: u32,
+    ) -> Vecs<Int<'a>> {
+        let const0 = zero(context, bit_width);
+        let mut result = Vecs::new(operands[0].dims.clone());
+        for i in 0 .. DIMS[0] {
+            for _j in 0 .. DIMS[1] {
+                result.vecs[i].push(const0.clone());
+            }
+        }
+        for j in 0 .. DIMS[1] {
+            let mut sum = zero(context, bit_width);
+            for i in 0 .. DIMS[0] {
+                sum = Int::add(context, &[&sum, &operands[0].vecs[i][j]]);
+            }
+            result.vecs[0][j] = sum;
+        }
+
+        return result;
+    }
+}
+
+pub fn tf_reduce_sum0() -> Box<dyn Component> {
+    Box::new(TfReduceSum0) as _
+}
+
+#[derive(Debug)]
+struct TfReduceSum1;
+
+impl Component for TfReduceSum1 {
+    fn operand_arity(&self) -> usize {
+        1
+    }
+
+    fn make_operator(&self, _immediates: &Vec<Vecs<i64>>, operands: &[Id]) -> Operator {
+        Operator::TfReduceSum1(operands[0])
+    }
+
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vecs<Int<'a>>],
+        operands: &[Vecs<Int<'a>>],
+        bit_width: u32,
+    ) -> Vecs<Int<'a>> {
+        let const0 = zero(context, bit_width);
+        let mut result = Vecs::new(operands[0].dims.clone());
+        for i in 0 .. DIMS[0] {
+            for _j in 0 .. DIMS[1] {
+                result.vecs[i].push(const0.clone());
+            }
+        }
+        for i in 0 .. DIMS[1] {
+            let mut sum = zero(context, bit_width);
+            for j in 0 .. DIMS[0] {
+                sum = Int::add(context, &[&sum, &operands[0].vecs[i][j]]);
+            }
+            result.vecs[0][i] = sum;
+        }
+
+        return result;
+    }
+}
+
+pub fn tf_reduce_sum1() -> Box<dyn Component> {
+    Box::new(TfReduceSum1) as _
+}
+
+#[derive(Debug)]
 struct TfSequenceMask;
 
 impl Component for TfSequenceMask {
@@ -1892,6 +2174,30 @@ macro_rules! with_operator_component {
             }
             Operator::TfRange(_, _) => {
                 let $c = TfRange;
+                $body
+            }
+            Operator::TfReduceMax(_) => {
+                let $c = TfReduceMax;
+                $body
+            }
+            Operator::TfReduceMax0(_) => {
+                let $c = TfReduceMax0;
+                $body
+            }
+            Operator::TfReduceMax1(_) => {
+                let $c = TfReduceMax1;
+                $body
+            }
+            Operator::TfReduceSum(_) => {
+                let $c = TfReduceSum;
+                $body
+            }
+            Operator::TfReduceSum0(_) => {
+                let $c = TfReduceSum0;
+                $body
+            }
+            Operator::TfReduceSum1(_) => {
+                let $c = TfReduceSum1;
                 $body
             }
             Operator::TfSequenceMask(_) => {

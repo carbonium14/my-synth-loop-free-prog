@@ -45,8 +45,10 @@ fn main() {
         simple_output_equals_input_multiple,
         simple_output_equals_constant,
         google_01,
+        google_02,
         google_08,
         google_10,
+        google_11,
         google_12,
         google_13,
         google_14,
@@ -65,13 +67,17 @@ fn main() {
         stackoverflow_17,
         stackoverflow_22,
         stackoverflow_24,
+        stackoverflow_26,
+        stackoverflow_31,
         stackoverflow_32,
         stackoverflow_34,
         stackoverflow_35,
         stackoverflow_36,
         stackoverflow_37,
+        stackoverflow_38,
         stackoverflow_39,
         stackoverflow_41,
+        stackoverflow_42,
         stackoverflow_45,
         stackoverflow_46,
         stackoverflow_48,
@@ -544,7 +550,35 @@ fn google_01(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     return synthesize(opts, context, &spec, &library); 
 }
 
-//todo google_02 tf.reduce_sum
+// google_02
+// 避免末尾的0无法区分是自己加的还是扩充的，调整末尾0为1
+// [[0.0, 1.0, 0.0, 0.0], [0.0, 1.0, 1.0, 0.0],[1.0, 1.0, 1.0, 1.0]]为[[0.0, 1.0, 0.0, 1.0], [0.0, 1.0, 1.0, 1.0],[1.0, 1.0, 1.0, 1.0]]
+// 浮点数手动调整为整数
+fn google_02(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+     
+    let mut input1 : Vec<Vec<i64>> = Vec::new();   
+    input1.push(vec![0, 10, 0, 10]);
+    input1.push(vec![0, 10, 10, 10]);
+    input1.push(vec![10, 10, 10, 10]);
+
+    let mut input2 : Vec<Vec<i64>> = Vec::new();   
+    input2.push(vec![0, 10, 0, 10]);
+    input2.push(vec![0, 10, 10, 10]);
+    input2.push(vec![10, 10, 10, 10]);
+
+    let in1 = builder.var(input1);
+    let in2 = builder.var(input2);
+
+    let o1 = builder.tf_reduce_sum1(in1);
+    let o2 = builder.tf_expand_dims(o1);
+    let _ = builder.tf_divide(in2, o2);
+    let spec = builder.finish();
+
+    return synthesize(opts, context, &spec, &library); 
+}
 
 // google_03 无法实现，维度已经超过二维
 
@@ -606,7 +640,37 @@ fn google_10(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     synthesize(opts, context, &spec, &library)
 }
 
-//todo google_11 tf.reduce_sum 用到了浮点数转换为整数，目前可以将输入手动转为整数
+// google_11 
+// 用到了浮点数转换为整数，目前可以将输入手动转为整数
+// 避免末尾的0无法区分是自己加的还是扩充的，调整末尾0为10
+// [[1.0, 0.3, -4.2, 0.0, 2.1, 0.4], [-0.1, 0.0, 1.4, -1.0, 0.4, 0.0], [0.1, 0.0, 0.7, -0.3, 0.5, -0.1], [1.4, 2.5, 0.3, 0.01, 0.0, 1.2]]
+fn google_11(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+     
+    let mut input1 : Vec<Vec<i64>> = Vec::new();   
+    input1.push(vec![10, 3, -42, 0, 21, 4]);
+    input1.push(vec![-1, 0, 14, -10, 4, 10]);
+    input1.push(vec![1, 0, 7, -3, 5, -1]);
+    input1.push(vec![14, 25, 3, 1, 0, 12]);
+
+    let mut input2 : Vec<Vec<i64>> = Vec::new();   
+    input2.push(vec![0, 0, 0, 0, 0, 0]);
+    input2.push(vec![0, 0, 0, 0, 0, 0]);
+    input2.push(vec![0, 0, 0, 0, 0, 0]);
+    input2.push(vec![0, 0, 0, 0, 0, 0]);
+
+    let in1 = builder.var(input1);
+    let in2 = builder.var(input2);
+
+    let o1 = builder.tf_greater(in1, in2);
+    let o2 = builder.tf_cast(o1);
+    let _ = builder.tf_reduce_sum1(o2);
+    let spec = builder.finish();
+
+    return synthesize(opts, context, &spec, &library); 
+}
 
 // google_12
 // 用到了浮点数转换为整数，目前可以将输入手动转为整数
@@ -785,7 +849,7 @@ fn stackoverflow_02(context: &z3::Context, opts: &Options) -> SynthResult<Progra
     synthesize(opts, context, &spec, &library)
 }
 
-//todo stackoverflow_03 tf.reduce_sum tf.one_hot
+//todo stackoverflow_03 tf.one_hot
 
 //todo stackoverflow_04 tf.gather_nd tf.stack
 
@@ -1073,7 +1137,25 @@ fn stackoverflow_24(context: &z3::Context, opts: &Options) -> SynthResult<Progra
 
 //todo stackoverflow_25 tf.tile
 
-//todo stackoverflow_26 tf.reduce_sum
+// stackoverflow_26 
+// 由于原输入是三维的，手动实现第一次reducesum
+fn stackoverflow_26(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+     
+    let mut input1 : Vec<Vec<i64>> = Vec::new();   
+    input1.push(vec![6, 4]);
+    input1.push(vec![3, -7]);
+    input1.push(vec![30, 3]);
+
+    let in1 = builder.var(input1);
+
+    let _ = builder.tf_reduce_sum1(in1);
+    let spec = builder.finish();
+
+    return synthesize(opts, context, &spec, &library); 
+}
 
 // stackoverflow_27 无法实现，维度超过二维
 
@@ -1081,9 +1163,34 @@ fn stackoverflow_24(context: &z3::Context, opts: &Options) -> SynthResult<Progra
 
 //todo stackoverflow_29 tf.searchsorted
 
-//todo stackoverflow_30 tf.sqrt tf.reduce_sum
+// stackoverflow_30 无法实现，维度超过二维
 
-//todo stackoverflow_31 tf.reduce_sum tf.sparse.to_dense
+// stackoverflow_31
+// 手动将稀疏张量变为普通张量
+// 将浮点数变为整数
+fn stackoverflow_31(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+     
+    let mut input1 : Vec<Vec<i64>> = Vec::new();   
+    input1.push(vec![10, 15]);
+    input1.push(vec![0, -20]);
+
+    let mut input2 : Vec<Vec<i64>> = Vec::new();   
+    input2.push(vec![30, 10]);
+    input2.push(vec![2, -10]);
+
+    let in1 = builder.var(input1);
+    let in2 = builder.var(input2);
+
+    let o1 = builder.tf_subtract(in2, in1);
+    let o2 = builder.tf_square(o1);
+    let _ = builder.tf_reduce_sum(o2);
+    let spec = builder.finish();
+
+    return synthesize(opts, context, &spec, &library); 
+}
 
 // stackoverflow_32
 // 由于tensordot第二个参数方向是纵轴方向，所以自己手动用expand_dims调整，由于是小数，调整为整数
@@ -1241,7 +1348,41 @@ fn stackoverflow_37(context: &z3::Context, opts: &Options) -> SynthResult<Progra
     synthesize(opts, context, &spec, &library)
 }
 
-//todo stackoverflow_38 tf.reduce_max
+// stackoverflow_38
+// 避免末尾的0无法区分是自己加的还是扩充的，调整末尾0为1
+// [[0, 0, 1, 0, 1, 0], [1, 0, 0, 0, 0, 0], [0, 1, 1, 1, 0, 1]]
+fn stackoverflow_38(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+
+    let mut input1 : Vec<Vec<i64>> = Vec::new();
+    input1.push(vec![9, 2, 5, 3, 7, 4]);
+    input1.push(vec![9, 2, 5, 3, 7, 4]);
+    input1.push(vec![9, 2, 5, 3, 7, 4]);
+
+    let mut input2 : Vec<Vec<i64>> = Vec::new();
+    input2.push(vec![0, 0, 1, 0, 1, 1]);
+    input2.push(vec![1, 0, 0, 0, 0, 1]);
+    input2.push(vec![0, 1, 1, 1, 0, 1]);
+
+    let mut input3 : Vec<Vec<i64>> = Vec::new();
+    input3.push(vec![0, 0, 1, 0, 1, 1]);
+    input3.push(vec![1, 0, 0, 0, 0, 1]);
+    input3.push(vec![0, 1, 1, 1, 0, 1]);
+
+    let in1 = builder.var(input1);
+    let in2 = builder.var(input2);
+    let in3 = builder.var(input3);
+
+    let o1 = builder.tf_reduce_max(in3);
+    let o2 = builder.tf_multiply(in1, in2);
+    let o3 = builder.tf_maximum(o1, o2);
+    let _ = builder.tf_reduce_prod(o3);
+
+    let spec = builder.finish();
+
+    synthesize(opts, context, &spec, &library)
+}
 
 // stackoverflow_39
 // 由于类型只有整数，并且不允许多次调用同一个表达式，因此自行优化[[-1.5, 1.0, 0.9, 2.0], [1.1, 0.0, -0.1, -0.9], [-1.0, 0.1, -1.1, 2.5]]为
@@ -1304,11 +1445,31 @@ fn stackoverflow_41(context: &z3::Context, opts: &Options) -> SynthResult<Progra
     synthesize(opts, context, &spec, &library)
 }
 
-//todo stackoverflow_42 tf.reduce_max
+// stackoverflow_42 
+fn stackoverflow_42(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+
+    let mut input1 : Vec<Vec<i64>> = Vec::new();
+    input1.push(vec![4, 6, 2, 6, 7, 3, -3]);
+
+    let mut input2 : Vec<Vec<i64>> = Vec::new();
+    input2.push(vec![4, 6, 2, 6, 7, 3, -3]);
+
+    let in1 = builder.var(input1);
+    let in2 = builder.var(input2);
+
+    let o1 = builder.tf_reduce_max(in1);
+    let o2 = builder.tf_equal(in2, o1);
+    let _ = builder.tf_cast(o2);
+    let spec = builder.finish();
+
+    synthesize(opts, context, &spec, &library)
+}
 
 //todo stackoverflow_43 tf.gather_nd tf.transpose
 
-//todo stackoverflow_44 tf.squeeze tf.reduce_sum tf.reshape
+//todo stackoverflow_44 tf.squeeze tf.reshape
 
 // stackoverflow_45
 // 原本的输入是三维的，为了适应4*10的数组
@@ -1509,7 +1670,7 @@ fn autopandas11(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     synthesize(opts, context, &spec, &library)
 }
 
-//todo autopandas12 tf.reduce_sum
+// autopandas12 无法实现，超出二维
 
 // autopandas13
 // 输入超出4*10范围，[[101, 0, 11, 0], [102, 1, 12, 4], [103, 2, 13, 2], [104, 3, 14, 8], [105, 4, 15, 4],

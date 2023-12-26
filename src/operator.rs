@@ -26,6 +26,12 @@ pub enum Operator {
     TfCumsum(Id, Id),
     TfMultiply(Id, Id),
     TfRange(Id, Id),
+    TfReduceMax(Id),
+    TfReduceMax0(Id),
+    TfReduceMax1(Id),
+    TfReduceSum(Id),
+    TfReduceSum0(Id),
+    TfReduceSum1(Id),
     TfSequenceMask(Id),
     TfSquare(Id),
     TfSubtract(Id, Id),
@@ -60,6 +66,12 @@ impl Operator {
             | Operator::TfConstant(_)
             | Operator::TfExpandDims(_)
             | Operator::TfBincount(_)
+            | Operator::TfReduceMax(_)
+            | Operator::TfReduceMax0(_)
+            | Operator::TfReduceMax1(_)
+            | Operator::TfReduceSum(_)
+            | Operator::TfReduceSum0(_)
+            | Operator::TfReduceSum1(_)
             | Operator::TfSequenceMask(_)
             | Operator::TfSquare(_)
             | Operator::TfTranspose(_)
@@ -115,6 +127,12 @@ impl Operator {
             | Operator::TfConstant(a)
             | Operator::TfExpandDims(a)
             | Operator::TfBincount(a)
+            | Operator::TfReduceMax(a)
+            | Operator::TfReduceMax0(a)
+            | Operator::TfReduceMax1(a)
+            | Operator::TfReduceSum(a)
+            | Operator::TfReduceSum0(a)
+            | Operator::TfReduceSum1(a)
             | Operator::TfSequenceMask(a)
             | Operator::TfSquare(a)
             | Operator::TfTranspose(a)
@@ -173,6 +191,12 @@ impl Operator {
             | Operator::TfConstant(a)
             | Operator::TfExpandDims(a)
             | Operator::TfBincount(a)
+            | Operator::TfReduceMax(a)
+            | Operator::TfReduceMax0(a)
+            | Operator::TfReduceMax1(a)
+            | Operator::TfReduceSum(a)
+            | Operator::TfReduceSum0(a)
+            | Operator::TfReduceSum1(a)
             | Operator::TfSequenceMask(a)
             | Operator::TfSquare(a)
             | Operator::TfTranspose(a)
@@ -243,6 +267,12 @@ impl Display for Operator {
             Operator::TfCumsum(a, b) => write!(f, "TfCumsum: {}, {}", a, b),
             Operator::TfMultiply(a, b) => write!(f, "TfMultiply: {}, {}", a, b),
             Operator::TfRange(a, b) => write!(f, "TfRange: {}, {}", a, b),
+            Operator::TfReduceMax(a) => write!(f, "TfReduceMax: {}", a),
+            Operator::TfReduceMax0(a) => write!(f, "TfReduceMax: {}, axis = 0", a),
+            Operator::TfReduceMax1(a) => write!(f, "TfReduceMax: {}, axis = 1", a),
+            Operator::TfReduceSum(a) => write!(f, "TfReduceSum: {}", a),
+            Operator::TfReduceSum0(a) => write!(f, "TfReduceSum: {}, axis = 0", a),
+            Operator::TfReduceSum1(a) => write!(f, "TfReduceSum: {}, axis = 1", a),
             Operator::TfSequenceMask(a) => write!(f, "TfSequenceMask: {}", a),
             Operator::TfSquare(a) => write!(f, "TfSquare: {}", a),
             Operator::TfSubtract(a, b) => write!(f, "TfSubtract: {}, {}", a, b),

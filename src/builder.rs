@@ -199,6 +199,60 @@ impl ProgramBuilder {
         result
     }
 
+    pub fn tf_reduce_max(&mut self, a: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfReduceMax(a),
+        });
+        result
+    }
+
+    pub fn tf_reduce_max0(&mut self, a: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfReduceMax0(a),
+        });
+        result
+    }
+
+    pub fn tf_reduce_max1(&mut self, a: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfReduceMax1(a),
+        });
+        result
+    }
+
+    pub fn tf_reduce_sum(&mut self, a: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfReduceSum(a),
+        });
+        result
+    }
+
+    pub fn tf_reduce_sum0(&mut self, a: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfReduceSum0(a),
+        });
+        result
+    }
+
+    pub fn tf_reduce_sum1(&mut self, a: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfReduceSum1(a),
+        });
+        result
+    }
+
     pub fn tf_sequence_mask(&mut self, a: Id) -> Id {
         let result = self.next_id();
         self.program.instructions.push(Instruction {
