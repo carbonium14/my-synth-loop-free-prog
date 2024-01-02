@@ -40,6 +40,7 @@ fn main() {
         simple_using_constant,
         simple_using_output_shape,
         simple_using_output_shape_tuple,
+        simple_using_boolean_constant,
         simple_using_primitive_input,
         simple_output_equals_input_single,
         simple_output_equals_input_multiple,
@@ -309,9 +310,9 @@ fn simple_cast(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     return synthesize(opts, context, &spec, &library); 
 }
 
-//todo simple_index 直接数组下标操作 in1[in2]
+//simple_index 直接数组下标操作 in1[in2] 与项目无关，无法实现
 
-//todo simple_slice 也是数组下标切片问题
+//simple_slice 也是数组下标切片问题，与项目无关，无法实现
 
 // simple_sparse_add
 // 暂时先不管啥稠密张量稀疏张量，能满足二维数组就行，并且有些还不符合要求呢
@@ -426,7 +427,24 @@ fn simple_using_output_shape_tuple(context: &z3::Context, opts: &Options) -> Syn
     return synthesize(opts, context, &spec, &library); 
 }
 
-//todo simple_using_boolean_constant tf.SparseTensor
+// simple_using_boolean_constant
+// 将稀疏张量手动设置为连续的张量
+fn simple_using_boolean_constant(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+     
+    let mut input1 : Vec<Vec<i64>> = Vec::new();   
+    input1.push(vec![12, 34]);
+    input1.push(vec![0, 56]);
+
+    let in1 = builder.var(input1);
+
+    let _ = builder.tf_reduce_sum1(in1);
+    let spec = builder.finish();
+
+    return synthesize(opts, context, &spec, &library); 
+}
 
 //todo simple_using_constant_kwarg tf.argsort
 
@@ -586,9 +604,9 @@ fn google_02(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
 
 //todo google_05 tf.tile
 
-//todo google_06 tf.math.segment_max
+//todo google_06 tf.segment_max
 
-//todo google_07 考虑出现多次应该怎么办
+//todo google_07 出现多次，暂时无法实现
 
 // google_08
 fn google_08(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
@@ -849,9 +867,9 @@ fn stackoverflow_02(context: &z3::Context, opts: &Options) -> SynthResult<Progra
     synthesize(opts, context, &spec, &library)
 }
 
-//todo stackoverflow_03 tf.one_hot
+// stackoverflow_03 无法实现，重复多次出现同一表达式，且出现多次非tf运算
 
-//todo stackoverflow_04 tf.gather_nd tf.stack
+//todo stackoverflow_04 tf.gather_nd
 
 // stackoverflow_05
 // 原来的第二个输入需要按照列进行遍历，手动改为列遍历后的结果
@@ -1072,7 +1090,7 @@ fn stackoverflow_17(context: &z3::Context, opts: &Options) -> SynthResult<Progra
 
 // stackoverflow_18 无法实现，维度已经超过二维
 
-//todo stackoverflow_19 tf.gather tf.argsort
+// stackoverflow_19 无法实现，多次重复出现同一表达式，且有数组切片运算
 
 //todo stackoverflow_20 tf.one_hot
 
@@ -1159,7 +1177,7 @@ fn stackoverflow_26(context: &z3::Context, opts: &Options) -> SynthResult<Progra
 
 // stackoverflow_27 无法实现，维度超过二维
 
-//todo stackoverflow_28 tf.squeeze tf.gather
+// stackoverflow_28 无法实现，维度超过二维
 
 //todo stackoverflow_29 tf.searchsorted
 
@@ -1412,7 +1430,7 @@ fn stackoverflow_39(context: &z3::Context, opts: &Options) -> SynthResult<Progra
     synthesize(opts, context, &spec, &library)
 }
 
-//todo stackoverflow_40 tf.sparse.to_dense
+//todo stackoverflow_40 tf.sparse.to_dense tf.SparseTensor
 
 // stackoverflow_41
 fn stackoverflow_41(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
@@ -1467,9 +1485,9 @@ fn stackoverflow_42(context: &z3::Context, opts: &Options) -> SynthResult<Progra
     synthesize(opts, context, &spec, &library)
 }
 
-//todo stackoverflow_43 tf.gather_nd tf.transpose
+//todo stackoverflow_43 tf.gather_nd
 
-//todo stackoverflow_44 tf.squeeze tf.reshape
+// stackoverflow_44 无法实现，维度超过二维
 
 // stackoverflow_45
 // 原本的输入是三维的，为了适应4*10的数组
@@ -1524,7 +1542,7 @@ fn stackoverflow_46(context: &z3::Context, opts: &Options) -> SynthResult<Progra
     synthesize(opts, context, &spec, &library)
 }
 
-//todo stackoverflow_47 tf.reshape tf.gather tf.reshape
+//todo stackoverflow_47 tf.reshape tf.gather
 
 // stackoverflow_48
 fn stackoverflow_48(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
@@ -1549,7 +1567,7 @@ fn stackoverflow_48(context: &z3::Context, opts: &Options) -> SynthResult<Progra
     synthesize(opts, context, &spec, &library)
 }
 
-//todo stackoverflow_49 无法实现，首先是形状不对，其次是无法同时用一个方法两次
+// stackoverflow_49 无法实现，首先是形状不对，其次是无法同时用一个方法两次
 
 //todo stackoverflow_50 tf.one_hot
 
@@ -1557,9 +1575,9 @@ fn stackoverflow_48(context: &z3::Context, opts: &Options) -> SynthResult<Progra
 
 //todo autopandas1 tf.gather
 
-//todo autopandas2 数组下标取元素
+// autopandas2 数组下标取元素，不是tf的表达式
 
-//todo autopandas3 tf.transpose tf.reshape
+//todo autopandas3 tf.reshape
 
 // autopandas4
 // 原输入超出4*10范围，[[1, 2, 3, 4, 5], [9, 8, 7, 6, 5], [3, 0, 2, 5, 8], [8, 8, 6, 3, 2], [2, 0, 7, 7, 3], [9, 0, 3, 2, 7], [1, 3, 8, 9, 4]]改为
@@ -1622,7 +1640,7 @@ fn autopandas8(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     synthesize(opts, context, &spec, &library)
 }
 
-//todo autopandas9 tf.gather tf.argsort
+// autopandas9 无法实现，重复的表达式出现多次
 
 // autopandas10
 // 手动实现tf.math.logical_not(tf.math.is_nan(in1))，为[0, 1, 1, 0, 1, 1]
