@@ -47,6 +47,7 @@ fn main() {
         simple_output_equals_constant,
         google_01,
         google_02,
+        google_06,
         google_08,
         google_10,
         google_11,
@@ -66,9 +67,11 @@ fn main() {
         stackoverflow_15,
         stackoverflow_16,
         stackoverflow_17,
+        stackoverflow_20,
         stackoverflow_22,
         stackoverflow_24,
         stackoverflow_26,
+        stackoverflow_27,
         stackoverflow_31,
         stackoverflow_32,
         stackoverflow_34,
@@ -82,6 +85,7 @@ fn main() {
         stackoverflow_45,
         stackoverflow_46,
         stackoverflow_48,
+        stackoverflow_50,
         autopandas4,
         autopandas8,
         autopandas10,
@@ -469,7 +473,7 @@ fn simple_using_primitive_input(context: &z3::Context, opts: &Options) -> SynthR
     return synthesize(opts, context, &spec, &library); 
 }
 
-//todo simple_with_many_inputs tf.gather
+// simple_with_many_inputs 维度超过二维，无法实现
 
 // simple_output_equals_input_single
 // 直接相等，我们采用constant来等价
@@ -602,9 +606,28 @@ fn google_02(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
 
 // google_04 无法实现，维度已经超过二维
 
-//todo google_05 tf.tile
+// google_05 无法实现，维度已经超过二维
 
-//todo google_06 tf.segment_max
+// google_06
+fn google_06(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+     
+    let mut input1 : Vec<Vec<i64>> = Vec::new();   
+    input1.push(vec![0, 1, 1, 2, 3, 3, 3, 3]);
+
+    let mut input2 : Vec<Vec<i64>> = Vec::new();   
+    input2.push(vec![1, 3, 4, 5, 10, 8, 9, 4]);
+
+    let in1 = builder.var(input1);
+    let in2 = builder.var(input2);
+
+    let _ = builder.tf_segment_max(in2, in1);
+    let spec = builder.finish();
+
+    return synthesize(opts, context, &spec, &library); 
+}
 
 //todo google_07 出现多次，暂时无法实现
 
@@ -710,7 +733,6 @@ fn google_12(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
 
     synthesize(opts, context, &spec, &library)
 }
-
 
 // google_13
 fn google_13(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
@@ -1092,7 +1114,31 @@ fn stackoverflow_17(context: &z3::Context, opts: &Options) -> SynthResult<Progra
 
 // stackoverflow_19 无法实现，多次重复出现同一表达式，且有数组切片运算
 
-//todo stackoverflow_20 tf.one_hot
+// stackoverflow_20
+// 原输入超过4行，删除最后一行，将小数修正为整数
+fn stackoverflow_20(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+
+    let mut input1 : Vec<Vec<i64>> = Vec::new();
+    input1.push(vec![7, 2, 1]);
+    input1.push(vec![4, 5, 1]);
+    input1.push(vec![4, 4, 2]);
+    input1.push(vec![3, 4, 3]);
+
+    let mut input2 : Vec<Vec<i64>> = Vec::new();
+    input2.push(vec![3]);
+
+    let in1 = builder.var(input1);
+    let in2 = builder.var(input2);
+
+    let o1 = builder.tf_argmax(in1);
+    let o2 = builder.tf_one_hot(o1, in2);
+    let _ = builder.tf_cast(o2);
+    let spec = builder.finish();
+
+    synthesize(opts, context, &spec, &library)
+}
 
 //todo stackoverflow_21 tf.gather
 
@@ -1175,7 +1221,28 @@ fn stackoverflow_26(context: &z3::Context, opts: &Options) -> SynthResult<Progra
     return synthesize(opts, context, &spec, &library); 
 }
 
-// stackoverflow_27 无法实现，维度超过二维
+// stackoverflow_27
+fn stackoverflow_27(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+     
+    let mut input1 : Vec<Vec<i64>> = Vec::new();   
+    input1.push(vec![0, 3, 5, 6]);
+
+    let mut input2 : Vec<Vec<i64>> = Vec::new();   
+    input2.push(vec![8]);
+
+    let in1 = builder.var(input1);
+    let in2 = builder.var(input2);
+
+    let o1 = builder.tf_one_hot(in1, in2);
+    let o2 = builder.tf_reduce_max0(o1);
+    let _ = builder.tf_cast(o2);
+    let spec = builder.finish();
+
+    return synthesize(opts, context, &spec, &library); 
+}
 
 // stackoverflow_28 无法实现，维度超过二维
 
@@ -1542,7 +1609,7 @@ fn stackoverflow_46(context: &z3::Context, opts: &Options) -> SynthResult<Progra
     synthesize(opts, context, &spec, &library)
 }
 
-//todo stackoverflow_47 tf.reshape tf.gather
+// stackoverflow_47 无法实现，出现重复的表达式和其他运算
 
 // stackoverflow_48
 fn stackoverflow_48(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
@@ -1569,7 +1636,32 @@ fn stackoverflow_48(context: &z3::Context, opts: &Options) -> SynthResult<Progra
 
 // stackoverflow_49 无法实现，首先是形状不对，其次是无法同时用一个方法两次
 
-//todo stackoverflow_50 tf.one_hot
+// stackoverflow_50
+// 原输入有5行，修改为4行，手动调整python的数组格式(5,)为[1, 5]
+fn stackoverflow_50(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
+    let library = Library::brahma_std();
+    let mut builder = ProgramBuilder::new();
+
+    let mut input1 : Vec<Vec<i64>> = Vec::new();
+    input1.push(vec![1, 4]);
+
+    let mut input2 : Vec<Vec<i64>> = Vec::new();
+    input2.push(vec![6]);
+
+    let mut input3 : Vec<Vec<i64>> = Vec::new();
+    input3.push(vec![3]);
+
+    let in1 = builder.var(input1);
+    let in2 = builder.var(input2);
+    let in3 = builder.var(input3);
+
+    let o1 = builder.tf_fill(in1, in3);
+    let o2 = builder.tf_one_hot(o1, in2);
+    let _ = builder.tf_cast(o2);
+    let spec = builder.finish();
+
+    synthesize(opts, context, &spec, &library)
+}
 
 // autopandas_benchmarks
 

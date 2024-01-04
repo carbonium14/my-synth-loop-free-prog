@@ -190,6 +190,15 @@ impl ProgramBuilder {
         result
     }
 
+    pub fn tf_one_hot(&mut self, a: Id, b: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfOneHot(a, b),
+        });
+        result
+    }
+
     pub fn tf_range(&mut self, a: Id, b: Id) -> Id {
         let result = self.next_id();
         self.program.instructions.push(Instruction {
@@ -331,6 +340,15 @@ impl ProgramBuilder {
         self.program.instructions.push(Instruction {
             result,
             operator: Operator::TfFill(a, b),
+        });
+        result
+    }
+
+    pub fn tf_segment_max(&mut self, a: Id, b: Id) -> Id {
+        let result = self.next_id();
+        self.program.instructions.push(Instruction {
+            result,
+            operator: Operator::TfSegmentMax(a, b),
         });
         result
     }

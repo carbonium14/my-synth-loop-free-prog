@@ -362,6 +362,7 @@ impl Library {
                 component::tf_bincount(),
                 component::tf_cumsum(),
                 component::tf_multiply(),
+                component::tf_one_hot(),
                 component::tf_range(),
                 component::tf_reduce_max(),
                 component::tf_reduce_max0(),
@@ -379,6 +380,7 @@ impl Library {
 
                 component::tf_eye(),
                 component::tf_fill(),
+                component::tf_segment_max(),
                 component::tf_matmul(),
                 component::tf_maximum(),
                 component::tf_minimum(),

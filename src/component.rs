@@ -845,6 +845,59 @@ pub fn tf_multiply() -> Box<dyn Component> {
 }
 
 #[derive(Debug)]
+struct TfOneHot;
+
+impl Component for TfOneHot {
+    fn operand_arity(&self) -> usize {
+        2
+    }
+
+    fn make_operator(&self, _immediates: &Vec<Vecs<i64>>, operands: &[Id]) -> Operator {
+        Operator::TfOneHot(operands[0], operands[1])
+    }
+
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vecs<Int<'a>>],
+        operands: &[Vecs<Int<'a>>],
+        bit_width: u32,
+    ) -> Vecs<Int<'a>> {
+        let const0 = zero(context, bit_width);
+        let const1 = one(context, bit_width);
+        let mut result = Vecs::new(operands[0].dims.clone());
+        let mut rowlen = Int::from_i64(context, -1);
+        let mut collen = Int::from_i64(context, -1);
+        for i in (0 .. DIMS[0]).rev() {
+            let row_index = Int::from_i64(context, i as i64);
+            for j in (0 .. DIMS[1]).rev() {
+                let col_index = Int::from_i64(context, j as i64);
+                collen = Bool::and(context, &[&operands[0].vecs[i][j]._eq(&const0), &Int::sub(context, &[&collen, &const1])._eq(&col_index)]).ite(&col_index, &collen);
+            }
+            rowlen = collen._eq(&const0).ite(&row_index, &rowlen);
+        }
+        let depth = operands[1].vecs[0][0].clone();
+        for i in 0 .. DIMS[0] {
+            for j in 0 .. DIMS[1] {
+                let row_index = Int::from_i64(context, i as i64);
+                let col_index = Int::from_i64(context, j as i64);
+                let is_in_row = row_index.lt(&rowlen);
+                let is_in_col = Bool::and(context, &[&col_index.lt(&collen), &col_index.lt(&depth)]);
+                let is_equal = operands[0].vecs[0][i]._eq(&col_index);
+                let value = Bool::and(context, &[&is_in_row, &is_in_col, &is_equal]).ite(&const1, &const0);
+                result.vecs[i].push(value);
+            }
+        }
+
+        return result;
+    }
+}
+
+pub fn tf_one_hot() -> Box<dyn Component> {
+    Box::new(TfOneHot) as _
+}
+
+#[derive(Debug)]
 struct TfRange;
 
 impl Component for TfRange {
@@ -1559,6 +1612,52 @@ pub fn tf_fill() -> Box<dyn Component> {
 }
 
 #[derive(Debug)]
+struct TfSegmentMax;
+
+impl Component for TfSegmentMax {
+    fn operand_arity(&self) -> usize {
+        2
+    }
+
+    fn make_operator(&self, _immediates: &Vec<Vecs<i64>>, operands: &[Id]) -> Operator {
+        Operator::TfSegmentMax(operands[0], operands[1])
+    }
+
+    fn make_expression<'a>(
+        &self,
+        context: &'a z3::Context,
+        _immediates: &[Vecs<Int<'a>>],
+        operands: &[Vecs<Int<'a>>],
+        bit_width: u32,
+    ) -> Vecs<Int<'a>> {
+        let const0 = zero(context, bit_width);
+        let mut result = Vecs::new(operands[0].dims.clone());
+        let domain_sort = Sort::int(&context);
+        let range_sort = Sort::int(&context);
+        for i in 0 .. DIMS[0] {
+            let mut array = Array::fresh_const(context, "segment_max_array:", &domain_sort, &range_sort);
+            let max = Int::from_i64(context, -9223372036854775808);
+            for j in 0 .. DIMS[1] {
+                let select_value = array.select(&operands[0].vecs[i][j]).as_int().unwrap_or(max.clone());
+                let final_value = select_value.gt(&operands[1].vecs[i][j]).ite(&select_value, &operands[1].vecs[i][j]);
+                array = array.store(&operands[0].vecs[i][j], &final_value);
+            }
+            for j in 0 .. DIMS[1] {
+                let index = Int::from_i64(context, j as i64);
+                let value = array.select(&index).as_int().unwrap_or(const0.clone());
+                result.vecs[i].push(value);
+            }
+        }
+
+        return result;
+    }
+}
+
+pub fn tf_segment_max() -> Box<dyn Component> {
+    Box::new(TfSegmentMax) as _
+}
+
+#[derive(Debug)]
 struct TfMatmul;
 
 impl Component for TfMatmul {
@@ -2172,6 +2271,10 @@ macro_rules! with_operator_component {
                 let $c = TfMultiply;
                 $body
             }
+            Operator::TfOneHot(_, _) => {
+                let $c = TfOneHot;
+                $body
+            }
             Operator::TfRange(_, _) => {
                 let $c = TfRange;
                 $body
@@ -2235,6 +2338,10 @@ macro_rules! with_operator_component {
             }
             Operator::TfFill(_, _) => {
                 let $c = TfFill;
+                $body
+            }
+            Operator::TfSegmentMax(_, _) => {
+                let $c = TfSegmentMax;
                 $body
             }
             Operator::TfMatmul(_, _) => {

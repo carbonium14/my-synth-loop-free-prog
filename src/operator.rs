@@ -12,9 +12,11 @@ pub enum Operator {
     // 我自己的操作符号
     TfAdd(Id, Id),
     TfArgmax(Id),
+    // 第一个是两个输入维度相同的情况，第二个是不同的情况
     TfBooleanMask(Id, Id),
     TfBooleanMask_(Id, Id),
     TfCast(Id),
+    // 下标表示不同的axis
     TfConcat0(Id, Id),
     TfConcat1(Id, Id),
     TfConstant(Id),
@@ -25,7 +27,9 @@ pub enum Operator {
     TfBincount(Id),
     TfCumsum(Id, Id),
     TfMultiply(Id, Id),
+    TfOneHot(Id, Id),
     TfRange(Id, Id),
+    // 下标表示不同的axis，没有下标就是axis=-1
     TfReduceMax(Id),
     TfReduceMax0(Id),
     TfReduceMax1(Id),
@@ -37,16 +41,19 @@ pub enum Operator {
     TfSubtract(Id, Id),
     TfTensordot(Id, Id),
     TfTranspose(Id),
+    // 下标表示参数的个数
     TfWhere1(Id),
     TfWhere3(Id, Id, Id),
 
     TfEye(Id, Id),
     TfFill(Id, Id),
+    TfSegmentMax(Id, Id),
     TfMatmul(Id, Id),
     TfMaximum(Id, Id),
     TfMinimum(Id, Id),
     TfNotEqual(Id, Id),
     TfOnes(Id),
+    // 下标表示不同的axis，没有下标就是axis=-1
     TfReduceAny0(Id),
     TfReduceAny1(Id),
     TfReduceMean(Id),
@@ -95,12 +102,14 @@ impl Operator {
             | Operator::TfGreater(_, _)
             | Operator::TfCumsum(_, _)
             | Operator::TfMultiply(_, _)
+            | Operator::TfOneHot(_, _)
             | Operator::TfRange(_, _)
             | Operator::TfSubtract(_, _)
             | Operator::TfTensordot(_, _)
 
             | Operator::TfEye(_, _)
             | Operator::TfFill(_, _)
+            | Operator::TfSegmentMax(_, _)
             | Operator::TfMatmul(_, _)
             | Operator::TfMaximum(_, _)
             | Operator::TfMinimum(_, _)
@@ -158,12 +167,14 @@ impl Operator {
             | Operator::TfGreater(a, b)
             | Operator::TfCumsum(a, b)
             | Operator::TfMultiply(a, b)
+            | Operator::TfOneHot(a, b)
             | Operator::TfRange(a, b)
             | Operator::TfSubtract(a, b)
             | Operator::TfTensordot(a, b)
 
             | Operator::TfEye(a, b)
             | Operator::TfFill(a, b)
+            | Operator::TfSegmentMax(a, b)
             | Operator::TfMatmul(a, b)
             | Operator::TfMaximum(a, b)
             | Operator::TfMinimum(a, b)
@@ -222,12 +233,14 @@ impl Operator {
             | Operator::TfGreater(a, b)
             | Operator::TfCumsum(a, b)
             | Operator::TfMultiply(a, b)
+            | Operator::TfOneHot(a, b)
             | Operator::TfRange(a, b)
             | Operator::TfSubtract(a, b)
             | Operator::TfTensordot(a, b)
 
             | Operator::TfEye(a, b)
             | Operator::TfFill(a, b)
+            | Operator::TfSegmentMax(a, b)
             | Operator::TfMatmul(a, b)
             | Operator::TfMaximum(a, b)
             | Operator::TfMinimum(a, b)
@@ -266,6 +279,7 @@ impl Display for Operator {
             Operator::TfBincount(a) => write!(f, "TfBincount: {}", a),
             Operator::TfCumsum(a, b) => write!(f, "TfCumsum: {}, {}", a, b),
             Operator::TfMultiply(a, b) => write!(f, "TfMultiply: {}, {}", a, b),
+            Operator::TfOneHot(a, b) => write!(f, "TfOneHot: {}, {}", a, b),
             Operator::TfRange(a, b) => write!(f, "TfRange: {}, {}", a, b),
             Operator::TfReduceMax(a) => write!(f, "TfReduceMax: {}", a),
             Operator::TfReduceMax0(a) => write!(f, "TfReduceMax: {}, axis = 0", a),
@@ -283,6 +297,7 @@ impl Display for Operator {
 
             Operator::TfEye(a, b) => write!(f, "TfEye: {}, {}", a, b),
             Operator::TfFill(a, b) => write!(f, "TfFill: {}, {}", a, b),
+            Operator::TfSegmentMax(a, b) => write!(f, "TfSegmentMax: {}, {}", a, b),
             Operator::TfMatmul(a, b) => write!(f, "TfMatmul: {}, {}", a, b),
             Operator::TfMaximum(a, b) => write!(f, "TfMaximum: {}, {}", a, b),
             Operator::TfMinimum(a, b) => write!(f, "TfMinimum: {}, {}", a, b),
