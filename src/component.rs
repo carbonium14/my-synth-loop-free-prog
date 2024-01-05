@@ -193,7 +193,7 @@ impl Component for TfArgmax {
         let const0 = zero(context, bit_width);
         let mut result = Vecs::new(operands[0].dims.clone());
         for i in 0 .. DIMS[0] {
-            for _j in 0 .. DIMS[1] {
+            for _ in 0 .. DIMS[1] {
                 result.vecs[i].push(const0.clone());
             }
         }
@@ -338,7 +338,7 @@ impl Component for TfCast {
 
     fn make_expression<'a>(
         &self,
-        context: &'a z3::Context,
+        _context: &'a z3::Context,
         _immediates: &[Vecs<Int<'a>>],
         operands: &[Vecs<Int<'a>>],
         _bit_width: u32,
@@ -346,7 +346,7 @@ impl Component for TfCast {
         let mut result = Vecs::new(operands[0].dims.clone());
         for i in 0 .. DIMS[0] {
             for j in 0 .. DIMS[1] {
-                result.vecs[i].push(Int::from_i64(&context, operands[0].vecs[i][j].as_i64().unwrap_or(0)));
+                result.vecs[i].push(operands[0].vecs[i][j].clone());
             }
         }
 
@@ -393,7 +393,7 @@ impl Component for TfConcat0 {
         let domain_sort = Sort::int(&context);
         let range_sort = Sort::int(&context);
         for i in 0 .. DIMS[0] {
-            for _j in 0 .. DIMS[1] {
+            for _ in 0 .. DIMS[1] {
                 result.vecs[i].push(const0.clone());
             }
         }
@@ -603,7 +603,7 @@ impl Component for TfEqual {
                 let col = Int::from_i64(context, j as i64);
                 let is_in_row = row.lt(&rowlen);
                 let is_in_col = col.lt(&collen);
-                result.vecs[i].push(Bool::and(context, &[&is_in_row, &is_in_col]).ite(&operands[0].vecs[i][j]._eq(&operands[1].vecs[i][j]).ite(&const1, &const0), &const0));
+                result.vecs[i].push(Bool::and(context, &[&is_in_row, &is_in_col, &operands[0].vecs[i][j]._eq(&operands[1].vecs[i][j])]).ite(&const1, &const0));
             }
         }
 
@@ -696,7 +696,7 @@ impl Component for TfGreater {
                 let col = Int::from_i64(context, j as i64);
                 let is_in_row = row.lt(&rowlen);
                 let is_in_col = col.lt(&collen);
-                result.vecs[i].push(Bool::and(context, &[&is_in_row, &is_in_col]).ite(&operands[0].vecs[i][j].gt(&operands[1].vecs[i][j]).ite(&const1, &const0), &const0));
+                result.vecs[i].push(Bool::and(context, &[&is_in_row, &is_in_col, &operands[0].vecs[i][j].gt(&operands[1].vecs[i][j])]).ite(&const1, &const0));
             }
         }
 
@@ -924,7 +924,7 @@ impl Component for TfRange {
         let limit = operands[1].vecs[0][0].clone();
         let mut value = start.clone();
         for i in 0 .. DIMS[0] {
-            for _j in 0 .. DIMS[1] {
+            for _ in 0 .. DIMS[1] {
                 result.vecs[i].push(const0.clone());
             }
         }
@@ -1027,6 +1027,11 @@ impl Component for TfReduceMax0 {
             }
             rowlen = collen._eq(&const0).ite(&row_index, &rowlen);
         }
+        for i in 0 .. DIMS[0] {
+            for _ in 0 .. DIMS[1] {
+                result.vecs[i].push(const0.clone());
+            }
+        }
         for j in 0 .. DIMS[1] {
             let mut sum = Int::from_i64(context, -9223372036854775808);
             for i in 0 .. DIMS[0] {
@@ -1079,6 +1084,11 @@ impl Component for TfReduceMax1 {
                 collen = Bool::and(context, &[&operands[0].vecs[i][j]._eq(&const0), &Int::sub(context, &[&collen, &const1])._eq(&col_index)]).ite(&col_index, &collen);
             }
             rowlen = collen._eq(&const0).ite(&row_index, &rowlen);
+        }
+        for i in 0 .. DIMS[0] {
+            for _ in 0 .. DIMS[1] {
+                result.vecs[i].push(const0.clone());
+            }
         }
         for i in 0 .. DIMS[0] {
             let mut sum = Int::from_i64(context, -9223372036854775808);
@@ -1161,7 +1171,7 @@ impl Component for TfReduceSum0 {
         let const0 = zero(context, bit_width);
         let mut result = Vecs::new(operands[0].dims.clone());
         for i in 0 .. DIMS[0] {
-            for _j in 0 .. DIMS[1] {
+            for _ in 0 .. DIMS[1] {
                 result.vecs[i].push(const0.clone());
             }
         }
@@ -1203,13 +1213,13 @@ impl Component for TfReduceSum1 {
         let const0 = zero(context, bit_width);
         let mut result = Vecs::new(operands[0].dims.clone());
         for i in 0 .. DIMS[0] {
-            for _j in 0 .. DIMS[1] {
+            for _ in 0 .. DIMS[1] {
                 result.vecs[i].push(const0.clone());
             }
         }
-        for i in 0 .. DIMS[1] {
+        for i in 0 .. DIMS[0] {
             let mut sum = zero(context, bit_width);
-            for j in 0 .. DIMS[0] {
+            for j in 0 .. DIMS[1] {
                 sum = Int::add(context, &[&sum, &operands[0].vecs[i][j]]);
             }
             result.vecs[0][i] = sum;
@@ -1361,7 +1371,7 @@ impl Component for TfTensordot {
         let const0 = zero(context, bit_width);
         let mut result = Vecs::new(operands[0].dims.clone());
         for i in 0 .. DIMS[0] {
-            for _j in 0 .. DIMS[1] {
+            for _ in 0 .. DIMS[1] {
                 result.vecs[i].push(const0.clone());
             }
         }
@@ -1404,7 +1414,7 @@ impl Component for TfTranspose {
         let const0 = zero(context, bit_width);
         let mut result = Vecs::new(operands[0].dims.clone());
         for i in 0 .. DIMS[0] {
-            for _j in 0 .. DIMS[1] {
+            for _ in 0 .. DIMS[1] {
                 result.vecs[i].push(const0.clone());
             }
         }
@@ -1680,7 +1690,7 @@ impl Component for TfMatmul {
         let const0 = zero(context, bit_width);
         let mut result = Vecs::new(operands[0].dims.clone());
         for i in 0 .. DIMS[0] {
-            for _j in 0 .. DIMS[1] {
+            for _ in 0 .. DIMS[1] {
                 result.vecs[i].push(const0.clone());
             }
         }
@@ -1926,7 +1936,7 @@ impl Component for TfReduceAny0 {
             rowlen = collen._eq(&const0).ite(&row_index, &rowlen);
         }
         for i in 0 .. DIMS[0] {
-            for _j in 0 .. DIMS[1] {
+            for _ in 0 .. DIMS[1] {
                 result.vecs[i].push(const0.clone());
             }
         }
@@ -1980,7 +1990,7 @@ impl Component for TfReduceAny1 {
             rowlen = collen._eq(&const0).ite(&row_index, &rowlen);
         }
         for i in 0 .. DIMS[0] {
-            for _j in 0 .. DIMS[1] {
+            for _ in 0 .. DIMS[1] {
                 result.vecs[i].push(const0.clone());
             }
         }
@@ -2035,7 +2045,7 @@ impl Component for TfReduceMean {
             rowlen = collen._eq(&const0).ite(&row_index, &rowlen);
         }
         for i in 0 .. DIMS[0] {
-            for _j in 0 .. DIMS[1] {
+            for _ in 0 .. DIMS[1] {
                 result.vecs[i].push(const0.clone());
             }
         }
@@ -2089,7 +2099,7 @@ impl Component for TfReduceProd {
             rowlen = collen._eq(&const0).ite(&row_index, &rowlen);
         }
         for i in 0 .. DIMS[0] {
-            for _j in 0 .. DIMS[1] {
+            for _ in 0 .. DIMS[1] {
                 result.vecs[i].push(const0.clone());
             }
         }
@@ -2144,7 +2154,7 @@ impl Component for TfRoll {
             rowlen = collen._eq(&const0).ite(&row_index, &rowlen);
         }
         for i in 0 .. DIMS[0] {
-            for _j in 0 .. DIMS[1] {
+            for _ in 0 .. DIMS[1] {
                 result.vecs[i].push(const0.clone());
             }
         }
@@ -2190,7 +2200,7 @@ impl Component for TfZeros {
         let const0 = zero(context, bit_width);
         let mut result = Vecs::new(operands[0].dims.clone());
         for i in 0 .. DIMS[0] {
-            for _j in 0 .. DIMS[1] {
+            for _ in 0 .. DIMS[1] {
                 result.vecs[i].push(const0.clone());
             }
         }
