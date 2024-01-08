@@ -573,8 +573,6 @@ fn google_01(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
 }
 
 // google_02
-// 避免末尾的0无法区分是自己加的还是扩充的，调整末尾0为1
-// [[0.0, 1.0, 0.0, 0.0], [0.0, 1.0, 1.0, 0.0],[1.0, 1.0, 1.0, 1.0]]为[[0.0, 1.0, 0.0, 1.0], [0.0, 1.0, 1.0, 1.0],[1.0, 1.0, 1.0, 1.0]]
 // 浮点数手动调整为整数
 fn google_02(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
 
@@ -582,13 +580,13 @@ fn google_02(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     let mut builder = ProgramBuilder::new();
      
     let mut input1 : Vec<Vec<i64>> = Vec::new();   
-    input1.push(vec![0, 10, 0, 10]);
-    input1.push(vec![0, 10, 10, 10]);
+    input1.push(vec![0, 10, 0, 0]);
+    input1.push(vec![0, 10, 10, 0]);
     input1.push(vec![10, 10, 10, 10]);
 
     let mut input2 : Vec<Vec<i64>> = Vec::new();   
-    input2.push(vec![0, 10, 0, 10]);
-    input2.push(vec![0, 10, 10, 10]);
+    input2.push(vec![0, 10, 0, 0]);
+    input2.push(vec![0, 10, 10, 0]);
     input2.push(vec![10, 10, 10, 10]);
 
     let in1 = builder.var(input1);
@@ -683,8 +681,6 @@ fn google_10(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
 
 // google_11 
 // 用到了浮点数转换为整数，目前可以将输入手动转为整数
-// 避免末尾的0无法区分是自己加的还是扩充的，调整末尾0为10
-// [[1.0, 0.3, -4.2, 0.0, 2.1, 0.4], [-0.1, 0.0, 1.4, -1.0, 0.4, 0.0], [0.1, 0.0, 0.7, -0.3, 0.5, -0.1], [1.4, 2.5, 0.3, 0.01, 0.0, 1.2]]
 fn google_11(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
 
     let library = Library::brahma_std();
@@ -692,7 +688,7 @@ fn google_11(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
      
     let mut input1 : Vec<Vec<i64>> = Vec::new();   
     input1.push(vec![10, 3, -42, 0, 21, 4]);
-    input1.push(vec![-1, 0, 14, -10, 4, 10]);
+    input1.push(vec![-1, 0, 14, -10, 4, 0]);
     input1.push(vec![1, 0, 7, -3, 5, -1]);
     input1.push(vec![14, 25, 3, 1, 0, 12]);
 
@@ -757,15 +753,14 @@ fn google_13(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
 }
 
 // google_14
-// 为了消除0带来的影响，将输入中的0改为-1
 fn google_14(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     let library = Library::brahma_std();
     let mut builder = ProgramBuilder::new();
 
     let mut input1 : Vec<Vec<i64>> = Vec::new();
-    input1.push(vec![1, 3, 2, -1, -1]);
-    input1.push(vec![4, 6, 5, -1, -1]);
-    input1.push(vec![8, 7, 9, -1, -1]);
+    input1.push(vec![1, 3, 2, 0, 0]);
+    input1.push(vec![4, 6, 5, 0, 0]);
+    input1.push(vec![8, 7, 9, 0, 0]);
 
     let in1 = builder.var(input1);
 
@@ -1434,8 +1429,6 @@ fn stackoverflow_37(context: &z3::Context, opts: &Options) -> SynthResult<Progra
 }
 
 // stackoverflow_38
-// 避免末尾的0无法区分是自己加的还是扩充的，调整末尾0为1
-// [[0, 0, 1, 0, 1, 0], [1, 0, 0, 0, 0, 0], [0, 1, 1, 1, 0, 1]]
 fn stackoverflow_38(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     let library = Library::brahma_std();
     let mut builder = ProgramBuilder::new();
@@ -1446,13 +1439,13 @@ fn stackoverflow_38(context: &z3::Context, opts: &Options) -> SynthResult<Progra
     input1.push(vec![9, 2, 5, 3, 7, 4]);
 
     let mut input2 : Vec<Vec<i64>> = Vec::new();
-    input2.push(vec![0, 0, 1, 0, 1, 1]);
-    input2.push(vec![1, 0, 0, 0, 0, 1]);
+    input2.push(vec![0, 0, 1, 0, 1, 0]);
+    input2.push(vec![1, 0, 0, 0, 0, 0]);
     input2.push(vec![0, 1, 1, 1, 0, 1]);
 
     let mut input3 : Vec<Vec<i64>> = Vec::new();
-    input3.push(vec![0, 0, 1, 0, 1, 1]);
-    input3.push(vec![1, 0, 0, 0, 0, 1]);
+    input3.push(vec![0, 0, 1, 0, 1, 0]);
+    input3.push(vec![1, 0, 0, 0, 0, 0]);
     input3.push(vec![0, 1, 1, 1, 0, 1]);
 
     let in1 = builder.var(input1);
@@ -1867,17 +1860,15 @@ fn autopandas15(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
 }
 
 // autopandas16
-// 不知道数组末尾的0是填充的还是自带的，将末尾的0改成1，输出不考虑数组的取下标
-// [[0, 6, 0], [3, 101, 14], [0, 91, 6], [5, 15, 0]]改成[[0, 6, 1], [3, 101, 14], [0, 91, 6], [5, 15, 1]]
 fn autopandas16(context: &z3::Context, opts: &Options) -> SynthResult<Program> {
     let library = Library::brahma_std();
     let mut builder = ProgramBuilder::new();
 
     let mut input1 : Vec<Vec<i64>> = Vec::new();
-    input1.push(vec![0, 6, 1]);
+    input1.push(vec![0, 6, 0]);
     input1.push(vec![3, 101, 14]);
     input1.push(vec![0, 91, 6]);
-    input1.push(vec![5, 15, 1]);
+    input1.push(vec![5, 15, 0]);
 
     let in1 = builder.var(input1);
     

@@ -191,20 +191,21 @@ impl Component for TfArgmax {
         // 注意，这里只有axis=1的实现方式，这么做的原因是因为它不给axis=0的测试样例所以没有写。。。
         // 目前遇到的问题是，如果采用之前array的方法，即计算两遍然后根据axis判断返回结果，那么会导致ite的时候类型不匹配
         let const0 = zero(context, bit_width);
-        let mut result = Vecs::new(operands[0].dims.clone());
+        let mut result = Vecs::new([one(context, bit_width), operands[0].dims[0].clone()]);
         for i in 0 .. DIMS[0] {
             for _ in 0 .. DIMS[1] {
                 result.vecs[i].push(const0.clone());
             }
         }
         for i in 0 .. DIMS[0] {
-            let mut max = const0.clone();
+            let mut max = Int::from_i64(context, -9223372036854775808);
             let mut index = const0.clone();
             for j in 0 .. DIMS[1] {
-                max = operands[0].vecs[i][j].lt(&max).ite(&operands[0].vecs[i][j], &max);
+                max = operands[0].vecs[i][j].gt(&max).ite(&operands[0].vecs[i][j], &max);
             }
             for j in (0 .. DIMS[1]).rev() {
-                index = operands[0].vecs[i][j]._eq(&max).ite(&Int::from_i64(context, j as i64), &index);
+                let col = Int::from_i64(context, j as i64);
+                index = operands[0].vecs[i][j]._eq(&max).ite(&col, &index);
             }
             result.vecs[0][i] = index;
         }
@@ -242,17 +243,20 @@ impl Component for TfBooleanMask {
         let domain_sort = Sort::int(&context);
         let range_sort = Sort::int(&context);
         let mut array = Array::fresh_const(context, "boolean_mask_array:", &domain_sort, &range_sort);
+        let mut result_index = zero(context, bit_width);
         for i in 0 .. DIMS[0] {
-            let mut index = Int::from_i64(context, -1);
+            let mut index = zero(context, bit_width);
             for j in 0 .. DIMS[1] {
-                let cur_index = operands[1].vecs[i][j]._eq(&const0).ite(&Int::from_i64(context, -1), &Int::add(context, &[&index, &const1]));
+                let cur_index = operands[1].vecs[i][j]._eq(&const0).ite(&Int::from_i64(context, -1), &index);
                 index = operands[1].vecs[i][j]._eq(&const0).ite(&index, &Int::add(context, &[&index, &const1]));
                 array = array.store(&cur_index, &operands[0].vecs[i][j]);
             }
+            result_index = result_index.lt(&index).ite(&index, &result_index);
             for j in 0 .. DIMS[1] {
                 result.vecs[i].push(array.select(&Int::from_i64(context, j as i64)).as_int().unwrap_or(const0.clone()));
             }
         }
+        result.dims[1] = result_index;
 
         return result;
     }
@@ -293,19 +297,21 @@ impl Component for TfBooleanMask_ {
         let mut array = Array::fresh_const(context, "boolean_mask_array_second:", &domain_sort, &range_sort);
         let mut array_ = Array::fresh_const(context, "boolean_mask_array:", &first_dim_sort, &array_sort);
         for i in 0 .. DIMS[0] {
-            for _j in 0 .. DIMS[1] {
+            for _ in 0 .. DIMS[1] {
                 result.vecs[i].push(const0.clone());
             }
         }
-        let mut index_ = Int::from_i64(context, -1);
+        let mut index_ = zero(context, bit_width);
+        let mut result_index = zero(context, bit_width);
         for i in 0 .. DIMS[0] {
-            let mut index = Int::from_i64(context, -1);
+            let mut index = zero(context, bit_width);
             for j in 0 .. DIMS[1] {
-                let cur_index = operands[1].vecs[0][i]._eq(&const0).ite(&Int::from_i64(context, -1), &Int::add(context, &[&index, &const1]));
+                let cur_index = operands[1].vecs[0][i]._eq(&const0).ite(&Int::from_i64(context, -1), &index);
                 index = operands[1].vecs[0][i]._eq(&const0).ite(&index, &Int::add(context, &[&index, &const1]));
                 array = array.store(&cur_index, &operands[0].vecs[i][j]);
             }
-            let cur_index_ = operands[1].vecs[0][i]._eq(&const0).ite(&Int::from_i64(context, -1), &Int::add(context, &[&index_, &const1]));
+            result_index = result_index.lt(&index).ite(&index, &result_index);
+            let cur_index_ = operands[1].vecs[0][i]._eq(&const0).ite(&Int::from_i64(context, -1), &index_);
             index_ = operands[1].vecs[0][i]._eq(&const0).ite(&index_, &Int::add(context, &[&index_, &const1]));
             array_ = array_.store(&cur_index_, &array);
         }
@@ -315,6 +321,8 @@ impl Component for TfBooleanMask_ {
                 result.vecs[i][j] = row.select(&Int::from_i64(context, j as i64)).as_int().unwrap_or(const0.clone());
             }
         }
+        result.dims[0] = index_;
+        result.dims[1] = result_index;
 
         return result;
     }
@@ -378,18 +386,7 @@ impl Component for TfConcat0 {
         bit_width: u32,
     ) -> Vecs<Int<'a>> {
         let const0 = zero(context, bit_width);
-        let const1 = one(context, bit_width);
-        let mut result = Vecs::new(operands[0].dims.clone());
-        let mut rowlen = Int::from_i64(context, -1);
-        let mut collen = Int::from_i64(context, -1);
-        for i in (0 .. DIMS[0]).rev() {
-            let row_index = Int::from_i64(context, i as i64);
-            for j in (0 .. DIMS[1]).rev() {
-                let col_index = Int::from_i64(context, j as i64);
-                collen = Bool::and(context, &[&operands[0].vecs[i][j]._eq(&const0), &Int::sub(context, &[&collen, &const1])._eq(&col_index)]).ite(&col_index, &collen);
-            }
-            rowlen = collen._eq(&const0).ite(&row_index, &rowlen);
-        }
+        let mut result = Vecs::new([Int::add(context, &[&operands[0].dims[0], &operands[1].dims[0]]), operands[0].dims[1].clone()]);
         let domain_sort = Sort::int(&context);
         let range_sort = Sort::int(&context);
         for i in 0 .. DIMS[0] {
@@ -404,7 +401,7 @@ impl Component for TfConcat0 {
                 array = array.store(&row_index, &operands[0].vecs[i][j]);
             }
             for i in 0 .. DIMS[0] {
-                let row_index = Int::add(context, &[&Int::from_i64(context, i as i64), &rowlen]);
+                let row_index = Int::add(context, &[&Int::from_i64(context, i as i64), &operands[0].dims[0]]);
                 array = array.store(&row_index, &operands[1].vecs[i][j]);
             }
             for i in 0 .. DIMS[0] {
@@ -441,18 +438,7 @@ impl Component for TfConcat1 {
         bit_width: u32,
     ) -> Vecs<Int<'a>> {
         let const0 = zero(context, bit_width);
-        let const1 = one(context, bit_width);
-        let mut result = Vecs::new(operands[0].dims.clone());
-        let mut rowlen = Int::from_i64(context, -1);
-        let mut collen = Int::from_i64(context, -1);
-        for i in (0 .. DIMS[0]).rev() {
-            let row_index = Int::from_i64(context, i as i64);
-            for j in (0 .. DIMS[1]).rev() {
-                let col_index = Int::from_i64(context, j as i64);
-                collen = Bool::and(context, &[&operands[0].vecs[i][j]._eq(&const0), &Int::sub(context, &[&collen, &const1])._eq(&col_index)]).ite(&col_index, &collen);
-            }
-            rowlen = collen._eq(&const0).ite(&row_index, &rowlen);
-        }
+        let mut result = Vecs::new([operands[0].dims[0].clone(), Int::add(context, &[&operands[0].dims[1], &operands[1].dims[1]])]);
         let domain_sort = Sort::int(&context);
         let range_sort = Sort::int(&context);
         for i in 0 .. DIMS[0] {
@@ -462,7 +448,7 @@ impl Component for TfConcat1 {
                 array = array.store(&col_index, &operands[0].vecs[i][j]);
             }
             for j in 0 .. DIMS[1] {
-                let col_index = Int::add(context, &[&Int::from_i64(context, j as i64), &collen]);
+                let col_index = Int::add(context, &[&Int::from_i64(context, j as i64), &operands[0].dims[1]]);
                 array = array.store(&col_index, &operands[1].vecs[i][j]);
             }
             for j in 0 .. DIMS[1] {
@@ -535,24 +521,15 @@ impl Component for TfDivide {
         let const0 = zero(context, bit_width);
         let const1 = one(context, bit_width);
         let mut result = Vecs::new(operands[0].dims.clone());
-        let mut rowlen = Int::from_i64(context, -1);
-        let mut collen = Int::from_i64(context, -1);
-        for i in (0 .. DIMS[0]).rev() {
-            let row_index = Int::from_i64(context, i as i64);
-            for j in (0 .. DIMS[1]).rev() {
-                let col_index = Int::from_i64(context, j as i64);
-                collen = Bool::and(context, &[&operands[0].vecs[i][j]._eq(&const0), &Int::sub(context, &[&collen, &const1])._eq(&col_index)]).ite(&col_index, &collen);
-            }
-            rowlen = collen._eq(&const0).ite(&row_index, &rowlen);
-        }
         for i in 0 .. DIMS[0] {
             for j in 0 .. DIMS[1] {
                 let row = Int::from_i64(context, i as i64);
                 let col = Int::from_i64(context, j as i64);
-                let is_in_row = row.lt(&rowlen);
-                let is_in_col = col.lt(&collen);
+                let is_in_row = row.lt(&operands[0].dims[0]);
+                let is_in_col = col.lt(&operands[0].dims[1]);
                 let fenmu = operands[1].vecs[i][j]._eq(&const0).ite(&const1, &operands[1].vecs[i][j]);
-                let value = Bool::and(context, &[&is_in_row, &is_in_col]).ite(&Int::div(&operands[0].vecs[i][j], &fenmu), &const0);
+                let value = Bool::and(context, &[&is_in_row, &is_in_col])
+                    .ite(&Int::div(&operands[0].vecs[i][j], &fenmu), &const0);
                 result.vecs[i].push(value);
             }
         }
@@ -587,23 +564,14 @@ impl Component for TfEqual {
         let const0 = zero(context, bit_width);
         let const1 = one(context, bit_width);
         let mut result = Vecs::new(operands[0].dims.clone());
-        let mut rowlen = Int::from_i64(context, -1);
-        let mut collen = Int::from_i64(context, -1);
-        for i in (0 .. DIMS[0]).rev() {
-            let row_index = Int::from_i64(context, i as i64);
-            for j in (0 .. DIMS[1]).rev() {
-                let col_index = Int::from_i64(context, j as i64);
-                collen = Bool::and(context, &[&operands[0].vecs[i][j]._eq(&const0), &Int::sub(context, &[&collen, &const1])._eq(&col_index)]).ite(&col_index, &collen);
-            }
-            rowlen = collen._eq(&const0).ite(&row_index, &rowlen);
-        }
         for i in 0 .. DIMS[0] {
             for j in 0 .. DIMS[1] {
                 let row = Int::from_i64(context, i as i64);
                 let col = Int::from_i64(context, j as i64);
-                let is_in_row = row.lt(&rowlen);
-                let is_in_col = col.lt(&collen);
-                result.vecs[i].push(Bool::and(context, &[&is_in_row, &is_in_col, &operands[0].vecs[i][j]._eq(&operands[1].vecs[i][j])]).ite(&const1, &const0));
+                let is_in_row = row.lt(&operands[0].dims[0]);
+                let is_in_col = col.lt(&operands[0].dims[1]);
+                result.vecs[i].push(Bool::and(context, &[&is_in_row, &is_in_col, &operands[0].vecs[i][j]._eq(&operands[1].vecs[i][j])])
+                    .ite(&const1, &const0));
             }
         }
 
@@ -634,19 +602,19 @@ impl Component for TfExpandDims {
         operands: &[Vecs<Int<'a>>],
         bit_width: u32,
     ) -> Vecs<Int<'a>> {
-        // 样例中能用的（有些数组维度超过了二维）基本上都是axis=1的情况，目前只考虑这个
+        // 样例中能用的（有些数组维度超过了二维）基本上都是axis = 1的情况，目前只考虑这个
         let const0 = zero(context, bit_width);
-        let mut result = Vecs::new(operands[0].dims.clone());
+        let const4 = Int::from_i64(context, DIMS[0] as i64);
+        let result_row = operands[0].dims[1].lt(&const4).ite(&operands[0].dims[1], &const4);
+        let mut result = Vecs::new([result_row, one(context, bit_width)]);
         for i in 0 .. DIMS[0] {
             for _ in 0 .. DIMS[1] {
                 result.vecs[i].push(const0.clone());
             }
         }
         for i in 0 .. DIMS[0] {
-            for j in 0 .. DIMS[1] {
-                if j < DIMS[0] {
-                    result.vecs[j][0] = operands[0].vecs[i][j].clone();
-                }
+            for j in 0 .. DIMS[0] {
+                result.vecs[j][0] = operands[0].vecs[i][j].clone();
             }
         }
 
@@ -680,23 +648,14 @@ impl Component for TfGreater {
         let const0 = zero(context, bit_width);
         let const1 = one(context, bit_width);
         let mut result = Vecs::new(operands[0].dims.clone());
-        let mut rowlen = Int::from_i64(context, -1);
-        let mut collen = Int::from_i64(context, -1);
-        for i in (0 .. DIMS[0]).rev() {
-            let row_index = Int::from_i64(context, i as i64);
-            for j in (0 .. DIMS[1]).rev() {
-                let col_index = Int::from_i64(context, j as i64);
-                collen = Bool::and(context, &[&operands[0].vecs[i][j]._eq(&const0), &Int::sub(context, &[&collen, &const1])._eq(&col_index)]).ite(&col_index, &collen);
-            }
-            rowlen = collen._eq(&const0).ite(&row_index, &rowlen);
-        }
         for i in 0 .. DIMS[0] {
             for j in 0 .. DIMS[1] {
                 let row = Int::from_i64(context, i as i64);
                 let col = Int::from_i64(context, j as i64);
-                let is_in_row = row.lt(&rowlen);
-                let is_in_col = col.lt(&collen);
-                result.vecs[i].push(Bool::and(context, &[&is_in_row, &is_in_col, &operands[0].vecs[i][j].gt(&operands[1].vecs[i][j])]).ite(&const1, &const0));
+                let is_in_row = row.lt(&operands[0].dims[0]);
+                let is_in_col = col.lt(&operands[0].dims[1]);
+                result.vecs[i].push(Bool::and(context, &[&is_in_row, &is_in_col, &operands[0].vecs[i][j].gt(&operands[1].vecs[i][j])])
+                    .ite(&const1, &const0));
             }
         }
 
@@ -736,8 +695,10 @@ impl Component for TfBincount {
                 result.vecs[i].push(const0.clone());
             }
         }
+        let mut result_index = zero(context, bit_width);
         for i in 0 .. DIMS[0] {
             for j in 0 .. DIMS[1] {
+                result_index = result_index.gt(&operands[0].vecs[i][j]).ite(&result_index, &operands[0].vecs[i][j]);
                 for k in 0 .. DIMS[1] {
                     let index = Int::from_i64(context, k as i64);
                     let new_value = Int::add(context, &[&result.vecs[i][k], &const1]);
@@ -745,6 +706,7 @@ impl Component for TfBincount {
                 }
             }
         }
+        result.dims[1] = result_index;
 
         return result;
     }
@@ -775,29 +737,19 @@ impl Component for TfCumsum {
     ) -> Vecs<Int<'a>> {
         // 所有样例只有输入数组和exclusive两个输入，只考虑这俩
         let const0 = zero(context, bit_width);
-        let const1 = one(context, bit_width);
         let mut result = Vecs::new(operands[0].dims.clone());
-        let mut rowlen = Int::from_i64(context, -1);
-        let mut collen = Int::from_i64(context, -1);
-        for i in (0 .. DIMS[0]).rev() {
-            let row_index = Int::from_i64(context, i as i64);
-            for j in (0 .. DIMS[1]).rev() {
-                let col_index = Int::from_i64(context, j as i64);
-                collen = Bool::and(context, &[&operands[0].vecs[i][j]._eq(&const0), &Int::sub(context, &[&collen, &const1])._eq(&col_index)]).ite(&col_index, &collen);
-            }
-            rowlen = collen._eq(&const0).ite(&row_index, &rowlen);
-        }
         let is_exclusive = operands[1].vecs[0][0]._eq(&const0);
         for i in 0 .. DIMS[0] {
             result.vecs[i].push(is_exclusive.ite(&operands[0].vecs[i][0], &const0));
             for j in 1 .. (DIMS[1] + 1) {
                 let col_index = Int::from_i64(context, j as i64);
-                let is_in_col = col_index.lt(&collen);
+                let is_in_col = col_index.lt(&operands[0].dims[1]);
                 let mut temp = j;
                 if j == DIMS[1] {
                     temp = DIMS[1] - 1;
                 }
-                let value = Int::add(context, &[&result.vecs[i][j - 1], &is_exclusive.ite(&operands[0].vecs[i][temp], &operands[0].vecs[i][j - 1])]);
+                let is_exclusive_value = is_exclusive.ite(&operands[0].vecs[i][temp], &operands[0].vecs[i][j - 1]);
+                let value = Int::add(context, &[&result.vecs[i][j - 1], &is_exclusive_value]);
                 result.vecs[i].push(is_in_col.ite(&value, &const0));
             }
         }
@@ -865,24 +817,16 @@ impl Component for TfOneHot {
     ) -> Vecs<Int<'a>> {
         let const0 = zero(context, bit_width);
         let const1 = one(context, bit_width);
-        let mut result = Vecs::new(operands[0].dims.clone());
-        let mut rowlen = Int::from_i64(context, -1);
-        let mut collen = Int::from_i64(context, -1);
-        for i in (0 .. DIMS[0]).rev() {
-            let row_index = Int::from_i64(context, i as i64);
-            for j in (0 .. DIMS[1]).rev() {
-                let col_index = Int::from_i64(context, j as i64);
-                collen = Bool::and(context, &[&operands[0].vecs[i][j]._eq(&const0), &Int::sub(context, &[&collen, &const1])._eq(&col_index)]).ite(&col_index, &collen);
-            }
-            rowlen = collen._eq(&const0).ite(&row_index, &rowlen);
-        }
+        let const4 = Int::from_i64(context, DIMS[0] as i64);
+        let result_row = operands[0].dims[1].lt(&const4).ite(&operands[0].dims[1], &const4);
         let depth = operands[1].vecs[0][0].clone();
+        let mut result = Vecs::new([result_row, depth.clone()]);
         for i in 0 .. DIMS[0] {
             for j in 0 .. DIMS[1] {
                 let row_index = Int::from_i64(context, i as i64);
                 let col_index = Int::from_i64(context, j as i64);
-                let is_in_row = row_index.lt(&rowlen);
-                let is_in_col = Bool::and(context, &[&col_index.lt(&collen), &col_index.lt(&depth)]);
+                let is_in_row = row_index.lt(&operands[0].dims[0]);
+                let is_in_col = Bool::and(context, &[&col_index.lt(&operands[0].dims[1]), &col_index.lt(&depth)]);
                 let is_equal = operands[0].vecs[0][i]._eq(&col_index);
                 let value = Bool::and(context, &[&is_in_row, &is_in_col, &is_equal]).ite(&const1, &const0);
                 result.vecs[i].push(value);
@@ -919,9 +863,11 @@ impl Component for TfRange {
         // 所有样例只有两个参数，起始和结束，第三个参数delta按照1处理
         let const0 = zero(context, bit_width);
         let const1 = one(context, bit_width);
-        let mut result = Vecs::new(operands[0].dims.clone());
         let start = operands[0].vecs[0][0].clone();
         let limit = operands[1].vecs[0][0].clone();
+        let len = Int::sub(context, &[&limit, &start]);
+        let col = len.gt(&const0).ite(&len, &const0);
+        let mut result = Vecs::new([const1.clone(), col]);
         let mut value = start.clone();
         for i in 0 .. DIMS[0] {
             for _ in 0 .. DIMS[1] {
@@ -962,30 +908,20 @@ impl Component for TfReduceMax {
     ) -> Vecs<Int<'a>> {
         let const0 = zero(context, bit_width);
         let const1 = one(context, bit_width);
-        let mut result = Vecs::new(operands[0].dims.clone());
-        let mut rowlen = Int::from_i64(context, -1);
-        let mut collen = Int::from_i64(context, -1);
-        for i in (0 .. DIMS[0]).rev() {
-            let row_index = Int::from_i64(context, i as i64);
-            for j in (0 .. DIMS[1]).rev() {
-                let col_index = Int::from_i64(context, j as i64);
-                collen = Bool::and(context, &[&operands[0].vecs[i][j]._eq(&const0), &Int::sub(context, &[&collen, &const1])._eq(&col_index)]).ite(&col_index, &collen);
-            }
-            rowlen = collen._eq(&const0).ite(&row_index, &rowlen);
-        }
-        let mut sum = Int::from_i64(context, -9223372036854775808);
+        let mut result = Vecs::new([const1.clone(), const1.clone()]);
+        let mut max = Int::from_i64(context, -9223372036854775808);
         for i in 0 .. DIMS[0] {
             for j in 0 .. DIMS[1] {
                 result.vecs[i].push(const0.clone());
                 let row_index = Int::from_i64(context, i as i64);
-                let col_index = Int::from_i64(context, i as i64);
-                let is_in_row = row_index.lt(&rowlen);
-                let is_in_col = col_index.lt(&collen);
-                let value = operands[0].vecs[i][j].gt(&sum).ite(&operands[0].vecs[i][j], &sum);
-                sum = Bool::and(context, &[&is_in_row, &is_in_col]).ite(&value, &sum);
+                let col_index = Int::from_i64(context, j as i64);
+                let is_in_row = row_index.lt(&operands[0].dims[0]);
+                let is_in_col = col_index.lt(&operands[0].dims[1]);
+                let value = operands[0].vecs[i][j].gt(&max).ite(&operands[0].vecs[i][j], &max);
+                max = Bool::and(context, &[&is_in_row, &is_in_col]).ite(&value, &max);
             }
         }
-        result.vecs[0][0] = sum;
+        result.vecs[0][0] = max;
 
         return result;
     }
@@ -1016,33 +952,23 @@ impl Component for TfReduceMax0 {
     ) -> Vecs<Int<'a>> {
         let const0 = zero(context, bit_width);
         let const1 = one(context, bit_width);
-        let mut result = Vecs::new(operands[0].dims.clone());
-        let mut rowlen = Int::from_i64(context, -1);
-        let mut collen = Int::from_i64(context, -1);
-        for i in (0 .. DIMS[0]).rev() {
-            let row_index = Int::from_i64(context, i as i64);
-            for j in (0 .. DIMS[1]).rev() {
-                let col_index = Int::from_i64(context, j as i64);
-                collen = Bool::and(context, &[&operands[0].vecs[i][j]._eq(&const0), &Int::sub(context, &[&collen, &const1])._eq(&col_index)]).ite(&col_index, &collen);
-            }
-            rowlen = collen._eq(&const0).ite(&row_index, &rowlen);
-        }
+        let mut result = Vecs::new([const1.clone(), operands[0].dims[1].clone()]);
         for i in 0 .. DIMS[0] {
             for _ in 0 .. DIMS[1] {
                 result.vecs[i].push(const0.clone());
             }
         }
         for j in 0 .. DIMS[1] {
-            let mut sum = Int::from_i64(context, -9223372036854775808);
+            let mut max = Int::from_i64(context, -9223372036854775808);
             for i in 0 .. DIMS[0] {
                 let row_index = Int::from_i64(context, i as i64);
-                let col_index = Int::from_i64(context, i as i64);
-                let is_in_row = row_index.lt(&rowlen);
-                let is_in_col = col_index.lt(&collen);
-                let value = operands[0].vecs[i][j].gt(&sum).ite(&operands[0].vecs[i][j], &sum);
-                sum = Bool::and(context, &[&is_in_row, &is_in_col]).ite(&value, &sum);
+                let col_index = Int::from_i64(context, j as i64);
+                let is_in_row = row_index.lt(&operands[0].dims[0]);
+                let is_in_col = col_index.lt(&operands[0].dims[1]);
+                let value = operands[0].vecs[i][j].gt(&max).ite(&operands[0].vecs[i][j], &max);
+                max = Bool::and(context, &[&is_in_row, &is_in_col]).ite(&value, &max);
             }
-            result.vecs[0][j] = sum;
+            result.vecs[0][j] = max;
         }
 
         return result;
@@ -1074,33 +1000,23 @@ impl Component for TfReduceMax1 {
     ) -> Vecs<Int<'a>> {
         let const0 = zero(context, bit_width);
         let const1 = one(context, bit_width);
-        let mut result = Vecs::new(operands[0].dims.clone());
-        let mut rowlen = Int::from_i64(context, -1);
-        let mut collen = Int::from_i64(context, -1);
-        for i in (0 .. DIMS[0]).rev() {
-            let row_index = Int::from_i64(context, i as i64);
-            for j in (0 .. DIMS[1]).rev() {
-                let col_index = Int::from_i64(context, j as i64);
-                collen = Bool::and(context, &[&operands[0].vecs[i][j]._eq(&const0), &Int::sub(context, &[&collen, &const1])._eq(&col_index)]).ite(&col_index, &collen);
-            }
-            rowlen = collen._eq(&const0).ite(&row_index, &rowlen);
-        }
+        let mut result = Vecs::new([const1.clone(), operands[0].dims[0].clone()]);
         for i in 0 .. DIMS[0] {
             for _ in 0 .. DIMS[1] {
                 result.vecs[i].push(const0.clone());
             }
         }
         for i in 0 .. DIMS[0] {
-            let mut sum = Int::from_i64(context, -9223372036854775808);
+            let mut max = Int::from_i64(context, -9223372036854775808);
             for j in 0 .. DIMS[1] {
                 let row_index = Int::from_i64(context, i as i64);
-                let col_index = Int::from_i64(context, i as i64);
-                let is_in_row = row_index.lt(&rowlen);
-                let is_in_col = col_index.lt(&collen);
-                let value = operands[0].vecs[i][j].gt(&sum).ite(&operands[0].vecs[i][j], &sum);
-                sum = Bool::and(context, &[&is_in_row, &is_in_col]).ite(&value, &sum);
+                let col_index = Int::from_i64(context, j as i64);
+                let is_in_row = row_index.lt(&operands[0].dims[0]);
+                let is_in_col = col_index.lt(&operands[0].dims[1]);
+                let value = operands[0].vecs[i][j].gt(&max).ite(&operands[0].vecs[i][j], &max);
+                max = Bool::and(context, &[&is_in_row, &is_in_col]).ite(&value, &max);
             }
-            result.vecs[0][i] = sum;
+            result.vecs[0][i] = max;
         }
 
         return result;
@@ -1131,7 +1047,7 @@ impl Component for TfReduceSum {
         bit_width: u32,
     ) -> Vecs<Int<'a>> {
         let const0 = zero(context, bit_width);
-        let mut result = Vecs::new(operands[0].dims.clone());
+        let mut result = Vecs::new([one(context, bit_width), one(context, bit_width)]);
         let mut sum = zero(context, bit_width);
         for i in 0 .. DIMS[0] {
             for j in 0 .. DIMS[1] {
@@ -1169,7 +1085,7 @@ impl Component for TfReduceSum0 {
         bit_width: u32,
     ) -> Vecs<Int<'a>> {
         let const0 = zero(context, bit_width);
-        let mut result = Vecs::new(operands[0].dims.clone());
+        let mut result = Vecs::new([one(context, bit_width), operands[0].dims[1].clone()]);
         for i in 0 .. DIMS[0] {
             for _ in 0 .. DIMS[1] {
                 result.vecs[i].push(const0.clone());
@@ -1211,7 +1127,7 @@ impl Component for TfReduceSum1 {
         bit_width: u32,
     ) -> Vecs<Int<'a>> {
         let const0 = zero(context, bit_width);
-        let mut result = Vecs::new(operands[0].dims.clone());
+        let mut result = Vecs::new([one(context, bit_width), operands[0].dims[0].clone()]);
         for i in 0 .. DIMS[0] {
             for _ in 0 .. DIMS[1] {
                 result.vecs[i].push(const0.clone());
@@ -1254,20 +1170,19 @@ impl Component for TfSequenceMask {
     ) -> Vecs<Int<'a>> {
         let const0 = zero(context, bit_width);
         let const1 = one(context, bit_width);
-        let mut result = Vecs::new(operands[0].dims.clone());
-        let mut rowlen = Int::from_i64(context, -1);
-        let mut collen = Int::from_i64(context, -1);
-        for j in (0 .. DIMS[1]).rev() {
-            let col_index = Int::from_i64(context, j as i64);
-            collen = collen.lt(&operands[0].vecs[0][j]).ite(&operands[0].vecs[0][j], &collen);
-            rowlen = Bool::and(context, &[&operands[0].vecs[0][j]._eq(&const0), &Int::sub(context, &[&rowlen, &const1])._eq(&col_index)]).ite(&col_index, &rowlen);
+        let mut maxlen = zero(context, bit_width);
+        for i in 0 .. DIMS[0] {
+            maxlen = maxlen.gt(&operands[0].vecs[0][i]).ite(&maxlen, &operands[0].vecs[0][i]);
         }
+        let const4 = Int::from_i64(context, DIMS[0] as i64);
+        let result_row = operands[0].dims[1].lt(&const4).ite(&operands[0].dims[1], &const4);
+        let mut result = Vecs::new([result_row, maxlen]);
         for i in 0 .. DIMS[0] {
             for j in 0 .. DIMS[1] {
                 let row = Int::from_i64(context, i as i64);
                 let col = Int::from_i64(context, j as i64);
-                let is_in_row = row.lt(&rowlen);
-                let is_in_col = col.lt(&collen);
+                let is_in_row = row.lt(&operands[0].dims[1]);
+                let is_in_col = col.lt(&operands[0].vecs[0][i]);
                 result.vecs[i].push(Bool::and(context, &[&is_in_row, &is_in_col]).ite(&const1, &const0));
             }
         }
@@ -1369,7 +1284,9 @@ impl Component for TfTensordot {
     ) -> Vecs<Int<'a>> {
         // 第三个参数axes所有的测试样例里面都是1，其他形式的可以自己转换
         let const0 = zero(context, bit_width);
-        let mut result = Vecs::new(operands[0].dims.clone());
+        let const4 = Int::from_i64(context, DIMS[0] as i64);
+        let result = operands[1].dims[1].lt(&const4).ite(&operands[1].dims[1], &const4);
+        let mut result = Vecs::new([operands[0].dims[0].clone(), result]);
         for i in 0 .. DIMS[0] {
             for _ in 0 .. DIMS[1] {
                 result.vecs[i].push(const0.clone());
@@ -1412,7 +1329,9 @@ impl Component for TfTranspose {
         bit_width: u32,
     ) -> Vecs<Int<'a>> {
         let const0 = zero(context, bit_width);
-        let mut result = Vecs::new(operands[0].dims.clone());
+        let const4 = Int::from_i64(context, DIMS[0] as i64);
+        let result = operands[0].dims[1].lt(&const4).ite(&operands[0].dims[1], &const4);
+        let mut result = Vecs::new([result, operands[0].dims[0].clone()]);
         for i in 0 .. DIMS[0] {
             for _ in 0 .. DIMS[1] {
                 result.vecs[i].push(const0.clone());
@@ -1463,11 +1382,9 @@ impl Component for TfWhere1 {
         let array_sort = Sort::array(context, &domain_sort_, &range_sort_);
         let first_dim_sort = Sort::int(&context);
         let mut array_total = Array::fresh_const(context, "where_1_array:", &first_dim_sort, &array_sort);
-        let array_temp = Array::fresh_const(context, "where_1_array_temp:", &domain_sort, &range_sort);
-        let index = Int::from_i64(context, -1);
+        let mut index = zero(context, bit_width);
         for i in 0 .. DIMS[0] {
-            array_total = array_total.store(&Int::from_i64(context, i as i64), &array_temp);
-            for _j in 0 .. DIMS[1] {
+            for _ in 0 .. DIMS[1] {
                 result.vecs[i].push(const0.clone());
             }
         }
@@ -1480,16 +1397,23 @@ impl Component for TfWhere1 {
                 let col_index = operands[0].vecs[i][j]._eq(&const0).ite(&const_minus_1, &Int::from_i64(context, j as i64));
                 array = array.store(&const0, &row_index);
                 array = array.store(&const1, &col_index);
-                let index_ = Bool::and(context, &[&row_index._eq(&const_minus_1), &col_index._eq(&const_minus_1)]).ite(&const_minus_1, &Int::add(context, &[&index, &const1]));
+                let index_ = Bool::and(context, &[&row_index._eq(&const_minus_1), &col_index._eq(&const_minus_1)])
+                    .ite(&const_minus_1, &index);
+                index = Bool::and(context, &[&row_index._eq(&const_minus_1), &col_index._eq(&const_minus_1)])
+                    .ite(&index, &Int::add(context, &[&index, &const1]));
                 array_total = array_total.store(&index_, &array);
             }
         }
         for i in 0 .. DIMS[0] {
             for j in 0 .. 2 {
-                result.vecs[i][j] = array_total.select(&Int::from_i64(context, i as i64)).as_array().unwrap()
+                result.vecs[i][j] = array_total.select(&Int::from_i64(context, i as i64)).as_array()
+                    .unwrap_or(Array::fresh_const(context, "where_1_array_temp:", &domain_sort, &range_sort))
                     .select(&Int::from_i64(context, j as i64)).as_int().unwrap_or(const0.clone());
             }
         }
+        let const4 = Int::from_i64(context, DIMS[0] as i64);
+        result.dims[0] = index.lt(&const4).ite(&index, &const4);
+        result.dims[1] = Int::from_i64(context, 2);
 
         return result;
     }
@@ -1557,9 +1481,9 @@ impl Component for TfEye {
     ) -> Vecs<Int<'a>> {
         let const0 = zero(context, bit_width);
         let const1 = one(context, bit_width);
-        let mut result = Vecs::new(operands[0].dims.clone());
         let total_row = operands[0].vecs[0][0].clone();
         let total_col = operands[1].vecs[0][0].clone();
+        let mut result = Vecs::new([total_row.clone(), total_col.clone()]);
         for i in 0 .. DIMS[0] {
             for j in 0 .. DIMS[1] {
                 let row = Int::from_i64(context, i as i64);
@@ -1599,10 +1523,10 @@ impl Component for TfFill {
         bit_width: u32,
     ) -> Vecs<Int<'a>> {
         let const0 = zero(context, bit_width);
-        let mut result = Vecs::new(operands[0].dims.clone());
         let total_row = operands[0].vecs[0][0].clone();
         let total_col = operands[0].vecs[0][1].clone();
         let fill_value = operands[1].vecs[0][0].clone();
+        let mut result = Vecs::new([total_row.clone(), total_col.clone()]);
         for i in 0 .. DIMS[0] {
             for j in 0 .. DIMS[1] {
                 let row = Int::from_i64(context, i as i64);
@@ -1641,14 +1565,18 @@ impl Component for TfSegmentMax {
         bit_width: u32,
     ) -> Vecs<Int<'a>> {
         let const0 = zero(context, bit_width);
+        let const1 = one(context, bit_width);
         let mut result = Vecs::new(operands[0].dims.clone());
         let domain_sort = Sort::int(&context);
         let range_sort = Sort::int(&context);
+        let mut col = zero(context, bit_width);
         for i in 0 .. DIMS[0] {
             let mut array = Array::fresh_const(context, "segment_max_array:", &domain_sort, &range_sort);
             let max = Int::from_i64(context, -9223372036854775808);
+            let flag = max.clone();
             for j in 0 .. DIMS[1] {
                 let select_value = array.select(&operands[0].vecs[i][j]).as_int().unwrap_or(max.clone());
+                col = select_value._eq(&flag).ite(&col, &Int::add(context, &[&col, &const1]));
                 let final_value = select_value.gt(&operands[1].vecs[i][j]).ite(&select_value, &operands[1].vecs[i][j]);
                 array = array.store(&operands[0].vecs[i][j], &final_value);
             }
@@ -1658,6 +1586,7 @@ impl Component for TfSegmentMax {
                 result.vecs[i].push(value);
             }
         }
+        result.dims[1] = col;
 
         return result;
     }
@@ -1688,7 +1617,9 @@ impl Component for TfMatmul {
     ) -> Vecs<Int<'a>> {
         // 所有的测试样例里面只有两个参数的形式
         let const0 = zero(context, bit_width);
-        let mut result = Vecs::new(operands[0].dims.clone());
+        let const4 = Int::from_i64(context, DIMS[0] as i64);
+        let result = operands[1].dims[1].lt(&const4).ite(&operands[1].dims[1], &const4);
+        let mut result = Vecs::new([operands[0].dims[0].clone(), result]);
         for i in 0 .. DIMS[0] {
             for _ in 0 .. DIMS[1] {
                 result.vecs[i].push(const0.clone());
@@ -1731,25 +1662,16 @@ impl Component for TfMaximum {
         bit_width: u32,
     ) -> Vecs<Int<'a>> {
         let const0 = zero(context, bit_width);
-        let const1 = one(context, bit_width);
         let mut result = Vecs::new(operands[0].dims.clone());
-        let mut rowlen = Int::from_i64(context, -1);
-        let mut collen = Int::from_i64(context, -1);
-        for i in (0 .. DIMS[0]).rev() {
-            let row_index = Int::from_i64(context, i as i64);
-            for j in (0 .. DIMS[1]).rev() {
-                let col_index = Int::from_i64(context, j as i64);
-                collen = Bool::and(context, &[&operands[0].vecs[i][j]._eq(&const0), &Int::sub(context, &[&collen, &const1])._eq(&col_index)]).ite(&col_index, &collen);
-            }
-            rowlen = collen._eq(&const0).ite(&row_index, &rowlen);
-        }
         for i in 0 .. DIMS[0] {
             for j in 0 .. DIMS[1] {
                 let row = Int::from_i64(context, i as i64);
                 let col = Int::from_i64(context, j as i64);
-                let is_in_row = row.lt(&rowlen);
-                let is_in_col = col.lt(&collen);
-                result.vecs[i].push(Bool::and(context, &[&is_in_row, &is_in_col]).ite(&operands[0].vecs[i][j].gt(&operands[1].vecs[i][j]).ite(&operands[0].vecs[i][j], &operands[1].vecs[i][j]), &const0));
+                let is_in_row = row.lt(&operands[0].dims[0]);
+                let is_in_col = col.lt(&operands[0].dims[1]);
+                result.vecs[i].push(Bool::and(context, &[&is_in_row, &is_in_col])
+                    .ite(&operands[0].vecs[i][j].gt(&operands[1].vecs[i][j])
+                    .ite(&operands[0].vecs[i][j], &operands[1].vecs[i][j]), &const0));
             }
         }
 
@@ -1781,25 +1703,16 @@ impl Component for TfMinimum {
         bit_width: u32,
     ) -> Vecs<Int<'a>> {
         let const0 = zero(context, bit_width);
-        let const1 = one(context, bit_width);
         let mut result = Vecs::new(operands[0].dims.clone());
-        let mut rowlen = Int::from_i64(context, -1);
-        let mut collen = Int::from_i64(context, -1);
-        for i in (0 .. DIMS[0]).rev() {
-            let row_index = Int::from_i64(context, i as i64);
-            for j in (0 .. DIMS[1]).rev() {
-                let col_index = Int::from_i64(context, j as i64);
-                collen = Bool::and(context, &[&operands[0].vecs[i][j]._eq(&const0), &Int::sub(context, &[&collen, &const1])._eq(&col_index)]).ite(&col_index, &collen);
-            }
-            rowlen = collen._eq(&const0).ite(&row_index, &rowlen);
-        }
         for i in 0 .. DIMS[0] {
             for j in 0 .. DIMS[1] {
                 let row = Int::from_i64(context, i as i64);
                 let col = Int::from_i64(context, j as i64);
-                let is_in_row = row.lt(&rowlen);
-                let is_in_col = col.lt(&collen);
-                result.vecs[i].push(Bool::and(context, &[&is_in_row, &is_in_col]).ite(&operands[0].vecs[i][j].lt(&operands[1].vecs[i][j]).ite(&operands[0].vecs[i][j], &operands[1].vecs[i][j]), &const0));
+                let is_in_row = row.lt(&operands[0].dims[0]);
+                let is_in_col = col.lt(&operands[0].dims[1]);
+                result.vecs[i].push(Bool::and(context, &[&is_in_row, &is_in_col])
+                    .ite(&operands[0].vecs[i][j].lt(&operands[1].vecs[i][j])
+                    .ite(&operands[0].vecs[i][j], &operands[1].vecs[i][j]), &const0));
             }
         }
 
@@ -1833,23 +1746,15 @@ impl Component for TfNotEqual {
         let const0 = zero(context, bit_width);
         let const1 = one(context, bit_width);
         let mut result = Vecs::new(operands[0].dims.clone());
-        let mut rowlen = Int::from_i64(context, -1);
-        let mut collen = Int::from_i64(context, -1);
-        for i in (0 .. DIMS[0]).rev() {
-            let row_index = Int::from_i64(context, i as i64);
-            for j in (0 .. DIMS[1]).rev() {
-                let col_index = Int::from_i64(context, j as i64);
-                collen = Bool::and(context, &[&operands[0].vecs[i][j]._eq(&const0), &Int::sub(context, &[&collen, &const1])._eq(&col_index)]).ite(&col_index, &collen);
-            }
-            rowlen = collen._eq(&const0).ite(&row_index, &rowlen);
-        }
         for i in 0 .. DIMS[0] {
             for j in 0 .. DIMS[1] {
                 let row = Int::from_i64(context, i as i64);
                 let col = Int::from_i64(context, j as i64);
-                let is_in_row = row.lt(&rowlen);
-                let is_in_col = col.lt(&collen);
-                result.vecs[i].push(Bool::and(context, &[&is_in_row, &is_in_col]).ite(&operands[0].vecs[i][j]._eq(&operands[1].vecs[i][j]).ite(&const0, &const1), &const0));
+                let is_in_row = row.lt(&operands[0].dims[0]);
+                let is_in_col = col.lt(&operands[0].dims[1]);
+                result.vecs[i].push(Bool::and(context, &[&is_in_row, &is_in_col])
+                    .ite(&operands[0].vecs[i][j]._eq(&operands[1].vecs[i][j])
+                    .ite(&const0, &const1), &const0));
             }
         }
 
@@ -1882,9 +1787,9 @@ impl Component for TfOnes {
     ) -> Vecs<Int<'a>> {
         let const0 = zero(context, bit_width);
         let const1 = one(context, bit_width);
-        let mut result = Vecs::new(operands[0].dims.clone());
         let total_row = operands[0].vecs[0][0].clone();
         let total_col = operands[0].vecs[0][1].clone();
+        let mut result = Vecs::new([total_row.clone(), total_col.clone()]);
         for i in 0 .. DIMS[0] {
             for j in 0 .. DIMS[1] {
                 let row = Int::from_i64(context, i as i64);
@@ -1924,17 +1829,7 @@ impl Component for TfReduceAny0 {
     ) -> Vecs<Int<'a>> {
         let const0 = zero(context, bit_width);
         let const1 = one(context, bit_width);
-        let mut result = Vecs::new(operands[0].dims.clone());
-        let mut rowlen = Int::from_i64(context, -1);
-        let mut collen = Int::from_i64(context, -1);
-        for i in (0 .. DIMS[0]).rev() {
-            let row_index = Int::from_i64(context, i as i64);
-            for j in (0 .. DIMS[1]).rev() {
-                let col_index = Int::from_i64(context, j as i64);
-                collen = Bool::and(context, &[&operands[0].vecs[i][j]._eq(&const0), &Int::sub(context, &[&collen, &const1])._eq(&col_index)]).ite(&col_index, &collen);
-            }
-            rowlen = collen._eq(&const0).ite(&row_index, &rowlen);
-        }
+        let mut result = Vecs::new([const1.clone(), operands[0].dims[1].clone()]);
         for i in 0 .. DIMS[0] {
             for _ in 0 .. DIMS[1] {
                 result.vecs[i].push(const0.clone());
@@ -1978,17 +1873,7 @@ impl Component for TfReduceAny1 {
     ) -> Vecs<Int<'a>> {
         let const0 = zero(context, bit_width);
         let const1 = one(context, bit_width);
-        let mut result = Vecs::new(operands[0].dims.clone());
-        let mut rowlen = Int::from_i64(context, -1);
-        let mut collen = Int::from_i64(context, -1);
-        for i in (0 .. DIMS[0]).rev() {
-            let row_index = Int::from_i64(context, i as i64);
-            for j in (0 .. DIMS[1]).rev() {
-                let col_index = Int::from_i64(context, j as i64);
-                collen = Bool::and(context, &[&operands[0].vecs[i][j]._eq(&const0), &Int::sub(context, &[&collen, &const1])._eq(&col_index)]).ite(&col_index, &collen);
-            }
-            rowlen = collen._eq(&const0).ite(&row_index, &rowlen);
-        }
+        let mut result = Vecs::new([const1.clone(), operands[0].dims[0].clone()]);
         for i in 0 .. DIMS[0] {
             for _ in 0 .. DIMS[1] {
                 result.vecs[i].push(const0.clone());
@@ -2033,17 +1918,7 @@ impl Component for TfReduceMean {
         // 测试样例中只有axis = 0的情况
         let const0 = zero(context, bit_width);
         let const1 = one(context, bit_width);
-        let mut result = Vecs::new(operands[0].dims.clone());
-        let mut rowlen = Int::from_i64(context, -1);
-        let mut collen = Int::from_i64(context, -1);
-        for i in (0 .. DIMS[0]).rev() {
-            let row_index = Int::from_i64(context, i as i64);
-            for j in (0 .. DIMS[1]).rev() {
-                let col_index = Int::from_i64(context, j as i64);
-                collen = Bool::and(context, &[&operands[0].vecs[i][j]._eq(&const0), &Int::sub(context, &[&collen, &const1])._eq(&col_index)]).ite(&col_index, &collen);
-            }
-            rowlen = collen._eq(&const0).ite(&row_index, &rowlen);
-        }
+        let mut result = Vecs::new([const1.clone(), operands[0].dims[1].clone()]);
         for i in 0 .. DIMS[0] {
             for _ in 0 .. DIMS[1] {
                 result.vecs[i].push(const0.clone());
@@ -2054,7 +1929,7 @@ impl Component for TfReduceMean {
             for i in 0 .. DIMS[0] {
                 sum = Int::add(context, &[&sum, &operands[0].vecs[i][j]]);
             }
-            result.vecs[0][j] = Int::div(&sum, &rowlen);
+            result.vecs[0][j] = Int::div(&sum, &operands[0].dims[0]);
         }
 
         return result;
@@ -2087,29 +1962,19 @@ impl Component for TfReduceProd {
         // 测试样例中只有axis = 1的情况
         let const0 = zero(context, bit_width);
         let const1 = one(context, bit_width);
-        let mut result = Vecs::new(operands[0].dims.clone());
-        let mut rowlen = Int::from_i64(context, -1);
-        let mut collen = Int::from_i64(context, -1);
-        for i in (0 .. DIMS[0]).rev() {
-            let row_index = Int::from_i64(context, i as i64);
-            for j in (0 .. DIMS[1]).rev() {
-                let col_index = Int::from_i64(context, j as i64);
-                collen = Bool::and(context, &[&operands[0].vecs[i][j]._eq(&const0), &Int::sub(context, &[&collen, &const1])._eq(&col_index)]).ite(&col_index, &collen);
-            }
-            rowlen = collen._eq(&const0).ite(&row_index, &rowlen);
-        }
+        let mut result = Vecs::new([const1.clone(), operands[0].dims[0].clone()]);
         for i in 0 .. DIMS[0] {
             for _ in 0 .. DIMS[1] {
                 result.vecs[i].push(const0.clone());
             }
         }
         for i in 0 .. DIMS[0] {
-            let mut sum = one(context, bit_width);
+            let mut mul = one(context, bit_width);
             for j in 0 .. DIMS[1] {
                 let col_index = Int::from_i64(context, j as i64);
-                sum = col_index.lt(&collen).ite(&Int::mul(context, &[&sum, &operands[0].vecs[i][j]]), &sum);
+                mul = col_index.lt(&operands[0].dims[1]).ite(&Int::mul(context, &[&mul, &operands[0].vecs[i][j]]), &mul);
             }
-            result.vecs[0][i] = sum;
+            result.vecs[0][i] = mul;
         }
 
         return result;
@@ -2141,18 +2006,7 @@ impl Component for TfRoll {
     ) -> Vecs<Int<'a>> {
         // 测试样例里面第二个参数和第三个参数都是一样的（都是1），目前只考虑一个参数的情况
         let const0 = zero(context, bit_width);
-        let const1 = one(context, bit_width);
         let mut result = Vecs::new(operands[0].dims.clone());
-        let mut rowlen = Int::from_i64(context, -1);
-        let mut collen = Int::from_i64(context, -1);
-        for i in (0 .. DIMS[0]).rev() {
-            let row_index = Int::from_i64(context, i as i64);
-            for j in (0 .. DIMS[1]).rev() {
-                let col_index = Int::from_i64(context, j as i64);
-                collen = Bool::and(context, &[&operands[0].vecs[i][j]._eq(&const0), &Int::sub(context, &[&collen, &const1])._eq(&col_index)]).ite(&col_index, &collen);
-            }
-            rowlen = collen._eq(&const0).ite(&row_index, &rowlen);
-        }
         for i in 0 .. DIMS[0] {
             for _ in 0 .. DIMS[1] {
                 result.vecs[i].push(const0.clone());
@@ -2162,11 +2016,14 @@ impl Component for TfRoll {
             for j in 0 .. DIMS[1] {
                 let row = Int::from_i64(context, i as i64);
                 let col = Int::from_i64(context, j as i64);
-                let is_in_row = row.lt(&rowlen);
-                let is_in_col = col.lt(&collen);
+                let is_in_row = row.lt(&operands[0].dims[0]);
+                let is_in_col = col.lt(&operands[0].dims[1]);
                 result.vecs[i][(j + 1) % DIMS[1]] = Bool::and(context, &[&is_in_row, &is_in_col]).ite(&operands[0].vecs[i][j], &const0);
-                result.vecs[i][0] = col._eq(&collen).ite(&operands[0].vecs[i][j], &const0);
-                result.vecs[i][j] = col._eq(&collen).ite(&const0, &result.vecs[i][j]);
+            }
+            for j in 0 .. DIMS[1] {
+                let col = Int::from_i64(context, j as i64);
+                result.vecs[i][0] = col._eq(&operands[0].dims[1]).ite(&operands[0].vecs[i][j], &result.vecs[i][0]);
+                result.vecs[i][j] = col.lt(&operands[0].dims[1]).ite(&result.vecs[i][j], &const0);
             }
         }
 
